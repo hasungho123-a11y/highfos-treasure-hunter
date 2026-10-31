@@ -1,0 +1,18 @@
+name = "highfos-treasure-hunter"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "highfos-treasure-hunter-db"
+# `npm run db:create` prints the real id — paste it here (Claude Code does this for you)
+database_id = "REPLACE_WITH_DATABASE_ID"
+
+[vars]
+# SETUP_CODE is a secret: set it with `npx wrangler secret put SETUP_CODE`

@@ -1,0 +1,17 @@
+{
+  "name": "하이포스 방학 트레저헌터",
+  "short_name": "트레저헌터",
+  "description": "미션을 하면 배가 나아가고, 보물섬에서 상자를 열어요.",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0C2440",
+  "theme_color": "#14466F",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

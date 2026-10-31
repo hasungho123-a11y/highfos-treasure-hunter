@@ -1,0 +1,17 @@
+{
+  "name": "highfos-treasure-hunter",
+  "version": "2.0.0",
+  "private": true,
+  "description": "하이포스 방학 트레저헌터 — 미션을 하면 배가 나아가고, 보물섬에서 상자를 열고, 도착 포인트로 상점에서 고르는 학원 방학 프로그램",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:create": "wrangler d1 create highfos-treasure-hunter-db",
+    "db:init:local": "wrangler d1 execute highfos-treasure-hunter-db --local --file=./schema.sql",
+    "db:init": "wrangler d1 execute highfos-treasure-hunter-db --remote --file=./schema.sql",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.20.0"
+  },
+  "type": "module"
+}
