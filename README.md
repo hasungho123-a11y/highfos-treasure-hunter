@@ -56,7 +56,7 @@ npm run dev        # http://localhost:8787
 
 ## 학원 로고로 아이콘 바꾸기
 
-지금 아이콘은 보물상자 그림이에요. 학원 로고 파일을 이 폴더에 넣고 Claude Code에 "학원 로고로 트레저헌터 앱 아이콘 다시 만들어 줘"라고 하면 `tools/`의 스크립트로 `public/icons/`를 새로 만들어요.
+지금 아이콘은 하이포스학원 로고 메달이 보물상자에서 솟아오르는 그림이에요(`tools/logo-icon.svg`, 로고 원본은 `tools/logo-mark.png`). 그림을 고친 뒤 `node tools/make-icons.cjs`를 실행하면 `public/icons/`가 새로 만들어져요.
 아이콘을 바꾼 뒤에는 `public/sw.js`의 `CACHE` 이름 숫자를 하나 올려야 이미 설치한 휴대폰에도 반영돼요.
 
 ## 폴더 구성
