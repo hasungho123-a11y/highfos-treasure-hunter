@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS pool (
   rarity TEXT NOT NULL,          -- 보통 | 희귀 | 전설
   weight INTEGER NOT NULL,
   points INTEGER NOT NULL DEFAULT 0,
+  stock INTEGER,                 -- NULL = unlimited; 0 = no longer drawn
   active INTEGER NOT NULL DEFAULT 1
 );
 -- one chest per (student, season, voyage, stop); prize is drawn when it is opened

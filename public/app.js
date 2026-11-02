@@ -11,6 +11,8 @@ const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { ret
 const pad = n => String(n).padStart(2, "0");
 const fmtTime = ms => { const d = new Date(ms), t = new Date(); return d.toDateString() === t.toDateString() ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : `${d.getMonth() + 1}/${d.getDate()}`; };
 const fmtPct = r => { const v = r * 100; return (v < 10 ? v.toFixed(1).replace(/\.0$/, "") : Math.round(v)) + "%"; };
+// prizes that can still come out of a chest (stock null = unlimited)
+const avail = pool => pool.filter(x => x.stock == null || x.stock > 0);
 const posText = (moves, s) => { const p = dpos(moves, s.routeLen); return p === s.routeLen ? "도착 항구" : p === 0 ? "출항 대기" : `${p}/${s.routeLen}칸`; };
 function nextText(moves, s) {
   const p = dpos(moves, s.routeLen);
@@ -291,7 +293,7 @@ function demoCard() {
 }
 function tMap() {
   const d = T.d, s = d.season, list = tStudents();
-  const wk = list.reduce((a, x) => a + x.stats.weekMoves, 0), goal = s.weeklyClassGoal || 0, tot = d.pool.reduce((a, x) => a + x.weight, 0) || 1;
+  const wk = list.reduce((a, x) => a + x.stats.weekMoves, 0), goal = s.weeklyClassGoal || 0, live = avail(d.pool), tot = live.reduce((a, x) => a + x.weight, 0) || 1;
   return `<section class="panel"><div class="row between"><div><h2>${esc(s.name)}</h2><p class="small muted">미션을 하나 끝낼 때마다 배가 나아가요. 보물섬을 지나면 상자를 열고, 도착 항구에 닿으면 ${s.arrivalPoints}포인트를 받아요.</p></div>
       <div class="row">${classChips()}<button class="btn sm" data-act="full">크게 보기</button></div></div>
       ${goal ? `<div class="goal" role="progressbar" aria-label="이번 주 함께 항해한 거리" aria-valuenow="${wk}" aria-valuemax="${goal}"><i style="width:${Math.min(100, wk / goal * 100)}%"></i></div>
@@ -300,7 +302,7 @@ function tMap() {
     <div class="legend"><span><i style="background:#FFE59A;box-shadow:inset 0 0 0 2px #9C6A22"></i>보물섬: 지나가면 보물 상자</span><span><i style="background:var(--coral)"></i>도착 항구: ${s.arrivalPoints}포인트 받고 다음 항해 출발</span></div>
     ${d.students.length ? "" : demoCard()}
     <section class="panel"><div class="row between"><h3>보물 상자에서 나올 수 있는 것</h3><span class="small muted">보물섬 ${s.treasureEvery}칸마다 · 상자 하나에 하나</span></div>
-      <div class="odds">${[...d.pool].sort((a, b) => RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity) || a.weight - b.weight).map(x => `<div class="odd r-${esc(x.rarity)}"><div class="row between"><b>${esc(x.name)}</b><span class="rar">${esc(x.rarity)}</span></div><span class="p num">${fmtPct(x.weight / tot)}</span></div>`).join("")}</div></section>`;
+      <div class="odds">${live.sort((a, b) => RARITIES.indexOf(b.rarity) - RARITIES.indexOf(a.rarity) || a.weight - b.weight).map(x => `<div class="odd r-${esc(x.rarity)}"><div class="row between"><b>${esc(x.name)}</b><span class="rar">${esc(x.rarity)}</span></div><span class="p num">${fmtPct(x.weight / tot)}</span></div>`).join("")}</div></section>`;
 }
 function tGrant() {
   const d = T.d, s = d.season;
@@ -388,7 +390,8 @@ function tDetail(x) {
 }
 function tTreasure() {
   const d = T.d, opened = d.chests.filter(c => c.status === "opened"), closedN = d.chests.filter(c => c.status === "closed").length;
-  const tot = d.pool.reduce((a, x) => a + x.weight, 0) || 1, ep = d.pool.find(x => x.id === T.editPool), es = d.shop.find(x => x.id === T.editShop);
+  const tot = avail(d.pool).reduce((a, x) => a + x.weight, 0) || 1, ep = d.pool.find(x => x.id === T.editPool), es = d.shop.find(x => x.id === T.editShop);
+  const out = x => x.stock != null && x.stock <= 0;
   return `<section class="panel"><div class="row between"><h2>건네줄 것</h2><span class="small muted">실제로 건넨 뒤 '줬어요'를 눌러요</span></div>
     ${opened.length || d.orders.length ? `<div class="plist">
       ${opened.map(c => `<div class="prow"><span><b>${esc(sname(c.student_id))}</b> · ${esc(c.reward)} <span class="rar r-${esc(c.rarity)}">${esc(c.rarity)}</span> <span class="small muted">보물 상자</span></span><span class="small muted">${fmtTime(c.opened_at)}</span><button class="btn sm primary" data-act="deliverChest" data-v="${c.id}">줬어요</button></div>`).join("")}
@@ -396,14 +399,17 @@ function tTreasure() {
       : `<p class="muted small">지금 건네줄 것이 없어요.</p>`}
     ${closedN ? `<p class="small muted">아이들이 아직 열지 않은 상자가 ${closedN}개 있어요. 아이 휴대폰이나 지도 화면에서 열 수 있어요.</p>` : ""}</section>
     <section class="panel"><div class="row between"><h2>보물 상자 목록</h2><span class="small muted">비중이 클수록 잘 나와요</span></div>
-      <div class="tablewrap"><table><thead><tr><th>보물</th><th>등급</th><th>비중</th><th>확률</th><th>바로 들어가는 포인트</th><th></th></tr></thead><tbody>
-      ${d.pool.map(x => `<tr><td><b>${esc(x.name)}</b></td><td><span class="rar r-${esc(x.rarity)}">${esc(x.rarity)}</span></td><td class="num">${x.weight}</td><td class="num">${fmtPct(x.weight / tot)}</td><td>${x.points ? `<span class="pt num">${x.points}</span>` : `<span class="muted">-</span>`}</td>
+      <div class="tablewrap"><table><thead><tr><th>보물</th><th>등급</th><th>비중</th><th>확률</th><th>남은 개수</th><th>바로 들어가는 포인트</th><th></th></tr></thead><tbody>
+      ${d.pool.map(x => `<tr><td><b>${esc(x.name)}</b></td><td><span class="rar r-${esc(x.rarity)}">${esc(x.rarity)}</span></td><td class="num">${x.weight}</td><td class="num">${out(x) ? `<span class="muted">안 나옴</span>` : fmtPct(x.weight / tot)}</td>
+        <td class="num">${x.stock == null ? `<span class="muted">무제한</span>` : out(x) ? `<b style="color:var(--coral)">다 나갔어요</b>` : `${x.stock}개`}</td><td>${x.points ? `<span class="pt num">${x.points}</span>` : `<span class="muted">-</span>`}</td>
         <td class="row"><button class="btn sm ghost" data-act="editPool" data-v="${x.id}">수정</button><button class="btn sm ghost" data-act="delPool" data-v="${x.id}">삭제</button></td></tr>`).join("")}</tbody></table></div>
       <form class="row" data-form="savePool"><label class="f" style="flex:1 1 180px">${ep ? "보물 수정" : "보물 이름"}<input type="text" id="np-name" maxlength="30" required placeholder="예: 피자 한 판" value="${esc(ep?.name || "")}" data-keep="no"></label>
         <label class="f">등급<select id="np-rar" data-keep="no">${RARITIES.map(r => `<option ${ep?.rarity === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
         <label class="f">비중<input type="number" id="np-w" min="1" value="${ep?.weight ?? 5}" required data-keep="no"></label>
+        <label class="f">남은 개수<input type="number" id="np-stock" min="0" value="${ep?.stock ?? ""}" placeholder="무제한" data-keep="no"></label>
         <label class="f">바로 포인트<input type="number" id="np-pts" min="0" value="${ep?.points || ""}" placeholder="없음" data-keep="no"></label>
         <button class="btn primary" style="align-self:end">${ep ? "저장" : "추가"}</button>${ep ? `<button type="button" class="btn ghost" style="align-self:end" data-act="cancelEdit">취소</button>` : ""}</form>
+      <p class="small muted">'남은 개수'를 정하면 그만큼만 나오고, 다 나가면 상자에서 더 이상 안 나와요. 비워 두면 무제한이에요. 준비한 실물(치킨, 쿠폰 등)은 개수를 꼭 정해 두세요.</p>
       <p class="small muted">'바로 포인트'를 넣은 보물은 상자를 여는 순간 포인트가 들어가요. 전설 등급은 상자가 오래, 세게 흔들리다 열려요.</p></section>
     <section class="panel"><h2>포인트 상점</h2>
       <div class="tablewrap"><table><thead><tr><th>상품</th><th>종류</th><th>포인트</th><th>수량</th><th></th></tr></thead><tbody>
@@ -510,7 +516,7 @@ const T_FORMS = {
   adjust: () => tDo(() => api("/api/t/adjust", { studentId: T.detail, type: val("adj-type"), amount: Number(val("adj-amt")), title: val("adj-why") || "선생님 조정" }), "반영했어요").then(() => { loadDetail(); }),
   rename: () => tDo(() => api(`/api/t/students/${T.detail}/rename`, { nickname: val("rn-name") }), "이름을 바꿨어요"),
   saveQuest: () => { const id = T.editQuest; T.editQuest = null; return tDo(() => api("/api/t/quests", { id, title: val("nq-title"), subject: val("nq-subj"), kind: val("nq-kind"), moves: Number(val("nq-mv")) }), id ? "미션을 저장했어요" : "미션을 추가했어요"); },
-  savePool: () => { const id = T.editPool; T.editPool = null; return tDo(() => api("/api/t/pool", { id, name: val("np-name"), rarity: val("np-rar"), weight: Number(val("np-w")), points: Number(val("np-pts") || 0) }), "보물 목록을 저장했어요"); },
+  savePool: () => { const id = T.editPool; T.editPool = null; return tDo(() => api("/api/t/pool", { id, name: val("np-name"), rarity: val("np-rar"), weight: Number(val("np-w")), points: Number(val("np-pts") || 0), stock: val("np-stock") }), "보물 목록을 저장했어요"); },
   saveShop: () => { const id = T.editShop; T.editShop = null; return tDo(() => api("/api/t/shop", { id, name: val("nr-name"), kind: val("nr-kind"), cost: Number(val("nr-cost")), stock: val("nr-stock") }), "상점을 저장했어요"); },
   saveSeason: () => tDo(() => api("/api/t/season", { name: val("se-name"), routeLen: Number(val("se-len")), treasureEvery: Number(val("se-every")), arrivalPoints: Number(val("se-pts")), weeklyClassGoal: Number(val("se-goal")) }), "항로를 저장했어요"),
   newVoyage: () => { T.confirm = null; return tDo(() => api("/api/t/season", { name: val("nv-name"), newVoyage: true }), "새 항해를 시작했어요"); },
