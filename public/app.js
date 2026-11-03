@@ -410,7 +410,8 @@ function tTreasure() {
         <label class="f">바로 포인트<input type="number" id="np-pts" min="0" value="${ep?.points || ""}" placeholder="없음" data-keep="no"></label>
         <button class="btn primary" style="align-self:end">${ep ? "저장" : "추가"}</button>${ep ? `<button type="button" class="btn ghost" style="align-self:end" data-act="cancelEdit">취소</button>` : ""}</form>
       <p class="small muted">'남은 개수'를 정하면 그만큼만 나오고, 다 나가면 상자에서 더 이상 안 나와요. 비워 두면 무제한이에요. 준비한 실물(치킨, 쿠폰 등)은 개수를 꼭 정해 두세요.</p>
-      <p class="small muted">'바로 포인트'를 넣은 보물은 상자를 여는 순간 포인트가 들어가요. 전설 등급은 상자가 오래, 세게 흔들리다 열려요.</p></section>
+      <p class="small muted">'바로 포인트'를 넣은 보물은 상자를 여는 순간 포인트가 들어가요. 전설 등급은 상자가 오래, 세게 흔들리다 열려요.</p>
+      <p class="small muted">상자를 여는 데 필요한 탭 수는 등급마다 랜덤이에요: 보통 1~3번, 희귀 3~5번, 전설 5~7번. 아이 화면에는 몇 번 남았는지 보이지 않아요.</p></section>
     <section class="panel"><h2>포인트 상점</h2>
       <div class="tablewrap"><table><thead><tr><th>상품</th><th>종류</th><th>포인트</th><th>수량</th><th></th></tr></thead><tbody>
       ${d.shop.map(x => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.kind)}</td><td><span class="pt num">${x.cost}</span></td><td class="num">${x.stock === null ? "무제한" : x.stock}</td>

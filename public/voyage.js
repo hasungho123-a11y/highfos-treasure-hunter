@@ -144,7 +144,12 @@ function waitTap(targets, auto) {
   });
 }
 
-// opener(): Promise<{name, rarity, points}> — called on the third tap; from: map point or null (centre)
+// Taps needed to open a chest, picked at random per rarity. The count is never shown to the child.
+const TAPS = { 보통: [1, 3], 희귀: [3, 5], 전설: [5, 7] };
+const tapsFor = r => { const [lo, hi] = TAPS[r] || TAPS["보통"]; return lo + Math.floor(Math.random() * (hi - lo + 1)); };
+
+// opener(): Promise<{name, rarity, points}> — called on the first tap, so the rarity decides how many taps follow;
+// from: map point or null (centre)
 async function chestFx(fx, from, who, stop, opener, { autoMs = 6000 } = {}) {
   if (!fx || FX.skip) return null;
   const pp = from ? pct(from) : { left: 50, top: 110 }, dim = fx.querySelector(".fx-dim"), flash = fx.querySelector(".fx-flash");
@@ -153,10 +158,10 @@ async function chestFx(fx, from, who, stop, opener, { autoMs = 6000 } = {}) {
   el.innerHTML = `<div class="rays"></div><div class="beam"></div>
     <div class="chest3d"><div class="c-shadow"></div><div class="c-lid">${C_LID}</div><div class="c-body">${C_BODY}</div><div class="c-glow"></div></div>
     <div class="gcard"><div class="gcard-in"><div class="gface gback">?</div><div class="gface gfront"></div></div></div>
-    <div class="tapmsg"><span>상자를 눌러요!</span><div class="tapdots"><i></i><i></i><i></i></div></div>`;
+    <div class="tapmsg"><span>상자를 눌러요!</span></div>`;
   fx.appendChild(el);
   const c3 = el.querySelector(".chest3d"), lid = el.querySelector(".c-lid"), glow = el.querySelector(".c-glow"), rays = el.querySelector(".rays"), beam = el.querySelector(".beam"),
-    card = el.querySelector(".gcard"), cin = el.querySelector(".gcard-in"), front = el.querySelector(".gfront"), msg = el.querySelector(".tapmsg"), dots = [...el.querySelectorAll(".tapdots i")];
+    card = el.querySelector(".gcard"), cin = el.querySelector(".gcard-in"), front = el.querySelector(".gfront"), msg = el.querySelector(".tapmsg");
   const seam = () => { const r = c3.getBoundingClientRect(), m = fx.getBoundingClientRect(); return [(r.left + r.width / 2 - m.left) / m.width * 100, (r.top + r.height * .44 - m.top) / m.height * 100]; };
   msg.style.opacity = 0;
   await play(el, [{ left: pp.left + "%", top: pp.top + "%", transform: "translate(-50%,-50%) scale(.22) rotate(-12deg)", opacity: .5 },
@@ -165,22 +170,24 @@ async function chestFx(fx, from, who, stop, opener, { autoMs = 6000 } = {}) {
   const [lx, ly] = seam(); burstAt(lx, ly + 9, 18, "spark");
   play(msg, [{ opacity: 0 }, { opacity: 1 }], { duration: 250 });
   const idle = FX.skip ? null : c3.animate([{ transform: "scale(1)" }, { transform: "scale(1.035,.97)" }], { duration: 520, iterations: Infinity, direction: "alternate", easing: "ease-in-out" });
-  let rewardP = null;
-  for (let i = 0; i < 3 && !FX.skip; i++) {
+  let rewardP = null, need = Infinity;
+  for (let i = 0; i < need && !FX.skip; i++) {
     await waitTap([el], autoMs);
     if (FX.skip) break;
-    if (i === 2) rewardP = opener().catch(e => ({ error: e.message || "상자를 열지 못했어요" }));
-    dots[i].classList.add("on");
-    await play(c3, [{ transform: "none" }, { transform: "scale(1.16,.8)", offset: .18 }, { transform: `translateY(-${10 + i * 5}%) scale(.9,1.14) rotate(${i % 2 ? 5 : -5}deg)`, offset: .5 }, { transform: "scale(1.1,.88)", offset: .82 }, { transform: "none" }], { duration: 420, easing: "ease-out", fill: "none" });
-    play(glow, [{ opacity: .25 * i }, { opacity: .3 + .3 * i }], { duration: 200 });
-    burstAt(...seam(), 14 + i * 16, "spark");
-    play(flash, [{ opacity: .12 + i * .08 }, { opacity: 0 }], { duration: 260, fill: "none" });
+    if (i === 0) rewardP = opener().catch(e => ({ error: e.message || "상자를 열지 못했어요" }));
+    // s grows 0 → 2 over the taps, so the last tap always bounces and glows the hardest
+    const s = need === Infinity || need < 2 ? 0 : 2 * i / (need - 1);
+    await play(c3, [{ transform: "none" }, { transform: "scale(1.16,.8)", offset: .18 }, { transform: `translateY(-${10 + s * 5}%) scale(.9,1.14) rotate(${i % 2 ? 5 : -5}deg)`, offset: .5 }, { transform: "scale(1.1,.88)", offset: .82 }, { transform: "none" }], { duration: 420, easing: "ease-out", fill: "none" });
+    play(glow, [{ opacity: .25 * s }, { opacity: .3 + .3 * s }], { duration: 200 });
+    burstAt(...seam(), 14 + s * 16, "spark");
+    play(flash, [{ opacity: .12 + s * .08 }, { opacity: 0 }], { duration: 260, fill: "none" });
+    if (i === 0) { const rw = await rewardP; need = rw.error ? 1 : tapsFor(rw.rarity); }
   }
   idle?.cancel();
   play(msg, [{ opacity: 1 }, { opacity: 0 }], { duration: 200 });
   if (FX.skip || !rewardP) { el.remove(); return null; }
   const rw = await rewardP;
-  if (rw.error) { msg.querySelector("span").textContent = rw.error; msg.querySelector(".tapdots")?.remove(); play(msg, [{ opacity: 0 }, { opacity: 1 }], { duration: 200 }); await waitTap([el, dim], 3500); el.remove(); return null; }
+  if (rw.error) { msg.querySelector("span").textContent = rw.error; play(msg, [{ opacity: 0 }, { opacity: 1 }], { duration: 200 }); await waitTap([el, dim], 3500); el.remove(); return null; }
   const legend = rw.rarity === "전설";
   el.classList.add(`r-${rw.rarity}`); if (legend) el.classList.add("legend");
   front.innerHTML = `<span class="rar">${esc(rw.rarity)}</span><b>${esc(rw.name)}</b><small>${esc(who)}<br>${stop}칸 보물섬${rw.points ? ` · +${rw.points}P` : ""}</small>`;
@@ -210,7 +217,7 @@ async function chestFx(fx, from, who, stop, opener, { autoMs = 6000 } = {}) {
     play(card, [{ opacity: 0, transform: "translateY(75%) scale(.15)" }, { opacity: 1, transform: "translateY(-8%) scale(1.12)", offset: .6 }, { opacity: 1, transform: "none" }], { duration: 720, easing: "cubic-bezier(.25,1.1,.4,1)" });
     await play(cin, [{ transform: "rotateY(0deg)" }, { transform: `rotateY(${legend ? 900 : 540}deg)` }], { duration: legend ? 1700 : 1000, easing: "cubic-bezier(.2,.7,.25,1)" });
     if (!FX.skip) { card.classList.add("shine"); burstAt(sx, sy - 22, legend ? 60 : 24, legend ? "coin" : "spark"); play(card, [{ transform: "scale(1)" }, { transform: "scale(1.08)" }, { transform: "scale(1)" }], { duration: 300, fill: "none" }); }
-    msg.querySelector("span").textContent = "눌러서 계속"; msg.querySelector(".tapdots")?.remove();
+    msg.querySelector("span").textContent = "눌러서 계속";
     play(msg, [{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay: 600 });
     fx.classList.add("catch");
     await waitTap([el, dim], legend ? 12000 : 8000);
