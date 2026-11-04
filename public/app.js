@@ -126,7 +126,8 @@ const GATE_FORMS = {
 /* =====================================================================
    STUDENT
    ===================================================================== */
-const K = { d: null, tab: "voyage", confirm: null, busy: false, playing: false };
+const K = { d: null, tab: "voyage", confirm: null, busy: false, playing: false, slot: "hull", tryKey: null };
+const DECO_SLOTS = [["hull", "배"], ["pattern", "돛 무늬"], ["flag", "깃발"], ["wake", "물결"], ["tag", "이름표"], ["sail", "돛 색"]];
 const CHEST_ICON = `<svg viewBox="0 0 28 24" aria-hidden="true"><path d="M2 11 Q14 0 26 11 Z" fill="#B06B36"/><rect x="2" y="10" width="24" height="13" rx="2" fill="#8A5328"/><rect x="2" y="14" width="24" height="2.6" fill="#F1C04B"/><rect x="12" y="12" width="4" height="6" rx="1" fill="#F1C04B"/></svg>`;
 async function kidLoad() { K.d = await api("/api/kid/state"); }
 async function kidStart() {
@@ -137,12 +138,12 @@ async function kidStart() {
 }
 function kidRender() {
   const d = K.d, s = d.season, st = d.stats, me = d.me;
-  const tabs = [["voyage", "항해"], ["missions", "미션"], ["shop", "상점"], ["me", "내 보물·기록"]];
+  const tabs = [["voyage", "항해"], ["missions", "미션"], ["deco", "내 배"], ["shop", "상점"], ["me", "보물·기록"]];
   const keep = keepInputs(app);
   app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>트레저헌터</h1><small>${esc(me.className)} · ${esc(s.name)}</small></div></div>
       <div class="hright"><span class="pt num" aria-label="내 포인트">${st.points}</span></div></div>
       <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "voyage" && st.closed ? `<span class="cnt">${st.closed}</span>` : ""}</button>`).join("")}</nav></header>
-    <main>${({ voyage: kVoyage, missions: kMissions, shop: kShop, me: kMe })[K.tab]()}</main>
+    <main>${({ voyage: kVoyage, missions: kMissions, deco: kDeco, shop: kShop, me: kMe })[K.tab]()}</main>
     ${me.mustChange ? kPinModal(true) : K.confirm?.type === "pin" ? kPinModal(false) : ""}`;
   restoreInputs(keep);
   if (K.tab === "voyage") { const map = $("#kmap"); V.placeShips(map, d.ships, s, { me: me.id }); requestAnimationFrame(() => scrollToMine()); }
@@ -175,6 +176,30 @@ function kMissions() {
     ${SUBJECTS.map(sub => { const list = qs.filter(q => q.subject === sub); return list.length ? `<h3>${sub}</h3><div class="mlist">${list.map(q => `<div class="mitem s-${esc(q.subject)}"><span class="bar"></span>
       <span><span class="t">${esc(q.title)}</span><br><span class="tag kind">${KINDS[q.kind]}</span> <span class="mv small">${q.moves}칸 전진</span></span>${btn(q)}</div>`).join("")}</div>` : ""; }).join("") || `<p class="muted">아직 미션이 없어요.</p>`}</section>`;
 }
+// a little patch of sea with one decorated ship on it
+const decoShip = (look, sailIdx, name, cls = "") => `<div class="deco-sea ${cls}"><div class="ship mine ${V.wakeClass(look)}" style="--sail:${sail(sailIdx)}">${V.boatSVG(look)}${name ? `<span class="nmtag ${V.tagClass(look)}">${esc(name)}</span>` : ""}</div></div>`;
+function kDeco() {
+  const d = K.d, me = d.me, pts = d.stats.points, owned = new Set(d.owned), slot = K.slot;
+  const tryItem = K.tryKey && d.deco.find(x => x.key === K.tryKey);
+  const look = tryItem ? { ...me.look, [tryItem.slot]: tryItem.id } : me.look;
+  const conf = K.confirm?.type === "deco" && d.deco.find(x => x.key === K.confirm.key);
+  const worn = x => me.look[x.slot] === x.id;
+  const card = x => { const has = owned.has(x.key), can = pts >= x.price;
+    return `<div class="deco-item ${K.tryKey === x.key ? "sel" : ""}" data-act="ktry" data-v="${x.key}">${decoShip({ ...me.look, [x.slot]: x.id }, me.sail, "", "tiny")}
+      <b>${esc(x.name)}</b>${has ? "" : `<span class="pt num">${x.price}</span>`}
+      ${worn(x) ? `<span class="pill ok">쓰는 중</span>` : has ? `<button class="btn sm" data-act="kwear" data-v="${x.key}">쓰기</button>`
+        : `<button class="btn sm ${can ? "primary" : ""}" data-act="kdecoAsk" data-v="${x.key}" ${can ? "" : "disabled"}>${can ? "사기" : `${x.price - pts}P 모자라요`}</button>`}</div>`; };
+  const items = d.deco.filter(x => x.slot === slot), mine = d.deco.filter(x => owned.has(x.key)).length;
+  return `<section class="panel deco-hero"><div class="row between"><h2>${esc(me.nickname)}의 배</h2><span class="pt num">${pts}</span></div>
+      ${decoShip(look, me.sail, (me.nickname), "big")}
+      <p class="small muted">${tryItem && !owned.has(tryItem.key) ? `<b>${esc(tryItem.name)}</b> 미리 보는 중이에요.` : "꾸미기를 누르면 내 배에 미리 입혀 볼 수 있어요."} 꾸민 배는 반 친구들 지도에도 그대로 보여요. · 모은 꾸미기 ${mine}/${d.deco.length}</p>
+      ${conf ? `<div class="confirm"><span><b>${esc(conf.name)}</b>을(를) <span class="pt">${conf.price}</span>로 살까요? 남는 포인트 ${pts - conf.price}</span><button class="btn sm primary" data-act="kdecoBuy" data-v="${conf.key}">사기</button><button class="btn sm" data-act="kcancelConfirm">취소</button></div>` : ""}</section>
+    <section class="panel"><div class="chips" role="group" aria-label="꾸미기 종류">${DECO_SLOTS.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>
+      ${slot === "sail" ? `<p class="small muted">돛 색은 언제든 무료로 바꿀 수 있어요.</p><div class="sails">${V.SAILS.map((c, i) => `<button style="--sail:${c}" data-act="ksail" data-v="${i}" aria-pressed="${me.sail === i}" aria-label="돛 색 ${i + 1}"></button>`).join("")}</div>`
+        : `<div class="deco-grid"><div class="deco-item ${me.look[slot] ? "" : "sel"}" data-act="ktry" data-v="">${decoShip({ ...me.look, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>
+            ${me.look[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>${items.map(card).join("")}</div>`}
+      <p class="small muted">포인트는 도착 항구에 닿거나 보물 상자에서 얻어요. 산 꾸미기는 계속 내 것이라 언제든 바꿔 쓸 수 있어요.</p></section>`;
+}
 function kShop() {
   const d = K.d, pts = d.stats.points, c = K.confirm?.type === "buy" && d.shop.find(x => x.id === K.confirm.id);
   const card = x => { const out = x.stock !== null && x.stock <= 0, can = pts >= x.cost && !out;
@@ -197,7 +222,7 @@ function kMe() {
       ${c.status === "opened" ? `<span class="pill wait">받을 차례</span>` : `<span class="pill ok">받음</span>`}</div>`).join("")}</div>` : `<p class="muted small">아직 연 상자가 없어요. 보물섬까지 가 봐요!</p>`}</section>
     <section class="panel"><h3>배지</h3><div class="badges">${d.badges.map(b => `<span class="badge ${st.badges.includes(b.key) ? "" : "off"}" title="${esc(b.desc)}">${esc(b.name)}</span>`).join("")}</div></section>
     <section class="panel feed"><h3>항해 일지</h3>${d.log.length ? `<ul>${d.log.map(l => `<li><time class="num">${fmtTime(l.at)}</time><span>${esc(l.title)}</span><span class="small">${l.moves ? `<span class="mv num">${l.moves > 0 ? "+" : ""}${l.moves}칸</span> ` : ""}${l.points ? `<span class="pt num">${l.points > 0 ? "+" : ""}${l.points}</span>` : ""}</span></li>`).join("")}</ul>` : `<p class="muted small">아직 기록이 없어요.</p>`}</section>
-    <section class="panel"><h3>내 배 꾸미기</h3><div class="sails">${V.SAILS.map((c, i) => `<button style="--sail:${c}" data-act="ksail" data-v="${i}" aria-pressed="${d.me.sail === i}" aria-label="돛 색 ${i + 1}"></button>`).join("")}</div>
+    <section class="panel"><h3>내 계정</h3><p class="small muted">돛 색과 배 꾸미기는 '내 배' 탭에서 바꿔요.</p>
       <div class="row"><button class="btn" data-act="kpinAsk">비밀번호 바꾸기</button><button class="btn ghost" data-act="logout">로그아웃</button></div></section>`;
 }
 function kPinModal(forced) {
@@ -234,6 +259,12 @@ const KID_ACTS = {
   kbuyAsk: v => { K.confirm = { type: "buy", id: Number(v) }; kidRender(); },
   kbuy: async v => { K.confirm = null; try { await api(`/api/kid/buy/${v}`, {}); toast("골랐어요! 선생님이 챙겨 줄 거예요"); await kidLoad(); } catch (e) { toast(e.message); } kidRender(); },
   kcancelConfirm: () => { K.confirm = null; kidRender(); },
+  kslot: v => { K.slot = v; K.tryKey = null; K.confirm = null; kidRender(); },
+  ktry: v => { K.tryKey = v && K.tryKey !== v ? v : null; kidRender(); },
+  kdecoAsk: v => { K.confirm = { type: "deco", key: v }; K.tryKey = v; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
+  kdecoBuy: async v => { K.confirm = null; try { await api("/api/kid/deco/buy", { key: v }); K.tryKey = null; toast("새 꾸미기를 달았어요!"); await kidLoad(); } catch (e) { toast(e.message); } kidRender(); },
+  // v is "slot.id" to put an item on, or just "slot" to go back to the plain look
+  kwear: async v => { const [slot] = v.split("."); try { await api("/api/kid/deco/wear", { slot, key: v.includes(".") ? v : null }); K.tryKey = null; await kidLoad(); } catch (e) { toast(e.message); } kidRender(); },
   ksail: async v => { try { await api("/api/kid/sail", { sail: Number(v) }); await kidLoad(); kidRender(); } catch (e) { toast(e.message); } },
   kpinAsk: () => { K.confirm = { type: "pin" }; kidRender(); },
   openChests: async () => {
@@ -278,7 +309,7 @@ function tRender() {
     <main>${({ map: tMap, grant: tGrant, crew: tCrew, treasure: tTreasure, quests: tQuests, season: tSeason })[T.tab]()}</main>`;
   restoreInputs(keep); if (focus) document.getElementById(focus)?.focus();
   if (T.tab === "map") {
-    const ships = tStudents().map(s => ({ id: s.id, nickname: s.nickname, sail: s.sail, moves: s.stats.moves }));
+    const ships = tStudents().map(s => ({ id: s.id, nickname: s.nickname, sail: s.sail, look: s.look, moves: s.stats.moves }));
     V.placeShips($("#tmap"), ships, d.season, { prev: T.shipPrev });
     for (const s of d.students) T.shipPrev[s.id] = s.stats.moves;
   }

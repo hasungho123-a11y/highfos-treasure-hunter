@@ -22,10 +22,46 @@ function stopPts(L) {
   return ptsCache[L] = out;
 }
 
-const BOAT = `<svg viewBox="0 0 48 44" aria-hidden="true"><g class="hull">
-  <path d="M24 4 L24 31" stroke="#5A3A22" stroke-width="2"/><path d="M25.5 6 L25.5 28 L41 28 Z" fill="var(--sail)"/>
-  <path d="M22.5 10 L22.5 28 L11 28 Z" fill="#FFF8EA"/><path d="M24 4 L31 6.5 L24 9 Z" fill="var(--sail)"/>
-  <path d="M5 30 L43 30 L37 39 Q24 42 11 39 Z" fill="#7A4A28"/><path d="M6.5 32 L41.5 32" stroke="#F1C04B" stroke-width="1.6"/></g></svg>`;
+/* ---------- ship decorations (names and prices come from the server) ---------- */
+// shared gradients and patterns, defined once so every boat can point at them
+const decoDefs = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+decoDefs.setAttribute("width", "0"); decoDefs.setAttribute("height", "0"); decoDefs.setAttribute("aria-hidden", "true"); decoDefs.style.position = "absolute";
+decoDefs.innerHTML = `<defs>
+  <linearGradient id="dk-gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF0A8"/><stop offset=".45" stop-color="#E9B53A"/><stop offset="1" stop-color="#A9771A"/></linearGradient>
+  <linearGradient id="dk-rainbow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0564A"/><stop offset=".2" stop-color="#F59B3A"/><stop offset=".4" stop-color="#F4D03F"/><stop offset=".6" stop-color="#5DBB63"/><stop offset=".8" stop-color="#3D8BD9"/><stop offset="1" stop-color="#8E5CC7"/></linearGradient>
+  <linearGradient id="dk-flame" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D03F"/><stop offset=".5" stop-color="#F28A2E"/><stop offset="1" stop-color="#D9402F"/></linearGradient>
+  <pattern id="dk-stripe" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1.8" fill="#fff" opacity=".6"/></pattern>
+  <pattern id="dk-dots" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".95" fill="#fff" opacity=".8"/></pattern></defs>`;
+document.body.appendChild(decoDefs);
+const starPath = (cx, cy, R, r) => "M" + Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? r : R; return `${(cx + k * Math.cos(a)).toFixed(2)} ${(cy + k * Math.sin(a)).toFixed(2)}`; }).join(" L") + " Z";
+const HULLS = { red: ["#C2402F", "#F1C04B"], navy: ["#22406B", "#F1C04B"], mint: ["#3A9E87", "#FFF3C4"], white: ["#F3EEE2", "#D9A53A"], gold: ["url(#dk-gold)", "#FFF3B8"] };
+const SAIL_FILL = { rainbow: "url(#dk-rainbow)", gold: "url(#dk-gold)" };
+const SAIL_MARK = {
+  stripe: `<path d="M25.5 6 L25.5 28 L41 28 Z" fill="url(#dk-stripe)"/>`,
+  dots: `<path d="M25.5 6 L25.5 28 L41 28 Z" fill="url(#dk-dots)"/>`,
+  star: `<path d="${starPath(31.2, 21.5, 3.8, 1.6)}" fill="#fff"/>`,
+  skull: `<circle cx="31" cy="20.2" r="3" fill="#fff"/><rect x="29.4" y="22" width="3.2" height="2.3" rx=".6" fill="#fff"/><circle cx="29.9" cy="20.1" r=".8" fill="#1B1B1B"/><circle cx="32.1" cy="20.1" r=".8" fill="#1B1B1B"/>`,
+  gold: `<path d="M27 25 L27.8 12" stroke="#FFF8D6" stroke-width=".9" opacity=".8"/>`
+};
+const FLAGS = {
+  jolly: `<path d="M24 1.5 H34 V8 H24 Z" fill="#1B1B1B"/><circle cx="29" cy="4.1" r="1.5" fill="#fff"/><path d="M26.6 6.6 L31.4 5.6 M26.6 5.6 L31.4 6.6" stroke="#fff" stroke-width=".6"/>`,
+  heart: `<path d="M24 1.5 H34 V8 H24 Z" fill="#E8668F"/><path d="M29 7 C26.4 5.2 26.6 3 28 3 C28.6 3 29 3.5 29 3.5 C29 3.5 29.4 3 30 3 C31.4 3 31.6 5.2 29 7 Z" fill="#fff"/>`,
+  star: `<path d="M24 1.5 H34 V8 H24 Z" fill="#22406B"/><path d="${starPath(29, 4.9, 2.4, 1)}" fill="#F4D03F"/>`,
+  crown: `<path d="M19.6 4.5 L20.4 -1 L22.4 1.6 L24 -2.2 L25.6 1.6 L27.6 -1 L28.4 4.5 Z" fill="url(#dk-gold)" stroke="#9C6A22" stroke-width=".5"/><circle cx="24" cy="2.3" r=".8" fill="#E0573F"/>`,
+  flame: `<path d="M24 1.5 C27.5 2.2 30 .2 35 3 C31.6 3.8 33.4 5.8 36 8 C31.5 7.8 28 9.2 24 9 Z" fill="url(#dk-flame)"/>`
+};
+// look: {hull, pattern, flag} ids; anything missing draws the plain wooden boat
+function boatSVG(look = {}) {
+  const [hull, trim] = HULLS[look.hull] || ["#7A4A28", "#F1C04B"], sailFill = SAIL_FILL[look.pattern] || "var(--sail)";
+  return `<svg viewBox="0 0 48 44" aria-hidden="true"><g class="hull">
+  <path d="M24 ${look.flag === "crown" ? 4 : 1.5} L24 31" stroke="#5A3A22" stroke-width="2"/><path d="M25.5 6 L25.5 28 L41 28 Z" fill="${sailFill}"/>${SAIL_MARK[look.pattern] || ""}
+  <path d="M22.5 10 L22.5 28 L11 28 Z" fill="${look.pattern === "gold" ? "#FFF1C2" : "#FFF8EA"}"/>${FLAGS[look.flag] || `<path d="M24 4 L31 6.5 L24 9 Z" fill="var(--sail)"/>`}
+  <path d="M5 30 L43 30 L37 39 Q24 42 11 39 Z" fill="${hull}" ${look.hull === "white" ? `stroke="#C9B48A" stroke-width=".8"` : ""}/><path d="M6.5 32 L41.5 32" stroke="${trim}" stroke-width="1.6"/></g></svg>`;
+}
+const BOAT = boatSVG();
+// extra classes on the .ship wrapper for the wake effect and on the name tag
+const wakeClass = look => look && look.wake ? `wk-${look.wake}` : "";
+const tagClass = look => look && look.tag ? `tg-${look.tag}` : "";
 
 function mapHTML(season, id = "map") {
   const L = season.routeLen, P = stopPts(L), stops = [];
@@ -74,8 +110,8 @@ function placeShips(map, ships, season, opts = {}) {
     g.forEach((s, k) => { const row = Math.floor(k / per), inRow = Math.min(per, n - row * per), col = k % per, b = pct(P[p]); fin[s.id] = { left: b.left + (col - (inRow - 1) / 2) * 5.4, top: b.top + row * 8.5 }; });
   }
   box.innerHTML = ships.map(s => { const i = dpos(s.moves, L), cur = P[i], nx = P[Math.min(L, i + 1)], pv = P[Math.max(0, i - 1)], dx = i < L ? nx.x - cur.x : cur.x - pv.x, f = fin[s.id];
-    return `<div class="ship ${dx < 0 ? "flip" : ""} ${i === L ? "arrived" : ""} ${s.id === opts.me ? "mine" : ""} ${opts.me && s.id !== opts.me ? "other" : ""}" data-id="${s.id}" style="--sail:${sail(s.sail)};left:${f.left}%;top:${f.top}%"
-      title="${esc(s.nickname)} · ${voyageOf(s.moves, L)}번째 항해 · ${i === L ? "도착 항구" : i + "칸"}">${BOAT}<span class="nmtag">${s.id === opts.me ? "나 · " : ""}${esc(s.nickname)}</span></div>`; }).join("");
+    return `<div class="ship ${dx < 0 ? "flip" : ""} ${i === L ? "arrived" : ""} ${s.id === opts.me ? "mine" : ""} ${opts.me && s.id !== opts.me ? "other" : ""} ${wakeClass(s.look)}" data-id="${s.id}" style="--sail:${sail(s.sail)};left:${f.left}%;top:${f.top}%"
+      title="${esc(s.nickname)} · ${voyageOf(s.moves, L)}번째 항해 · ${i === L ? "도착 항구" : i + "칸"}">${boatSVG(s.look)}<span class="nmtag ${tagClass(s.look)}">${s.id === opts.me ? "나 · " : ""}${esc(s.nickname)}</span></div>`; }).join("");
   if (!opts.prev || reduced()) return;
   for (const s of ships) {
     const prev = opts.prev[s.id]; if (prev == null || prev >= s.moves) continue;
@@ -306,5 +342,5 @@ async function stageChests(list, who, opener) {
   return opened;
 }
 
-window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, get running() { return !!FX.running; } };
+window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, boatSVG, wakeClass, tagClass, get running() { return !!FX.running; } };
 })();

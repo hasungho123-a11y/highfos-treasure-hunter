@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS students (
   class_id INTEGER NOT NULL,
   nickname TEXT NOT NULL,
   sail INTEGER NOT NULL DEFAULT 0,
+  look TEXT NOT NULL DEFAULT '{}',   -- decorations being worn, {slot: id}
   pin_hash TEXT NOT NULL,
   salt TEXT NOT NULL,
   must_change INTEGER NOT NULL DEFAULT 1,
@@ -121,4 +122,12 @@ CREATE TABLE IF NOT EXISTS orders (
   log_id INTEGER,
   created_at INTEGER NOT NULL,
   decided_at INTEGER
+);
+-- ship decorations a student has bought (item = "slot.id" from DECO in worker.js); log_id is the points it cost
+CREATE TABLE IF NOT EXISTS deco_owned (
+  student_id INTEGER NOT NULL,
+  item TEXT NOT NULL,
+  log_id INTEGER,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (student_id, item)
 );

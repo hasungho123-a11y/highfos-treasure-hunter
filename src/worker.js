@@ -17,6 +17,22 @@ const DEFAULT_SHOP = [
   ["젤리 한 봉지", "선물", 30], ["아이스크림", "선물", 50], ["예쁜 문구 세트", "선물", 80], ["작은 장난감 뽑기", "선물", 120],
   ["음악 선곡권", "특권", 30], ["자리 우선 선택권", "특권", 40], ["선생님과 미니게임", "특권", 60], ["숙제 1회 면제권", "특권", 100]
 ];
+// Ship decorations bought with points. Names and prices live here; how each one looks is drawn in public/voyage.js.
+const DECO_SLOTS = ["hull", "pattern", "flag", "wake", "tag"];
+const DECO = [
+  ["hull", "red", "빨간 배", 30], ["hull", "navy", "남색 배", 30], ["hull", "mint", "민트 배", 30], ["hull", "white", "하얀 금테 배", 80], ["hull", "gold", "황금 배", 250],
+  ["pattern", "stripe", "줄무늬 돛", 30], ["pattern", "dots", "물방울 돛", 30], ["pattern", "star", "별 돛", 60], ["pattern", "skull", "해골 돛", 100], ["pattern", "rainbow", "무지개 돛", 150], ["pattern", "gold", "황금 돛", 250],
+  ["flag", "jolly", "해적 깃발", 40], ["flag", "heart", "하트 깃발", 40], ["flag", "star", "별 깃발", 40], ["flag", "crown", "왕관", 100], ["flag", "flame", "불꽃 깃발", 100],
+  ["wake", "splash", "물보라", 50], ["wake", "sparkle", "반짝이 물결", 100], ["wake", "bubble", "비눗방울", 100], ["wake", "rainbow", "무지개 물결", 200],
+  ["tag", "gold", "금빛 이름표", 60], ["tag", "rainbow", "무지개 이름표", 150]
+].map(([slot, id, name, price]) => ({ key: `${slot}.${id}`, slot, id, name, price }));
+const decoByKey = k => DECO.find(d => d.key === k);
+// look = {slot: id} for the items a student is wearing; anything unknown is dropped
+function parseLook(s) {
+  let o = {}; try { o = JSON.parse(s || "{}") || {}; } catch (e) {}
+  const out = {}; for (const slot of DECO_SLOTS) if (o[slot] && decoByKey(`${slot}.${o[slot]}`)) out[slot] = o[slot];
+  return out;
+}
 const BADGES = [
   { key: "eng", name: "영어 항해사", desc: "영어 미션 10회" },
   { key: "math", name: "수학 항해사", desc: "수학 미션 10회" },
@@ -162,9 +178,9 @@ async function openChest(db, chest) {
   return { id: chest.id, name: pick.name, rarity: pick.rarity, points: pick.points, stop: chest.stop };
 }
 async function shipsOf(db, season, where, binds) {
-  const rows = (await db.prepare(`SELECT s.id, s.nickname, s.sail, s.class_id FROM students s WHERE s.active=1 ${where}`).bind(...binds).all()).results;
+  const rows = (await db.prepare(`SELECT s.id, s.nickname, s.sail, s.look, s.class_id FROM students s WHERE s.active=1 ${where}`).bind(...binds).all()).results;
   const st = await statsFor(db, season, rows.map(r => r.id));
-  return rows.map(r => ({ id: r.id, nickname: r.nickname, sail: r.sail, classId: r.class_id, moves: st[r.id].moves, weekMoves: st[r.id].weekMoves }));
+  return rows.map(r => ({ id: r.id, nickname: r.nickname, sail: r.sail, look: parseLook(r.look), classId: r.class_id, moves: st[r.id].moves, weekMoves: st[r.id].weekMoves }));
 }
 // Students only see prizes that can still come out; teachers also see sold-out ones (stock 0).
 async function poolList(db, all = false) { return (await db.prepare(`SELECT id, name, rarity, weight, points, stock FROM pool WHERE active=1 ${all ? "" : "AND (stock IS NULL OR stock>0)"} ORDER BY weight DESC, id`).all()).results; }
@@ -266,8 +282,34 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const orders = (await db.prepare("SELECT id, name, cost, status, created_at FROM orders WHERE student_id=? AND status<>'canceled' ORDER BY id DESC LIMIT 30").bind(st.id).all()).results;
   const log = (await db.prepare("SELECT title, moves, points, kind, at FROM logs WHERE student_id=? ORDER BY id DESC LIMIT 30").bind(st.id).all()).results;
   const ships = await shipsOf(db, season, "AND s.class_id=?", [st.class_id]);
-  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, className: st.class_name, mustChange: !!st.must_change }, season, stats, quests, chests, orders, log, ships,
-    pool: await poolList(db), shop: await shopList(db), badges: BADGES };
+  const owned = (await db.prepare("SELECT item FROM deco_owned WHERE student_id=?").bind(st.id).all()).results.map(r => r.item);
+  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: parseLook(st.look), className: st.class_name, mustChange: !!st.must_change }, season, stats, quests, chests, orders, log, ships,
+    pool: await poolList(db), shop: await shopList(db), badges: BADGES, deco: DECO, owned };
+});
+// buy a decoration with points; it is put on right away
+on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
+  const d = decoByKey(String(body.key || "")); if (!d) throw bad("없는 꾸미기예요");
+  const sid = me.student.id, season = await getSeason(db), s = (await statsFor(db, season, [sid]))[sid];
+  if (s.points < d.price) throw bad(`포인트가 ${d.price - s.points} 모자라요`);
+  const r = await db.prepare("INSERT OR IGNORE INTO deco_owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, d.key, Date.now()).run();
+  if (!r.meta.changes) throw bad("이미 가지고 있어요");
+  const lg = await logStmt(db, { student_id: sid, kind: "deco", title: `배 꾸미기: ${d.name}`, points: -d.price, season: season.id }).run();
+  const look = { ...parseLook(me.student.look), [d.slot]: d.id };
+  await db.batch([db.prepare("UPDATE deco_owned SET log_id=? WHERE student_id=? AND item=?").bind(lg.meta.last_row_id, sid, d.key),
+    db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), sid)]);
+  return { ok: true };
+});
+// put on (key) or take off (no key) one slot
+on("POST", "/api/kid/deco/wear", "student", async ({ db, me, body }) => {
+  const slot = String(body.slot || ""); if (!DECO_SLOTS.includes(slot)) throw bad("없는 꾸미기 자리예요");
+  const look = parseLook(me.student.look);
+  if (body.key) {
+    const d = decoByKey(String(body.key)); if (!d || d.slot !== slot) throw bad("없는 꾸미기예요");
+    if (!(await db.prepare("SELECT 1 FROM deco_owned WHERE student_id=? AND item=?").bind(me.student.id, d.key).first())) throw bad("아직 사지 않은 꾸미기예요");
+    look[slot] = d.id;
+  } else delete look[slot];
+  await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run();
+  return { ok: true };
 });
 on("POST", "/api/kid/request", "student", async ({ db, me, body }) => {
   const q = await db.prepare("SELECT * FROM quests WHERE id=? AND active=1 AND deleted=0").bind(int(body.questId, 1)).first();
@@ -303,9 +345,9 @@ on("POST", "/api/kid/buy/:id", "student", async ({ db, me, params }) => {
 on("GET", "/api/t/state", "teacher", async ({ db }) => {
   const season = await getSeason(db);
   const classes = (await db.prepare("SELECT id, name, code FROM classes WHERE active=1 ORDER BY name").all()).results;
-  const students = (await db.prepare("SELECT id, class_id, nickname, sail, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
+  const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const stats = await statsFor(db, season, students.map(s => s.id));
-  for (const s of students) { s.stats = stats[s.id]; s.locked = s.locked_until > Date.now(); delete s.locked_until; }
+  for (const s of students) { s.stats = stats[s.id]; s.look = parseLook(s.look); s.locked = s.locked_until > Date.now(); delete s.locked_until; }
   const quests = (await db.prepare("SELECT id, title, subject, kind, moves, active FROM quests WHERE deleted=0 ORDER BY active DESC, subject, kind, id").all()).results;
   const requests = (await db.prepare(`SELECT r.id, r.student_id, r.quest_id, r.created_at, q.title, q.moves, q.subject FROM requests r JOIN quests q ON q.id=r.quest_id JOIN students s ON s.id=r.student_id
       WHERE r.status='pending' AND s.active=1 ORDER BY r.id`).all()).results;
@@ -372,6 +414,11 @@ on("POST", "/api/t/logs/:id/undo", "teacher", async ({ db, params }) => {
   const l = await db.prepare("SELECT * FROM logs WHERE id=?").bind(params.id).first(); if (!l) throw bad("이미 취소된 기록이에요");
   if (l.kind === "buy") throw bad("상점 기록은 '보물·상점'에서 주문 취소로 되돌려 주세요");
   const ops = [];
+  if (l.kind === "deco") { // refund a decoration: take it back and off the ship
+    const o = await db.prepare("SELECT item FROM deco_owned WHERE log_id=?").bind(l.id).first(), st = await db.prepare("SELECT look FROM students WHERE id=?").bind(l.student_id).first();
+    if (o && st) { const d = decoByKey(o.item), look = parseLook(st.look); if (d && look[d.slot] === d.id) delete look[d.slot];
+      ops.push(db.prepare("DELETE FROM deco_owned WHERE log_id=?").bind(l.id), db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), l.student_id)); }
+  }
   if (l.grp && l.kind === "quest") {
     ops.push(db.prepare("DELETE FROM logs WHERE grp=? AND kind IN ('quest','arrive')").bind(l.grp));
     ops.push(db.prepare("DELETE FROM chests WHERE grp=? AND status='closed'").bind(l.grp));
