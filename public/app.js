@@ -127,7 +127,39 @@ const GATE_FORMS = {
    STUDENT
    ===================================================================== */
 const K = { d: null, tab: "voyage", confirm: null, busy: false, playing: false, slot: "hull", tryKey: null };
-const DECO_SLOTS = [["hull", "배"], ["pattern", "돛 무늬"], ["flag", "깃발"], ["wake", "물결"], ["tag", "이름표"], ["sail", "돛 색"]];
+const DECO_SLOTS = [["hull", "배"], ["att", "부착물"], ["pattern", "돛 무늬"], ["flag", "깃발"], ["trim", "테두리"], ["wake", "물결"], ["tag", "이름표"], ["sail", "돛 색"]];
+// a look with one item put on (attachments are added to the list, other slots replaced)
+const withItem = (look, x) => x.slot === "att" ? { ...look, att: [...new Set([...(look.att || []), x.id])] } : { ...look, [x.slot]: x.id };
+const isWorn = (look, x) => x.slot === "att" ? (look.att || []).includes(x.id) : look[x.slot] === x.id;
+
+/* ----- 3D ship: one shared viewer, shown in the "내 배" card or full screen when a ship on the map is tapped ----- */
+function show3D(host, look, sailIdx) {
+  if (!host || !window.Ship3D) return;
+  Ship3D.get().then(v => { if (!host.isConnected) return; v.setLook(look, sail(sailIdx)); v.mount(host); host.classList.add("ready"); })
+    .catch(e => { host.classList.add("failed"); const m = host.querySelector(".s3d-msg"); if (m) m.textContent = e.message; });
+}
+function openShip(ship) {
+  document.querySelector(".s3d-modal")?.remove();
+  const m = document.createElement("div"); m.className = "s3d-modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.setAttribute("aria-label", `${ship.nickname}의 배`);
+  m.innerHTML = `<div class="s3d-box"><div class="row between"><h2>${esc(ship.nickname)}의 배</h2><button type="button" class="btn sm" data-close>닫기</button></div>
+    <div class="s3d-host"><p class="s3d-msg">3D 배를 불러오는 중…</p></div></div>`;
+  document.body.appendChild(m);
+  const onKey = e => { if (e.key === "Escape") close(); };
+  const close = () => { m.remove(); document.removeEventListener("keydown", onKey); kidMount3D(); };
+  m.addEventListener("click", e => { if (e.target === m || e.target.closest("[data-close]")) close(); });
+  document.addEventListener("keydown", onKey);
+  m.querySelector("[data-close]").focus();
+  show3D(m.querySelector(".s3d-host"), ship.look || {}, ship.sail);
+}
+// tap a ship on any map to see it in 3D
+document.addEventListener("click", e => {
+  const el = e.target.closest(".map .ship"); if (!el || V.running) return;
+  const id = Number(el.dataset.id), list = K.d?.ships || T.d?.students || [];
+  const s = list.find(x => x.id === id); if (s) openShip(s);
+});
+// the "내 배" card shows the ship being tried on in 3D
+function decoLook() { const me = K.d.me, x = K.tryKey && K.d.deco.find(d => d.key === K.tryKey); return x ? withItem(me.look, x) : me.look; }
+function kidMount3D() { const h = $("#deco3d"); if (h && K.d && !$(".s3d-modal")) show3D(h, decoLook(), K.d.me.sail); }
 const CHEST_ICON = `<svg viewBox="0 0 28 24" aria-hidden="true"><path d="M2 11 Q14 0 26 11 Z" fill="#B06B36"/><rect x="2" y="10" width="24" height="13" rx="2" fill="#8A5328"/><rect x="2" y="14" width="24" height="2.6" fill="#F1C04B"/><rect x="12" y="12" width="4" height="6" rx="1" fill="#F1C04B"/></svg>`;
 async function kidLoad() { K.d = await api("/api/kid/state"); }
 async function kidStart() {
@@ -147,6 +179,7 @@ function kidRender() {
     ${me.mustChange ? kPinModal(true) : K.confirm?.type === "pin" ? kPinModal(false) : ""}`;
   restoreInputs(keep);
   if (K.tab === "voyage") { const map = $("#kmap"); V.placeShips(map, d.ships, s, { me: me.id }); requestAnimationFrame(() => scrollToMine()); }
+  if (K.tab === "deco") kidMount3D();
 }
 function scrollToMine() {
   const sc = $(".mapscroll"), el = $(".ship.mine"); if (!sc || !el) return;
@@ -181,23 +214,22 @@ const decoShip = (look, sailIdx, name, cls = "") => `<div class="deco-sea ${cls}
 function kDeco() {
   const d = K.d, me = d.me, pts = d.stats.points, owned = new Set(d.owned), slot = K.slot;
   const tryItem = K.tryKey && d.deco.find(x => x.key === K.tryKey);
-  const look = tryItem ? { ...me.look, [tryItem.slot]: tryItem.id } : me.look;
   const conf = K.confirm?.type === "deco" && d.deco.find(x => x.key === K.confirm.key);
-  const worn = x => me.look[x.slot] === x.id;
-  const card = x => { const has = owned.has(x.key), can = pts >= x.price;
-    return `<div class="deco-item ${K.tryKey === x.key ? "sel" : ""}" data-act="ktry" data-v="${x.key}">${decoShip({ ...me.look, [x.slot]: x.id }, me.sail, "", "tiny")}
+  const card = x => { const has = owned.has(x.key), can = pts >= x.price, on = isWorn(me.look, x), att = x.slot === "att";
+    return `<div class="deco-item ${K.tryKey === x.key ? "sel" : ""}" data-act="ktry" data-v="${x.key}">${decoShip(withItem(me.look, x), me.sail, "", "tiny")}
       <b>${esc(x.name)}</b>${has ? "" : `<span class="pt num">${x.price}</span>`}
-      ${worn(x) ? `<span class="pill ok">쓰는 중</span>` : has ? `<button class="btn sm" data-act="kwear" data-v="${x.key}">쓰기</button>`
+      ${has ? (att ? `<button class="btn sm ${on ? "" : "primary"}" data-act="kwear" data-v="${x.key}">${on ? "떼기" : "달기"}</button>` : on ? `<span class="pill ok">쓰는 중</span>` : `<button class="btn sm" data-act="kwear" data-v="${x.key}">쓰기</button>`)
         : `<button class="btn sm ${can ? "primary" : ""}" data-act="kdecoAsk" data-v="${x.key}" ${can ? "" : "disabled"}>${can ? "사기" : `${x.price - pts}P 모자라요`}</button>`}</div>`; };
   const items = d.deco.filter(x => x.slot === slot), mine = d.deco.filter(x => owned.has(x.key)).length;
+  const plain = slot !== "att" && slot !== "sail" ? `<div class="deco-item ${me.look[slot] ? "" : "sel"}" data-act="ktry" data-v="">${decoShip({ ...me.look, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>
+      ${me.look[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
   return `<section class="panel deco-hero"><div class="row between"><h2>${esc(me.nickname)}의 배</h2><span class="pt num">${pts}</span></div>
-      ${decoShip(look, me.sail, (me.nickname), "big")}
-      <p class="small muted">${tryItem && !owned.has(tryItem.key) ? `<b>${esc(tryItem.name)}</b> 미리 보는 중이에요.` : "꾸미기를 누르면 내 배에 미리 입혀 볼 수 있어요."} 꾸민 배는 반 친구들 지도에도 그대로 보여요. · 모은 꾸미기 ${mine}/${d.deco.length}</p>
+      <div class="deco3d" id="deco3d">${decoShip(decoLook(), me.sail, me.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
+      <p class="small muted">${tryItem && !owned.has(tryItem.key) ? `<b>${esc(tryItem.name)}</b> 미리 보는 중이에요.` : "꾸미기를 누르면 내 배에 미리 입혀 볼 수 있어요."} 배를 손가락으로 돌려 보고, 지도에서 친구 배를 누르면 친구 배도 볼 수 있어요. · 모은 꾸미기 ${mine}/${d.deco.length}</p>
       ${conf ? `<div class="confirm"><span><b>${esc(conf.name)}</b>을(를) <span class="pt">${conf.price}</span>로 살까요? 남는 포인트 ${pts - conf.price}</span><button class="btn sm primary" data-act="kdecoBuy" data-v="${conf.key}">사기</button><button class="btn sm" data-act="kcancelConfirm">취소</button></div>` : ""}</section>
     <section class="panel"><div class="chips" role="group" aria-label="꾸미기 종류">${DECO_SLOTS.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>
       ${slot === "sail" ? `<p class="small muted">돛 색은 언제든 무료로 바꿀 수 있어요.</p><div class="sails">${V.SAILS.map((c, i) => `<button style="--sail:${c}" data-act="ksail" data-v="${i}" aria-pressed="${me.sail === i}" aria-label="돛 색 ${i + 1}"></button>`).join("")}</div>`
-        : `<div class="deco-grid"><div class="deco-item ${me.look[slot] ? "" : "sel"}" data-act="ktry" data-v="">${decoShip({ ...me.look, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>
-            ${me.look[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>${items.map(card).join("")}</div>`}
+        : `${slot === "att" ? `<p class="small muted">부착물은 여러 개를 같이 달 수 있어요.</p>` : ""}<div class="deco-grid">${plain}${items.map(card).join("")}</div>`}
       <p class="small muted">포인트는 도착 항구에 닿거나 보물 상자에서 얻어요. 산 꾸미기는 계속 내 것이라 언제든 바꿔 쓸 수 있어요.</p></section>`;
 }
 function kShop() {

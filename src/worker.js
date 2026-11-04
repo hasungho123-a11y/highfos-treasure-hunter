@@ -18,20 +18,33 @@ const DEFAULT_SHOP = [
   ["음악 선곡권", "특권", 30], ["자리 우선 선택권", "특권", 40], ["선생님과 미니게임", "특권", 60], ["숙제 1회 면제권", "특권", 100]
 ];
 // Ship decorations bought with points. Names and prices live here; how each one looks is drawn in public/voyage.js.
-const DECO_SLOTS = ["hull", "pattern", "flag", "wake", "tag"];
+// "att" items are attachments: several can be on the ship at once. Every other slot holds one item.
+const DECO_SLOTS = ["hull", "trim", "pattern", "flag", "att", "wake", "tag"];
 const DECO = [
-  ["hull", "red", "빨간 배", 30], ["hull", "navy", "남색 배", 30], ["hull", "mint", "민트 배", 30], ["hull", "white", "하얀 금테 배", 80], ["hull", "gold", "황금 배", 250],
-  ["pattern", "stripe", "줄무늬 돛", 30], ["pattern", "dots", "물방울 돛", 30], ["pattern", "star", "별 돛", 60], ["pattern", "skull", "해골 돛", 100], ["pattern", "rainbow", "무지개 돛", 150], ["pattern", "gold", "황금 돛", 250],
-  ["flag", "jolly", "해적 깃발", 40], ["flag", "heart", "하트 깃발", 40], ["flag", "star", "별 깃발", 40], ["flag", "crown", "왕관", 100], ["flag", "flame", "불꽃 깃발", 100],
+  ["hull", "red", "진홍 배", 30], ["hull", "navy", "남색 배", 30], ["hull", "mint", "민트 배", 30], ["hull", "ebony", "흑단 배", 60], ["hull", "white", "상아 배", 80], ["hull", "gold", "황금 배", 250],
+  ["trim", "silver", "은테 장식", 40],
+  ["pattern", "stripe", "줄무늬 돛", 30], ["pattern", "dots", "물방울 돛", 30], ["pattern", "star", "별 돛", 60], ["pattern", "compass", "나침반 돛", 60], ["pattern", "skull", "해골 돛", 100], ["pattern", "rainbow", "무지개 돛", 150], ["pattern", "gold", "황금 돛", 250],
+  ["flag", "jolly", "해적 깃발", 40], ["flag", "heart", "하트 깃발", 40], ["flag", "star", "별 깃발", 40], ["flag", "crown", "왕관 깃발", 100], ["flag", "flame", "불꽃 깃발", 100],
+  ["att", "anchor", "닻", 40], ["att", "lantern", "랜턴", 50], ["att", "cannon", "대포", 80], ["att", "nest", "망루", 80], ["att", "parrot", "앵무새", 100], ["att", "treasure", "보물 더미", 150], ["att", "dragon", "용 선수상", 250],
   ["wake", "splash", "물보라", 50], ["wake", "sparkle", "반짝이 물결", 100], ["wake", "bubble", "비눗방울", 100], ["wake", "rainbow", "무지개 물결", 200],
   ["tag", "gold", "금빛 이름표", 60], ["tag", "rainbow", "무지개 이름표", 150]
 ].map(([slot, id, name, price]) => ({ key: `${slot}.${id}`, slot, id, name, price }));
 const decoByKey = k => DECO.find(d => d.key === k);
-// look = {slot: id} for the items a student is wearing; anything unknown is dropped
+// look = {slot: id, att: [ids]} for what a student is wearing; anything unknown is dropped
 function parseLook(s) {
   let o = {}; try { o = JSON.parse(s || "{}") || {}; } catch (e) {}
-  const out = {}; for (const slot of DECO_SLOTS) if (o[slot] && decoByKey(`${slot}.${o[slot]}`)) out[slot] = o[slot];
+  const out = {};
+  for (const slot of DECO_SLOTS) {
+    if (slot === "att") { const a = (Array.isArray(o.att) ? o.att : []).filter(id => decoByKey(`att.${id}`)); if (a.length) out.att = [...new Set(a)]; }
+    else if (o[slot] && decoByKey(`${slot}.${o[slot]}`)) out[slot] = o[slot];
+  }
   return out;
+}
+// put an item on (or take it off) a look
+function wearItem(look, d, on = true) {
+  if (d.slot === "att") { const a = new Set(look.att || []); on ? a.add(d.id) : a.delete(d.id); if (a.size) look.att = [...a]; else delete look.att; }
+  else if (on) look[d.slot] = d.id; else if (look[d.slot] === d.id) delete look[d.slot];
+  return look;
 }
 const BADGES = [
   { key: "eng", name: "영어 항해사", desc: "영어 미션 10회" },
@@ -294,19 +307,19 @@ on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
   const r = await db.prepare("INSERT OR IGNORE INTO deco_owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, d.key, Date.now()).run();
   if (!r.meta.changes) throw bad("이미 가지고 있어요");
   const lg = await logStmt(db, { student_id: sid, kind: "deco", title: `배 꾸미기: ${d.name}`, points: -d.price, season: season.id }).run();
-  const look = { ...parseLook(me.student.look), [d.slot]: d.id };
+  const look = wearItem(parseLook(me.student.look), d);
   await db.batch([db.prepare("UPDATE deco_owned SET log_id=? WHERE student_id=? AND item=?").bind(lg.meta.last_row_id, sid, d.key),
     db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), sid)]);
   return { ok: true };
 });
-// put on (key) or take off (no key) one slot
+// put on (key) or take off (no key) one slot; an attachment key toggles it, or follows `on` when given
 on("POST", "/api/kid/deco/wear", "student", async ({ db, me, body }) => {
   const slot = String(body.slot || ""); if (!DECO_SLOTS.includes(slot)) throw bad("없는 꾸미기 자리예요");
   const look = parseLook(me.student.look);
   if (body.key) {
     const d = decoByKey(String(body.key)); if (!d || d.slot !== slot) throw bad("없는 꾸미기예요");
     if (!(await db.prepare("SELECT 1 FROM deco_owned WHERE student_id=? AND item=?").bind(me.student.id, d.key).first())) throw bad("아직 사지 않은 꾸미기예요");
-    look[slot] = d.id;
+    wearItem(look, d, slot === "att" ? (typeof body.on === "boolean" ? body.on : !(look.att || []).includes(d.id)) : true);
   } else delete look[slot];
   await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run();
   return { ok: true };
@@ -416,7 +429,7 @@ on("POST", "/api/t/logs/:id/undo", "teacher", async ({ db, params }) => {
   const ops = [];
   if (l.kind === "deco") { // refund a decoration: take it back and off the ship
     const o = await db.prepare("SELECT item FROM deco_owned WHERE log_id=?").bind(l.id).first(), st = await db.prepare("SELECT look FROM students WHERE id=?").bind(l.student_id).first();
-    if (o && st) { const d = decoByKey(o.item), look = parseLook(st.look); if (d && look[d.slot] === d.id) delete look[d.slot];
+    if (o && st) { const d = decoByKey(o.item), look = parseLook(st.look); if (d) wearItem(look, d, false);
       ops.push(db.prepare("DELETE FROM deco_owned WHERE log_id=?").bind(l.id), db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), l.student_id)); }
   }
   if (l.grp && l.kind === "quest") {

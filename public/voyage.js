@@ -34,29 +34,53 @@ decoDefs.innerHTML = `<defs>
   <pattern id="dk-dots" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".95" fill="#fff" opacity=".8"/></pattern></defs>`;
 document.body.appendChild(decoDefs);
 const starPath = (cx, cy, R, r) => "M" + Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? r : R; return `${(cx + k * Math.cos(a)).toFixed(2)} ${(cy + k * Math.sin(a)).toFixed(2)}`; }).join(" L") + " Z";
-const HULLS = { red: ["#C2402F", "#F1C04B"], navy: ["#22406B", "#F1C04B"], mint: ["#3A9E87", "#FFF3C4"], white: ["#F3EEE2", "#D9A53A"], gold: ["url(#dk-gold)", "#FFF3B8"] };
+// a small side-on galleon (bow to the right) that matches the 3D ship in ship3d.js; same ids as DECO in worker.js
+const HULLS = { red: "#8E2A22", navy: "#1F3A63", mint: "#2F8C78", ebony: "#2A221D", white: "#E8DFC9", gold: "url(#dk-gold)" };
+const TRIMS = { silver: "#C9D3DC" };
 const SAIL_FILL = { rainbow: "url(#dk-rainbow)", gold: "url(#dk-gold)" };
-const SAIL_MARK = {
-  stripe: `<path d="M25.5 6 L25.5 28 L41 28 Z" fill="url(#dk-stripe)"/>`,
-  dots: `<path d="M25.5 6 L25.5 28 L41 28 Z" fill="url(#dk-dots)"/>`,
-  star: `<path d="${starPath(31.2, 21.5, 3.8, 1.6)}" fill="#fff"/>`,
-  skull: `<circle cx="31" cy="20.2" r="3" fill="#fff"/><rect x="29.4" y="22" width="3.2" height="2.3" rx=".6" fill="#fff"/><circle cx="29.9" cy="20.1" r=".8" fill="#1B1B1B"/><circle cx="32.1" cy="20.1" r=".8" fill="#1B1B1B"/>`,
-  gold: `<path d="M27 25 L27.8 12" stroke="#FFF8D6" stroke-width=".9" opacity=".8"/>`
+// a square sail with its free edge bellied toward the bow
+const sq = (cx, top, w, h) => `M${cx - w / 2} ${top} L${cx + w / 2} ${top} Q${cx + w / 2 + 1.4} ${top + h / 2} ${cx + w / 2} ${top + h} L${cx - w / 2} ${top + h} Q${cx - w / 2 + 1.4} ${top + h / 2} ${cx - w / 2} ${top} Z`;
+const SAIL_SHAPES = [sq(31, 15.5, 12, 10), sq(31, 6, 10, 8.5), sq(41, 17.5, 10, 9), sq(41, 9.5, 8.5, 7), sq(21, 19, 8.5, 8), sq(21, 12, 7.5, 6)];
+const EMB = { // emblems drawn on the big main sail, centred near (31.5, 20.5)
+  star: `<path d="${starPath(31.6, 20.6, 3.6, 1.5)}" fill="#fff"/>`,
+  skull: `<circle cx="31.6" cy="19.6" r="2.6" fill="#fff"/><rect x="30.2" y="21.2" width="2.8" height="2" rx=".5" fill="#fff"/><circle cx="30.7" cy="19.6" r=".7" fill="#1B1B1B"/><circle cx="32.5" cy="19.6" r=".7" fill="#1B1B1B"/><path d="M28 24 L35 18 M28 18 L35 24" stroke="#fff" stroke-width=".9" stroke-linecap="round" opacity=".9"/>`,
+  compass: `<circle cx="31.6" cy="20.6" r="3" fill="none" stroke="#fff" stroke-width=".7"/><path d="M31.6 16.8 L32.4 20.6 L31.6 24.4 L30.8 20.6 Z M27.8 20.6 L31.6 19.8 L35.4 20.6 L31.6 21.4 Z" fill="#fff"/>`,
+  gold: `<path d="M27.5 24.5 L28.2 17" stroke="#FFF8D6" stroke-width=".9" opacity=".8"/>`
 };
+const FLAG_AT = (fill, inner = "") => `<path d="M31 .4 H38.6 V5.4 H31 Z" fill="${fill}"/>${inner}`;
 const FLAGS = {
-  jolly: `<path d="M24 1.5 H34 V8 H24 Z" fill="#1B1B1B"/><circle cx="29" cy="4.1" r="1.5" fill="#fff"/><path d="M26.6 6.6 L31.4 5.6 M26.6 5.6 L31.4 6.6" stroke="#fff" stroke-width=".6"/>`,
-  heart: `<path d="M24 1.5 H34 V8 H24 Z" fill="#E8668F"/><path d="M29 7 C26.4 5.2 26.6 3 28 3 C28.6 3 29 3.5 29 3.5 C29 3.5 29.4 3 30 3 C31.4 3 31.6 5.2 29 7 Z" fill="#fff"/>`,
-  star: `<path d="M24 1.5 H34 V8 H24 Z" fill="#22406B"/><path d="${starPath(29, 4.9, 2.4, 1)}" fill="#F4D03F"/>`,
-  crown: `<path d="M19.6 4.5 L20.4 -1 L22.4 1.6 L24 -2.2 L25.6 1.6 L27.6 -1 L28.4 4.5 Z" fill="url(#dk-gold)" stroke="#9C6A22" stroke-width=".5"/><circle cx="24" cy="2.3" r=".8" fill="#E0573F"/>`,
-  flame: `<path d="M24 1.5 C27.5 2.2 30 .2 35 3 C31.6 3.8 33.4 5.8 36 8 C31.5 7.8 28 9.2 24 9 Z" fill="url(#dk-flame)"/>`
+  jolly: FLAG_AT("#141414", `<circle cx="34.8" cy="2.5" r="1.3" fill="#fff"/><path d="M32.9 4.6 L36.7 3.6 M32.9 3.6 L36.7 4.6" stroke="#fff" stroke-width=".5"/>`),
+  heart: FLAG_AT("#C9406A", `<path d="M34.8 4.7 C32.6 3.3 32.8 1.4 34 1.4 C34.5 1.4 34.8 1.8 34.8 1.8 C34.8 1.8 35.1 1.4 35.6 1.4 C36.8 1.4 37 3.3 34.8 4.7 Z" fill="#fff"/>`),
+  star: FLAG_AT("#1F3A63", `<path d="${starPath(34.8, 3, 2, .85)}" fill="#F4D03F"/>`),
+  crown: FLAG_AT("#6B2A8E", `<path d="M33 4.4 L32.8 1.6 L33.9 2.8 L34.8 1.2 L35.7 2.8 L36.8 1.6 L36.6 4.4 Z" fill="#F1C04B"/>`),
+  flame: FLAG_AT("#B5302A", `<path d="M34.8 4.8 C33.4 4.6 33.4 3 34.4 2.4 C34.4 3 34.8 3.1 35 1.2 C36 2.2 36.6 4.2 34.8 4.8 Z" fill="#F7C548"/>`)
 };
-// look: {hull, pattern, flag} ids; anything missing draws the plain wooden boat
+const ATT = {
+  cannon: [22, 28, 34, 40].map((x, i) => `<circle cx="${x}" cy="${36.1 - i * .2}" r="1" fill="#1E2126" stroke="#F1C04B" stroke-width=".3"/>`).join(""),
+  dragon: `<path d="M53.2 30.5 Q58.6 27.4 57.4 22.6 Q60.6 23.4 59.6 26.8 Q58.6 30.2 54.4 32.2 Z" fill="url(#dk-gold)" stroke="#9C6A22" stroke-width=".4"/><circle cx="58.5" cy="24.3" r=".45" fill="#D9402F"/>`,
+  nest: `<rect x="29.2" y="13.6" width="3.6" height="1.7" rx=".4" fill="#5A3A22"/><path d="M29.2 13.7 H32.8" stroke="#F1C04B" stroke-width=".4"/>`,
+  lantern: `<path d="M5.2 26 V23.4" stroke="#23262B" stroke-width=".5"/><circle cx="5.2" cy="22.6" r="1.25" fill="#FFD27A" stroke="#FFB347" stroke-width=".4"/>`,
+  parrot: `<ellipse cx="37.2" cy="14" rx=".9" ry="1.35" fill="#D9402F"/><circle cx="37.5" cy="12.6" r=".7" fill="#D9402F"/><path d="M38.1 12.6 L39 12.9 L38.1 13.1 Z" fill="#F4C430"/>`,
+  treasure: `<ellipse cx="26" cy="31.3" rx="2.4" ry="1.1" fill="url(#dk-gold)"/><rect x="24.6" y="29.1" width="2.8" height="1.8" rx=".3" fill="#8A5328" stroke="#F1C04B" stroke-width=".3"/>`,
+  anchor: `<path d="M50.5 33.2 V37.6 M48.9 36.4 Q50.5 38.6 52.1 36.4 M49.6 34 H51.4" stroke="#23262B" stroke-width=".7" fill="none" stroke-linecap="round"/>`
+};
+// look: {hull, trim, pattern, flag, att:[...]} ids; anything missing draws the plain wooden galleon
 function boatSVG(look = {}) {
-  const [hull, trim] = HULLS[look.hull] || ["#7A4A28", "#F1C04B"], sailFill = SAIL_FILL[look.pattern] || "var(--sail)";
-  return `<svg viewBox="0 0 48 44" aria-hidden="true"><g class="hull">
-  <path d="M24 ${look.flag === "crown" ? 4 : 1.5} L24 31" stroke="#5A3A22" stroke-width="2"/><path d="M25.5 6 L25.5 28 L41 28 Z" fill="${sailFill}"/>${SAIL_MARK[look.pattern] || ""}
-  <path d="M22.5 10 L22.5 28 L11 28 Z" fill="${look.pattern === "gold" ? "#FFF1C2" : "#FFF8EA"}"/>${FLAGS[look.flag] || `<path d="M24 4 L31 6.5 L24 9 Z" fill="var(--sail)"/>`}
-  <path d="M5 30 L43 30 L37 39 Q24 42 11 39 Z" fill="${hull}" ${look.hull === "white" ? `stroke="#C9B48A" stroke-width=".8"` : ""}/><path d="M6.5 32 L41.5 32" stroke="${trim}" stroke-width="1.6"/></g></svg>`;
+  const hull = HULLS[look.hull] || "#7A4A28", trim = TRIMS[look.trim] || "#F1C04B", fill = SAIL_FILL[look.pattern] || "var(--sail)";
+  const overlay = look.pattern === "stripe" ? "url(#dk-stripe)" : look.pattern === "dots" ? "url(#dk-dots)" : null;
+  const att = new Set(look.att || []);
+  return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">
+  <path d="M51 30.5 L59 21.5" stroke="#4E321E" stroke-width="1.2" stroke-linecap="round"/>
+  <path d="M21 31 V10 M31 31 V1 M41 31 V7" stroke="#4E321E" stroke-width="1.3"/>
+  <path d="M58.4 21.9 L41.8 8 L43.2 27 Z" fill="${fill}" opacity=".85"/>
+  ${SAIL_SHAPES.map(d => `<path d="${d}" fill="${fill}"/>${overlay ? `<path d="${d}" fill="${overlay}"/>` : ""}`).join("")}
+  <path d="M25 15.5 H37 M26 6 H36 M36 17.5 H46 M36.7 9.5 H45.3 M16.7 19 H25.3 M17.2 12 H24.8" stroke="#4E321E" stroke-width=".7"/>
+  ${EMB[look.pattern] || ""}${FLAGS[look.flag] || `<path d="M31 1.2 L37 2.8 L31 4.4 Z" fill="var(--sail)"/>`}
+  ${att.has("nest") ? ATT.nest : ""}${att.has("parrot") ? ATT.parrot : ""}${att.has("treasure") ? ATT.treasure : ""}
+  <path d="M3 25.5 L15.5 26.5 L17.5 31.5 L49 30.6 L57 26.2 L53 38.6 Q33 44.6 12 41.6 L5 34.6 Z" fill="${hull}" ${look.hull === "white" ? `stroke="#B9A47A" stroke-width=".6"` : ""}/>
+  <path d="M4.4 28 L15.6 28.8 M6.2 34.6 L50.4 33.6 L55.2 30.4 M8 38 L51.4 37" stroke="${trim}" stroke-width="1.05" fill="none"/>
+  <path d="M6 29.6 H8 M9.3 29.8 H11.3 M12.6 30 H14.4" stroke="#FFD27A" stroke-width="1.6"/>
+  ${att.has("cannon") ? ATT.cannon : ""}${att.has("dragon") ? ATT.dragon : ""}${att.has("lantern") ? ATT.lantern : ""}${att.has("anchor") ? ATT.anchor : ""}</g></svg>`;
 }
 const BOAT = boatSVG();
 // extra classes on the .ship wrapper for the wake effect and on the name tag
