@@ -1,7 +1,9 @@
 /* 하이포스 트레저헌터 — voyage chart, ships and treasure-chest effects (shared by teacher and student screens) */
 (() => {
 const ROUTE_D = "M 80 525 C 280 580, 560 470, 860 515 C 990 535, 995 375, 840 360 C 620 335, 420 415, 190 352 C 40 312, 55 190, 225 175 C 440 155, 650 238, 905 118";
-const SAILS = ["#E0573F", "#F2B134", "#2E9C8F", "#7A5CC7", "#3D8BD9", "#D9467A", "#5E9E3E", "#C9702D", "#1F6F8B", "#9B4FB0"];
+// free sail and flag colours: the first ten are the original ones (stored by index), then six pastels
+const SAILS = ["#E0573F", "#F2B134", "#2E9C8F", "#7A5CC7", "#3D8BD9", "#D9467A", "#5E9E3E", "#C9702D", "#1F6F8B", "#9B4FB0",
+  "#F7A8C4", "#C9B6F2", "#FFD3A8", "#A8E6CF", "#A8D8F7", "#FFF1A8"];
 const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const dpos = (t, L) => t <= 0 ? 0 : ((t - 1) % L) + 1;
@@ -31,56 +33,93 @@ decoDefs.innerHTML = `<defs>
   <linearGradient id="dk-rainbow" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0564A"/><stop offset=".2" stop-color="#F59B3A"/><stop offset=".4" stop-color="#F4D03F"/><stop offset=".6" stop-color="#5DBB63"/><stop offset=".8" stop-color="#3D8BD9"/><stop offset="1" stop-color="#8E5CC7"/></linearGradient>
   <linearGradient id="dk-flame" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#F4D03F"/><stop offset=".5" stop-color="#F28A2E"/><stop offset="1" stop-color="#D9402F"/></linearGradient>
   <pattern id="dk-stripe" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1.8" fill="#fff" opacity=".6"/></pattern>
-  <pattern id="dk-dots" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".95" fill="#fff" opacity=".8"/></pattern></defs>`;
+  <pattern id="dk-dots" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r=".95" fill="#fff" opacity=".8"/></pattern>
+  <pattern id="dk-check" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity=".45"/><rect x="2" y="2" width="2" height="2" fill="#fff" opacity=".45"/></pattern>
+  <pattern id="dk-hearts" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M2.5 4 C.6 2.8 .9 1 2 1 C2.3 1 2.5 1.4 2.5 1.4 C2.5 1.4 2.7 1 3 1 C4.1 1 4.4 2.8 2.5 4 Z" fill="#fff" opacity=".8"/></pattern>
+  <pattern id="dk-flowers" width="5" height="5" patternUnits="userSpaceOnUse"><g fill="#fff" opacity=".85"><circle cx="2.5" cy="1.6" r=".7"/><circle cx="3.4" cy="2.5" r=".7"/><circle cx="2.5" cy="3.4" r=".7"/><circle cx="1.6" cy="2.5" r=".7"/></g><circle cx="2.5" cy="2.5" r=".45" fill="#F4D03F"/></pattern>
+  <pattern id="dk-starry" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M1.5 .6 L1.8 1.3 L2.5 1.5 L1.8 1.7 L1.5 2.4 L1.2 1.7 L.5 1.5 L1.2 1.3 Z M4.5 3.6 L4.7 4.2 L5.3 4.4 L4.7 4.6 L4.5 5.2 L4.3 4.6 L3.7 4.4 L4.3 4.2 Z" fill="#FFF6C8"/></pattern></defs>`;
 document.body.appendChild(decoDefs);
 const starPath = (cx, cy, R, r) => "M" + Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? r : R; return `${(cx + k * Math.cos(a)).toFixed(2)} ${(cy + k * Math.sin(a)).toFixed(2)}`; }).join(" L") + " Z";
+const circ = (cx, cy, r) => `M${cx - r} ${cy} a${r} ${r} 0 1 0 ${2 * r} 0 a${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
+const petals = (n, dist, r) => Array.from({ length: n }, (_, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; return circ(+(50 + dist * Math.cos(a)).toFixed(2), +(50 + dist * Math.sin(a)).toFixed(2), r); }).join(" ");
+/* Emblems (문양) for sails and flags, in a 100×100 box. d is filled with the emblem colour; cut, when given,
+   is painted on top in the cloth colour (eyes, holes). Shared with the 3D ship, which draws the same paths on canvas. */
+const EMBLEMS = {
+  star: { d: starPath(50, 54, 46, 19) },
+  heart: { d: "M50 88 C22 68 6 50 14 30 C21 13 42 12 50 30 C58 12 79 13 86 30 C94 50 78 68 50 88 Z" },
+  flower: { d: petals(5, 25, 18) + " " + circ(50, 50, 14), cut: circ(50, 50, 7) },
+  ribbon: { d: "M50 47 C38 28 12 24 12 44 C12 62 36 60 50 52 Z M50 47 C62 28 88 24 88 44 C88 62 64 60 50 52 Z M45 54 L32 88 L42 84 L50 60 Z M55 54 L68 88 L58 84 L50 60 Z " + circ(50, 50, 9),
+    cut: "M22 44 C22 36 34 38 42 46 C34 50 22 52 22 44 Z M78 44 C78 36 66 38 58 46 C66 50 78 52 78 44 Z" },
+  butterfly: { d: "M50 50 C42 24 12 12 10 34 C9 48 30 54 50 53 Z M50 50 C58 24 88 12 90 34 C91 48 70 54 50 53 Z M50 55 C34 56 16 66 24 82 C32 92 46 76 50 57 Z M50 55 C66 56 84 66 76 82 C68 92 54 76 50 57 Z M47 30 C47 26 53 26 53 30 L53 78 C53 82 47 82 47 78 Z M48 30 L40 14 L42.5 13 L50 28 Z M52 30 L60 14 L57.5 13 L50 28 Z",
+    cut: circ(28, 36, 6) + " " + circ(72, 36, 6) },
+  cat: { d: "M16 44 L20 12 L38 26 Q50 22 62 26 L80 12 L84 44 Q88 84 50 86 Q12 84 16 44 Z",
+    cut: circ(37, 52, 6) + " " + circ(63, 52, 6) + " M45 63 L55 63 L50 69 Z M24 64 L38 65.5 L38 67.5 L24 67 Z M24 71 L38 69.5 L38 71.5 L24 74 Z M76 64 L62 65.5 L62 67.5 L76 67 Z M76 71 L62 69.5 L62 71.5 L76 74 Z" },
+  rabbit: { d: circ(50, 64, 24) + " M36 46 C26 8 44 2 46 42 Z M64 46 C74 8 56 2 54 42 Z",
+    cut: circ(42, 60, 4) + " " + circ(58, 60, 4) + " M46 70 L54 70 L50 75 Z M38 38 C33 16 42 14 43 38 Z M62 38 C67 16 58 14 57 38 Z" },
+  moon: { d: circ(46, 52, 38), cut: circ(66, 40, 32) },
+  note: { d: "M58 14 L64 14 L64 68 C64 84 36 86 34 72 C32 58 52 54 58 60 Z M64 14 C78 20 86 30 82 46 C80 36 72 30 64 30 Z" },
+  clover: { d: circ(36, 36, 15) + " " + circ(64, 36, 15) + " " + circ(36, 62, 15) + " " + circ(64, 62, 15) + " M48 60 L52 60 L60 92 L55 92 Z" },
+  anchor: { d: "M46 22 H54 V80 H46 Z M30 32 H70 V39 H30 Z M14 56 L22 52 Q26 76 50 80 Q74 76 78 52 L86 56 Q82 88 50 90 Q18 88 14 56 Z " + circ(50, 16, 9), cut: circ(50, 16, 4.5) },
+  compass: { d: circ(50, 50, 42) + " " + circ(50, 50, 36) + " M50 10 L57 50 L50 90 L43 50 Z M10 50 L50 43 L90 50 L50 57 Z", rule: "evenodd" },
+  crown: { d: "M14 70 L10 28 L32 48 L50 18 L68 48 L90 28 L86 70 Z M14 75 H86 V86 H14 Z", cut: circ(50, 58, 5) + " " + circ(30, 60, 4) + " " + circ(70, 60, 4) },
+  flame: { d: "M50 92 C22 90 18 60 36 44 C36 56 44 60 47 54 C42 38 54 24 52 8 C72 22 84 46 80 64 C78 82 66 92 50 92 Z", cut: "M50 86 C40 84 38 72 45 63 C47 71 53 71 56 66 C62 74 60 85 50 86 Z" },
+  skull: { d: "M50 12 C72 12 82 28 80 44 C79 54 72 58 68 60 L68 70 L32 70 L32 60 C28 58 21 54 20 44 C18 28 28 12 50 12 Z M12 78 L18 72 L88 92 L84 98 Z M88 78 L82 72 L12 92 L16 98 Z",
+    cut: circ(39, 40, 8) + " " + circ(61, 40, 8) + " M50 48 L45 57 L55 57 Z M40 62 H43 V70 H40 Z M48.5 62 H51.5 V70 H48.5 Z M57 62 H60 V70 H57 Z" },
+  shell: { d: "M50 86 L12 46 C18 16 82 16 88 46 Z M42 86 H58 V92 H42 Z", cut: "M50 80 L28 34 L31 33 Z M50 80 L41 27 L44 27 Z M50 80 L56 27 L59 27 Z M50 80 L69 33 L72 34 Z" },
+  cherry: { d: circ(34, 70, 15) + " " + circ(66, 66, 15) + " M33 56 Q38 30 58 16 L61 19 Q42 32 37 56 Z M64 52 Q63 32 58 18 L61 17 Q67 32 68 52 Z M58 17 C66 6 84 8 86 17 C78 24 66 25 58 17 Z" }
+};
+const lum = hex => { const n = parseInt(String(hex).slice(1), 16); return ((n >> 16) * .3 + ((n >> 8) & 255) * .59 + (n & 255) * .11) / 255; };
+// the emblem colour that reads on a given cloth colour
+const inkFor = hex => lum(hex) > .58 ? "#3A2A28" : "#FFFFFF";
+function embSVG(id, cx, cy, size, ink, bg) {
+  const e = EMBLEMS[id]; if (!e) return "";
+  return `<g transform="translate(${cx - size / 2} ${cy - size / 2}) scale(${size / 100})"><path d="${e.d}" fill="${ink}" ${e.rule ? `fill-rule="${e.rule}"` : ""}/>${e.cut ? `<path d="${e.cut}" fill="${bg}"/>` : ""}</g>`;
+}
 // a small side-on galleon (bow to the right) that matches the 3D ship in ship3d.js; same ids as DECO in worker.js
-const HULLS = { red: "#8E2A22", navy: "#1F3A63", mint: "#2F8C78", ebony: "#2A221D", white: "#E8DFC9", gold: "url(#dk-gold)" };
-const TRIMS = { silver: "#C9D3DC" };
-const SAIL_FILL = { rainbow: "url(#dk-rainbow)", gold: "url(#dk-gold)" };
+const HULLS = { red: "#8E2A22", navy: "#1F3A63", mint: "#2F8C78", pink: "#D97A9A", lavender: "#9A84C9", sky: "#6FA8D6", lemon: "#E8C85A", ebony: "#2A221D", white: "#E8DFC9", gold: "url(#dk-gold)" };
+const TRIMS = { silver: "#C9D3DC", rosegold: "#E2A48C", pearl: "#F4EFE6" };
+const SAIL_FILL = { rainbow: ["url(#dk-rainbow)", "#F4D03F"], gold: ["url(#dk-gold)", "#E9B53A"] };
+const SAIL_OVERLAY = { stripe: "url(#dk-stripe)", dots: "url(#dk-dots)", check: "url(#dk-check)", hearts: "url(#dk-hearts)", flowers: "url(#dk-flowers)", starry: "url(#dk-starry)" };
 // a square sail with its free edge bellied toward the bow
 const sq = (cx, top, w, h) => `M${cx - w / 2} ${top} L${cx + w / 2} ${top} Q${cx + w / 2 + 1.4} ${top + h / 2} ${cx + w / 2} ${top + h} L${cx - w / 2} ${top + h} Q${cx - w / 2 + 1.4} ${top + h / 2} ${cx - w / 2} ${top} Z`;
 const SAIL_SHAPES = [sq(31, 15.5, 12, 10), sq(31, 6, 10, 8.5), sq(41, 17.5, 10, 9), sq(41, 9.5, 8.5, 7), sq(21, 19, 8.5, 8), sq(21, 12, 7.5, 6)];
-const EMB = { // emblems drawn on the big main sail, centred near (31.5, 20.5)
-  star: `<path d="${starPath(31.6, 20.6, 3.6, 1.5)}" fill="#fff"/>`,
-  skull: `<circle cx="31.6" cy="19.6" r="2.6" fill="#fff"/><rect x="30.2" y="21.2" width="2.8" height="2" rx=".5" fill="#fff"/><circle cx="30.7" cy="19.6" r=".7" fill="#1B1B1B"/><circle cx="32.5" cy="19.6" r=".7" fill="#1B1B1B"/><path d="M28 24 L35 18 M28 18 L35 24" stroke="#fff" stroke-width=".9" stroke-linecap="round" opacity=".9"/>`,
-  compass: `<circle cx="31.6" cy="20.6" r="3" fill="none" stroke="#fff" stroke-width=".7"/><path d="M31.6 16.8 L32.4 20.6 L31.6 24.4 L30.8 20.6 Z M27.8 20.6 L31.6 19.8 L35.4 20.6 L31.6 21.4 Z" fill="#fff"/>`,
-  gold: `<path d="M27.5 24.5 L28.2 17" stroke="#FFF8D6" stroke-width=".9" opacity=".8"/>`
-};
-const FLAG_AT = (fill, inner = "") => `<path d="M31 .4 H38.6 V5.4 H31 Z" fill="${fill}"/>${inner}`;
-const FLAGS = {
-  jolly: FLAG_AT("#141414", `<circle cx="34.8" cy="2.5" r="1.3" fill="#fff"/><path d="M32.9 4.6 L36.7 3.6 M32.9 3.6 L36.7 4.6" stroke="#fff" stroke-width=".5"/>`),
-  heart: FLAG_AT("#C9406A", `<path d="M34.8 4.7 C32.6 3.3 32.8 1.4 34 1.4 C34.5 1.4 34.8 1.8 34.8 1.8 C34.8 1.8 35.1 1.4 35.6 1.4 C36.8 1.4 37 3.3 34.8 4.7 Z" fill="#fff"/>`),
-  star: FLAG_AT("#1F3A63", `<path d="${starPath(34.8, 3, 2, .85)}" fill="#F4D03F"/>`),
-  crown: FLAG_AT("#6B2A8E", `<path d="M33 4.4 L32.8 1.6 L33.9 2.8 L34.8 1.2 L35.7 2.8 L36.8 1.6 L36.6 4.4 Z" fill="#F1C04B"/>`),
-  flame: FLAG_AT("#B5302A", `<path d="M34.8 4.8 C33.4 4.6 33.4 3 34.4 2.4 C34.4 3 34.8 3.1 35 1.2 C36 2.2 36.6 4.2 34.8 4.8 Z" fill="#F7C548"/>`)
+const BUNT = ["#F7A8C4", "#FFD3A8", "#FFF1A8", "#A8E6CF", "#A8D8F7", "#C9B6F2"];
+const HEAD = {
+  dragon: `<path d="M53.2 30.5 Q58.6 27.4 57.4 22.6 Q60.6 23.4 59.6 26.8 Q58.6 30.2 54.4 32.2 Z" fill="url(#dk-gold)" stroke="#9C6A22" stroke-width=".4"/><circle cx="58.5" cy="24.3" r=".45" fill="#D9402F"/>`,
+  swan: `<path d="M53 31 Q59 30 57.5 24.5 Q56.8 21 59.4 21.4 Q61.2 21.9 59.8 23.2 Q58.6 24.2 59.2 27 Q59.8 31 54 32.8 Z" fill="#FFFFFF" stroke="#C9C2B8" stroke-width=".35"/><path d="M60.6 21.9 L62 22.4 L60.4 22.8 Z" fill="#F28A2E"/><circle cx="59.6" cy="22" r=".3" fill="#222"/>`
 };
 const ATT = {
   cannon: [22, 28, 34, 40].map((x, i) => `<circle cx="${x}" cy="${36.1 - i * .2}" r="1" fill="#1E2126" stroke="#F1C04B" stroke-width=".3"/>`).join(""),
-  dragon: `<path d="M53.2 30.5 Q58.6 27.4 57.4 22.6 Q60.6 23.4 59.6 26.8 Q58.6 30.2 54.4 32.2 Z" fill="url(#dk-gold)" stroke="#9C6A22" stroke-width=".4"/><circle cx="58.5" cy="24.3" r=".45" fill="#D9402F"/>`,
   nest: `<rect x="29.2" y="13.6" width="3.6" height="1.7" rx=".4" fill="#5A3A22"/><path d="M29.2 13.7 H32.8" stroke="#F1C04B" stroke-width=".4"/>`,
   lantern: `<path d="M5.2 26 V23.4" stroke="#23262B" stroke-width=".5"/><circle cx="5.2" cy="22.6" r="1.25" fill="#FFD27A" stroke="#FFB347" stroke-width=".4"/>`,
   parrot: `<ellipse cx="37.2" cy="14" rx=".9" ry="1.35" fill="#D9402F"/><circle cx="37.5" cy="12.6" r=".7" fill="#D9402F"/><path d="M38.1 12.6 L39 12.9 L38.1 13.1 Z" fill="#F4C430"/>`,
   treasure: `<ellipse cx="26" cy="31.3" rx="2.4" ry="1.1" fill="url(#dk-gold)"/><rect x="24.6" y="29.1" width="2.8" height="1.8" rx=".3" fill="#8A5328" stroke="#F1C04B" stroke-width=".3"/>`,
-  anchor: `<path d="M50.5 33.2 V37.6 M48.9 36.4 Q50.5 38.6 52.1 36.4 M49.6 34 H51.4" stroke="#23262B" stroke-width=".7" fill="none" stroke-linecap="round"/>`
+  anchor: `<path d="M50.5 33.2 V37.6 M48.9 36.4 Q50.5 38.6 52.1 36.4 M49.6 34 H51.4" stroke="#23262B" stroke-width=".7" fill="none" stroke-linecap="round"/>`,
+  flowers: [19, 23.5, 28, 32.5, 37, 41.5, 46].map((x, i) => `<circle cx="${x}" cy="${30.6 - i * .08}" r=".95" fill="${["#F7A8C4", "#FFFFFF", "#FFE27A"][i % 3]}"/>`).join(""),
+  bunting: `<path d="M21 10 Q26 9 31 3 Q36 8 41 7 Q50 13 58.4 21.9" stroke="#6B5A4A" stroke-width=".3" fill="none"/>` + [[24, 8.6], [28, 6.2], [34, 6.2], [38, 7], [45, 10.4], [50, 14], [54.5, 17.8]].map(([x, y], i) => `<path d="M${x - .9} ${y} L${x + .9} ${y} L${x} ${y + 1.8} Z" fill="${BUNT[i % 6]}"/>`).join(""),
+  balloons: `<path d="M6 26 Q5 20 3.6 15 M6 26 Q7.4 19 8.8 13.6" stroke="#8A8A8A" stroke-width=".25" fill="none"/>` + [[3.6, 13.8, "#F28AB0"], [8.8, 12.4, "#C9B6F2"]].map(([x, y, c]) => `<path d="M${x} ${y + 1.6} C${x - 2.1} ${y + .2} ${x - 1.8} ${y - 1.6} ${x - .8} ${y - 1.6} C${x - .3} ${y - 1.6} ${x} ${y - 1.1} ${x} ${y - 1.1} C${x} ${y - 1.1} ${x + .3} ${y - 1.6} ${x + .8} ${y - 1.6} C${x + 1.8} ${y - 1.6} ${x + 2.1} ${y + .2} ${x} ${y + 1.6} Z" fill="${c}"/>`).join(""),
+  bowribbon: `<path d="M4.6 30 C2.6 28.4 1.4 30.8 3.2 31.6 Z M4.6 30 C6.6 28.4 7.8 30.8 6 31.6 Z M4.2 30.6 L3.4 33.6 L4.2 33.2 Z M5 30.6 L5.8 33.6 L5 33.2 Z" fill="#F28AB0"/><circle cx="4.6" cy="30.3" r=".6" fill="#E0608F"/>`,
+  cat: `<ellipse cx="45.4" cy="29.4" rx="1.5" ry="1.1" fill="#F2A65A"/><circle cx="46.6" cy="28.1" r=".85" fill="#F2A65A"/><path d="M46 27.6 L46.2 26.7 L46.6 27.4 Z M46.8 27.4 L47.3 26.7 L47.4 27.7 Z" fill="#F2A65A"/><path d="M44 29.4 Q43 28.2 43.6 27.4" stroke="#F2A65A" stroke-width=".45" fill="none"/>`,
+  fairylights: `<path d="M31 2 Q46 12 58.4 21.9" stroke="#6B5A4A" stroke-width=".25" fill="none"/>` + [[34, 4.6], [37.5, 7], [41, 9.6], [44.5, 12.2], [48, 14.6], [51.5, 17], [55, 19.4]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r=".6" fill="${["#FFE27A", "#F7A8C4", "#A8D8F7", "#A8E6CF"][i % 4]}"/>`).join("")
 };
-// look: {hull, trim, pattern, flag, att:[...]} ids; anything missing draws the plain wooden galleon
-function boatSVG(look = {}) {
-  const hull = HULLS[look.hull] || "#7A4A28", trim = TRIMS[look.trim] || "#F1C04B", fill = SAIL_FILL[look.pattern] || "var(--sail)";
-  const overlay = look.pattern === "stripe" ? "url(#dk-stripe)" : look.pattern === "dots" ? "url(#dk-dots)" : null;
-  const att = new Set(look.att || []);
+// look: {hull, trim, pattern, se, fe, fc, head, att:[...]} (see parseLook in worker.js); missing parts draw the plain wooden ship
+function boatSVG(look = {}, sailIdx = 0) {
+  const sailHex = sail(sailIdx), hull = HULLS[look.hull] || "#7A4A28", trim = TRIMS[look.trim] || "#F1C04B";
+  const [fill, clothBg] = SAIL_FILL[look.pattern] || [sailHex, sailHex], overlay = SAIL_OVERLAY[look.pattern];
+  const flagHex = look.fc != null ? sail(look.fc) : sailHex, att = new Set(look.att || []);
   return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">
   <path d="M51 30.5 L59 21.5" stroke="#4E321E" stroke-width="1.2" stroke-linecap="round"/>
   <path d="M21 31 V10 M31 31 V1 M41 31 V7" stroke="#4E321E" stroke-width="1.3"/>
   <path d="M58.4 21.9 L41.8 8 L43.2 27 Z" fill="${fill}" opacity=".85"/>
   ${SAIL_SHAPES.map(d => `<path d="${d}" fill="${fill}"/>${overlay ? `<path d="${d}" fill="${overlay}"/>` : ""}`).join("")}
   <path d="M25 15.5 H37 M26 6 H36 M36 17.5 H46 M36.7 9.5 H45.3 M16.7 19 H25.3 M17.2 12 H24.8" stroke="#4E321E" stroke-width=".7"/>
-  ${EMB[look.pattern] || ""}${FLAGS[look.flag] || `<path d="M31 1.2 L37 2.8 L31 4.4 Z" fill="var(--sail)"/>`}
-  ${att.has("nest") ? ATT.nest : ""}${att.has("parrot") ? ATT.parrot : ""}${att.has("treasure") ? ATT.treasure : ""}
-  <path d="M3 25.5 L15.5 26.5 L17.5 31.5 L49 30.6 L57 26.2 L53 38.6 Q33 44.6 12 41.6 L5 34.6 Z" fill="${hull}" ${look.hull === "white" ? `stroke="#B9A47A" stroke-width=".6"` : ""}/>
+  ${embSVG(look.se, 31.6, 20.6, 8.6, inkFor(clothBg), clothBg)}
+  <path d="M31 .4 H38.6 V5.4 H31 Z" fill="${flagHex}"/>${embSVG(look.fe, 34.8, 2.9, 4.4, inkFor(flagHex), flagHex)}
+  ${att.has("bunting") ? ATT.bunting : ""}${att.has("fairylights") ? ATT.fairylights : ""}${att.has("nest") ? ATT.nest : ""}${att.has("parrot") ? ATT.parrot : ""}${att.has("treasure") ? ATT.treasure : ""}${att.has("cat") ? ATT.cat : ""}${att.has("flowers") ? ATT.flowers : ""}${att.has("balloons") ? ATT.balloons : ""}
+  <path d="M3 25.5 L15.5 26.5 L17.5 31.5 L49 30.6 L57 26.2 L53 38.6 Q33 44.6 12 41.6 L5 34.6 Z" fill="${hull}" ${["white", "lemon"].includes(look.hull) ? `stroke="#B9A47A" stroke-width=".6"` : ""}/>
   <path d="M4.4 28 L15.6 28.8 M6.2 34.6 L50.4 33.6 L55.2 30.4 M8 38 L51.4 37" stroke="${trim}" stroke-width="1.05" fill="none"/>
   <path d="M6 29.6 H8 M9.3 29.8 H11.3 M12.6 30 H14.4" stroke="#FFD27A" stroke-width="1.6"/>
-  ${att.has("cannon") ? ATT.cannon : ""}${att.has("dragon") ? ATT.dragon : ""}${att.has("lantern") ? ATT.lantern : ""}${att.has("anchor") ? ATT.anchor : ""}</g></svg>`;
+  ${att.has("cannon") ? ATT.cannon : ""}${HEAD[look.head] || ""}${att.has("lantern") ? ATT.lantern : ""}${att.has("anchor") ? ATT.anchor : ""}${att.has("bowribbon") ? ATT.bowribbon : ""}</g></svg>`;
 }
 const BOAT = boatSVG();
 // extra classes on the .ship wrapper for the wake effect and on the name tag
@@ -135,7 +174,7 @@ function placeShips(map, ships, season, opts = {}) {
   }
   box.innerHTML = ships.map(s => { const i = dpos(s.moves, L), cur = P[i], nx = P[Math.min(L, i + 1)], pv = P[Math.max(0, i - 1)], dx = i < L ? nx.x - cur.x : cur.x - pv.x, f = fin[s.id];
     return `<div class="ship ${dx < 0 ? "flip" : ""} ${i === L ? "arrived" : ""} ${s.id === opts.me ? "mine" : ""} ${opts.me && s.id !== opts.me ? "other" : ""} ${wakeClass(s.look)}" data-id="${s.id}" style="--sail:${sail(s.sail)};left:${f.left}%;top:${f.top}%"
-      title="${esc(s.nickname)} · ${voyageOf(s.moves, L)}번째 항해 · ${i === L ? "도착 항구" : i + "칸"}">${boatSVG(s.look)}<span class="nmtag ${tagClass(s.look)}">${s.id === opts.me ? "나 · " : ""}${esc(s.nickname)}</span></div>`; }).join("");
+      title="${esc(s.nickname)} · ${voyageOf(s.moves, L)}번째 항해 · ${i === L ? "도착 항구" : i + "칸"}">${boatSVG(s.look, s.sail)}<span class="nmtag ${tagClass(s.look)}">${s.id === opts.me ? "나 · " : ""}${esc(s.nickname)}</span></div>`; }).join("");
   if (!opts.prev || reduced()) return;
   for (const s of ships) {
     const prev = opts.prev[s.id]; if (prev == null || prev >= s.moves) continue;
@@ -366,5 +405,5 @@ async function stageChests(list, who, opener) {
   return opened;
 }
 
-window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, boatSVG, wakeClass, tagClass, get running() { return !!FX.running; } };
+window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, boatSVG, wakeClass, tagClass, EMBLEMS, inkFor, embSVG, get running() { return !!FX.running; } };
 })();

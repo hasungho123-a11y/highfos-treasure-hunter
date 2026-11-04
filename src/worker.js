@@ -3,7 +3,7 @@ const SESSION_DAYS = { teacher: 14, student: 60 };
 const PBKDF2_ITER = 60000;
 const MAX_FAILED = 5;
 const LOCK_MS = 10 * 60 * 1000;
-const SAILS = 10;
+const SAILS = 16; // free sail/flag colours, see SAILS in public/voyage.js
 const SUBJECTS = ["영어", "수학", "공통"];
 const KINDS = ["daily", "weekly", "challenge"];
 const RARITIES = ["보통", "희귀", "전설"];
@@ -18,31 +18,44 @@ const DEFAULT_SHOP = [
   ["음악 선곡권", "특권", 30], ["자리 우선 선택권", "특권", 40], ["선생님과 미니게임", "특권", 60], ["숙제 1회 면제권", "특권", 100]
 ];
 // Ship decorations bought with points. Names and prices live here; how each one looks is drawn in public/voyage.js.
-// "att" items are attachments: several can be on the ship at once. Every other slot holds one item.
-const DECO_SLOTS = ["hull", "trim", "pattern", "flag", "att", "wake", "tag"];
+// Slots: one item each, except "att" (attachments, several at once) and "emblem" (문양: bought once,
+// then shown on the sail, the flag, or both — look.se / look.fe). The flag colour look.fc is free.
+const DECO_SLOTS = ["hull", "trim", "pattern", "emblem", "head", "att", "wake", "tag"];
 const DECO = [
-  ["hull", "red", "진홍 배", 30], ["hull", "navy", "남색 배", 30], ["hull", "mint", "민트 배", 30], ["hull", "ebony", "흑단 배", 60], ["hull", "white", "상아 배", 80], ["hull", "gold", "황금 배", 250],
-  ["trim", "silver", "은테 장식", 40],
-  ["pattern", "stripe", "줄무늬 돛", 30], ["pattern", "dots", "물방울 돛", 30], ["pattern", "star", "별 돛", 60], ["pattern", "compass", "나침반 돛", 60], ["pattern", "skull", "해골 돛", 100], ["pattern", "rainbow", "무지개 돛", 150], ["pattern", "gold", "황금 돛", 250],
-  ["flag", "jolly", "해적 깃발", 40], ["flag", "heart", "하트 깃발", 40], ["flag", "star", "별 깃발", 40], ["flag", "crown", "왕관 깃발", 100], ["flag", "flame", "불꽃 깃발", 100],
-  ["att", "anchor", "닻", 40], ["att", "lantern", "랜턴", 50], ["att", "cannon", "대포", 80], ["att", "nest", "망루", 80], ["att", "parrot", "앵무새", 100], ["att", "treasure", "보물 더미", 150], ["att", "dragon", "용 선수상", 250],
-  ["wake", "splash", "물보라", 50], ["wake", "sparkle", "반짝이 물결", 100], ["wake", "bubble", "비눗방울", 100], ["wake", "rainbow", "무지개 물결", 200],
-  ["tag", "gold", "금빛 이름표", 60], ["tag", "rainbow", "무지개 이름표", 150]
+  ["hull", "red", "진홍 배", 30], ["hull", "navy", "남색 배", 30], ["hull", "mint", "민트 배", 30], ["hull", "pink", "분홍 배", 30], ["hull", "lavender", "라벤더 배", 30], ["hull", "sky", "하늘 배", 30], ["hull", "lemon", "레몬 배", 30],
+  ["hull", "ebony", "흑단 배", 60], ["hull", "white", "상아 배", 80], ["hull", "gold", "황금 배", 250],
+  ["trim", "silver", "은테", 40], ["trim", "rosegold", "로즈골드 테", 40], ["trim", "pearl", "진주 테", 60],
+  ["pattern", "stripe", "줄무늬", 30], ["pattern", "dots", "물방울", 30], ["pattern", "check", "체크", 40], ["pattern", "hearts", "하트 무늬", 40], ["pattern", "flowers", "꽃무늬", 60], ["pattern", "starry", "별빛 무늬", 60], ["pattern", "rainbow", "무지개 돛", 150], ["pattern", "gold", "황금 돛", 250],
+  ["emblem", "star", "별", 40], ["emblem", "heart", "하트", 40], ["emblem", "flower", "꽃", 40], ["emblem", "clover", "네잎클로버", 40], ["emblem", "note", "음표", 40], ["emblem", "cherry", "체리", 40], ["emblem", "anchor", "닻", 40],
+  ["emblem", "ribbon", "리본", 60], ["emblem", "butterfly", "나비", 60], ["emblem", "cat", "고양이", 60], ["emblem", "rabbit", "토끼", 60], ["emblem", "moon", "달", 60], ["emblem", "shell", "조개", 60], ["emblem", "compass", "나침반", 60],
+  ["emblem", "crown", "왕관", 100], ["emblem", "flame", "불꽃", 100], ["emblem", "skull", "해골", 100],
+  ["head", "swan", "백조 선수상", 200], ["head", "dragon", "용 선수상", 250],
+  ["att", "anchor", "닻", 40], ["att", "lantern", "랜턴", 50], ["att", "bunting", "가랜드 깃발", 50], ["att", "bowribbon", "리본 장식", 50], ["att", "flowers", "꽃 장식", 60],
+  ["att", "cannon", "대포", 80], ["att", "nest", "망루", 80], ["att", "balloons", "하트 풍선", 80], ["att", "fairylights", "요정 전구", 80],
+  ["att", "parrot", "앵무새", 100], ["att", "cat", "고양이 선원", 100], ["att", "treasure", "보물 더미", 150],
+  ["wake", "splash", "물보라", 50], ["wake", "sparkle", "반짝이 물결", 100], ["wake", "bubble", "비눗방울", 100], ["wake", "hearts", "하트 물결", 100], ["wake", "petals", "꽃잎 물결", 100], ["wake", "rainbow", "무지개 물결", 200],
+  ["tag", "pink", "분홍 이름표", 60], ["tag", "lavender", "라벤더 이름표", 60], ["tag", "gold", "금빛 이름표", 60], ["tag", "rainbow", "무지개 이름표", 150]
 ].map(([slot, id, name, price]) => ({ key: `${slot}.${id}`, slot, id, name, price }));
 const decoByKey = k => DECO.find(d => d.key === k);
-// look = {slot: id, att: [ids]} for what a student is wearing; anything unknown is dropped
+// look = {hull, trim, pattern, head, wake, tag, se, fe, fc, att:[...]}; anything unknown is dropped
 function parseLook(s) {
   let o = {}; try { o = JSON.parse(s || "{}") || {}; } catch (e) {}
   const out = {};
   for (const slot of DECO_SLOTS) {
     if (slot === "att") { const a = (Array.isArray(o.att) ? o.att : []).filter(id => decoByKey(`att.${id}`)); if (a.length) out.att = [...new Set(a)]; }
+    else if (slot === "emblem") { for (const k of ["se", "fe"]) if (o[k] && decoByKey(`emblem.${o[k]}`)) out[k] = o[k]; }
     else if (o[slot] && decoByKey(`${slot}.${o[slot]}`)) out[slot] = o[slot];
   }
+  if (Number.isInteger(o.fc) && o.fc >= 0 && o.fc < SAILS) out.fc = o.fc;
   return out;
 }
-// put an item on (or take it off) a look
-function wearItem(look, d, on = true) {
+// put an item on (or take it off) a look; an emblem goes on the sail or the flag (`where`)
+function wearItem(look, d, on = true, where = "sail") {
   if (d.slot === "att") { const a = new Set(look.att || []); on ? a.add(d.id) : a.delete(d.id); if (a.size) look.att = [...a]; else delete look.att; }
+  else if (d.slot === "emblem") {
+    if (on) look[where === "flag" ? "fe" : "se"] = d.id;
+    else for (const k of where === "both" ? ["se", "fe"] : [where === "flag" ? "fe" : "se"]) if (look[k] === d.id) delete look[k];
+  }
   else if (on) look[d.slot] = d.id; else if (look[d.slot] === d.id) delete look[d.slot];
   return look;
 }
@@ -276,8 +289,11 @@ on("POST", "/api/kid/pin", "student", async ({ db, me, body }) => {
   await db.prepare("UPDATE students SET pin_hash=?, salt=?, must_change=0 WHERE id=?").bind(h.hash, h.salt, me.student.id).run();
   return { ok: true };
 });
+// free colours: sail (index) and/or flag (index, or -1 to match the sail)
 on("POST", "/api/kid/sail", "student", async ({ db, me, body }) => {
-  await db.prepare("UPDATE students SET sail=? WHERE id=?").bind(int(body.sail, 0, SAILS - 1), me.student.id).run();
+  if (body.sail != null) await db.prepare("UPDATE students SET sail=? WHERE id=?").bind(int(body.sail, 0, SAILS - 1), me.student.id).run();
+  if (body.flag != null) { const look = parseLook(me.student.look), f = int(body.flag, -1, SAILS - 1); if (f < 0) delete look.fc; else look.fc = f;
+    await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run(); }
   return { ok: true };
 });
 on("GET", "/api/kid/state", "student", async ({ db, me }) => {
@@ -307,20 +323,25 @@ on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
   const r = await db.prepare("INSERT OR IGNORE INTO deco_owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, d.key, Date.now()).run();
   if (!r.meta.changes) throw bad("이미 가지고 있어요");
   const lg = await logStmt(db, { student_id: sid, kind: "deco", title: `배 꾸미기: ${d.name}`, points: -d.price, season: season.id }).run();
-  const look = wearItem(parseLook(me.student.look), d);
+  const old = parseLook(me.student.look);
+  // a new emblem goes on the sail, or on the flag when the sail already has one and the flag has none
+  const look = wearItem(old, d, true, d.slot === "emblem" && old.se && !old.fe ? "flag" : "sail");
   await db.batch([db.prepare("UPDATE deco_owned SET log_id=? WHERE student_id=? AND item=?").bind(lg.meta.last_row_id, sid, d.key),
     db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), sid)]);
   return { ok: true };
 });
-// put on (key) or take off (no key) one slot; an attachment key toggles it, or follows `on` when given
+// put on (key) or take off (no key) one slot. An attachment key toggles it (or follows `on`);
+// an emblem key toggles it on the sail or the flag (`where`), and no key clears that place.
 on("POST", "/api/kid/deco/wear", "student", async ({ db, me, body }) => {
   const slot = String(body.slot || ""); if (!DECO_SLOTS.includes(slot)) throw bad("없는 꾸미기 자리예요");
-  const look = parseLook(me.student.look);
+  const where = body.where === "flag" ? "flag" : "sail", look = parseLook(me.student.look);
   if (body.key) {
     const d = decoByKey(String(body.key)); if (!d || d.slot !== slot) throw bad("없는 꾸미기예요");
     if (!(await db.prepare("SELECT 1 FROM deco_owned WHERE student_id=? AND item=?").bind(me.student.id, d.key).first())) throw bad("아직 사지 않은 꾸미기예요");
-    wearItem(look, d, slot === "att" ? (typeof body.on === "boolean" ? body.on : !(look.att || []).includes(d.id)) : true);
-  } else delete look[slot];
+    const worn = slot === "att" ? (look.att || []).includes(d.id) : slot === "emblem" ? look[where === "flag" ? "fe" : "se"] === d.id : false;
+    wearItem(look, d, slot === "att" || slot === "emblem" ? (typeof body.on === "boolean" ? body.on : !worn) : true, where);
+  } else if (slot === "emblem") delete look[where === "flag" ? "fe" : "se"];
+  else delete look[slot];
   await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run();
   return { ok: true };
 });
@@ -429,7 +450,7 @@ on("POST", "/api/t/logs/:id/undo", "teacher", async ({ db, params }) => {
   const ops = [];
   if (l.kind === "deco") { // refund a decoration: take it back and off the ship
     const o = await db.prepare("SELECT item FROM deco_owned WHERE log_id=?").bind(l.id).first(), st = await db.prepare("SELECT look FROM students WHERE id=?").bind(l.student_id).first();
-    if (o && st) { const d = decoByKey(o.item), look = parseLook(st.look); if (d) wearItem(look, d, false);
+    if (o && st) { const d = decoByKey(o.item), look = parseLook(st.look); if (d) wearItem(look, d, false, "both");
       ops.push(db.prepare("DELETE FROM deco_owned WHERE log_id=?").bind(l.id), db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), l.student_id)); }
   }
   if (l.grp && l.kind === "quest") {

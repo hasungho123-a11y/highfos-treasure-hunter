@@ -17,11 +17,8 @@ function loadThree() {
 function webglOK() { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) { return false; } }
 
 // ids match DECO in worker.js; anything missing falls back to the plain wooden ship
-const HULL = { wood: "#7A4A28", ebony: "#2A221D", red: "#8E2A22", navy: "#1F3A63", mint: "#2F8C78", white: "#E8DFC9", gold: "#C99A2E" };
-const TRIM = { gold: "#E3B34A", silver: "#C9D3DC" };
-const FLAG_BG = { jolly: "#141414", heart: "#C9406A", star: "#1F3A63", crown: "#6B2A8E", flame: "#B5302A" };
-const FLAG_FG = { star: "#F4D03F", crown: "#F1C04B", flame: "#F7C548" };
-const FLAG_EMBLEM = { jolly: "skull", heart: "heart", star: "star", crown: "crown", flame: "flame" };
+const HULL = { wood: "#7A4A28", ebony: "#2A221D", red: "#8E2A22", navy: "#1F3A63", mint: "#2F8C78", pink: "#D97A9A", lavender: "#9A84C9", sky: "#6FA8D6", lemon: "#E8C85A", white: "#E8DFC9", gold: "#C99A2E" };
+const TRIM = { gold: "#E3B34A", silver: "#C9D3DC", rosegold: "#E2A48C", pearl: "#F4EFE6" };
 const PRESET = {
   day: { top: "#3E8FD6", hor: "#D4ECF8", sea: "#1D6E98", sun: "#FFF1D6", si: 1.5, sd: [12, 22, 8], hs: "#CFE8FF", hg: "#1C4D6E", hi: .75, fog: "#CDE6F4", orb: "#FFF8E0", exp: 1.0, lamp: .4, stars: false },
   sunset: { top: "#2A2C63", hor: "#F39A5B", sea: "#28506F", sun: "#FFB070", si: 1.8, sd: [-30, 9, 18], hs: "#F7B28A", hg: "#2A2F55", hi: .55, fog: "#E9906A", orb: "#FFD08A", exp: 1.05, lamp: 1.2, stars: false },
@@ -64,39 +61,36 @@ function build() {
   const plankTex = canvasTex(256, 128, (g, w, h) => { g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
     for (let y = 0; y < h; y += 16) { g.fillStyle = `rgba(0,0,0,${.06 + Math.random() * .08})`; g.fillRect(0, y, w, 16); g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(0, y, w, 1.5); for (let x = (y / 16 % 2) * 64; x < w; x += 128) g.fillRect(x, y, 1.5, 16); } });
   plankTex.wrapS = plankTex.wrapT = T.RepeatWrapping;
-  const EMBLEM = {
-    skull(g, cx, cy, s, col, bg) { g.strokeStyle = col; g.fillStyle = col; g.lineCap = "round"; g.lineWidth = s * .09;
-      for (const d of [1, -1]) { g.beginPath(); g.moveTo(cx - s * .5 * d, cy + s * .02); g.lineTo(cx + s * .5 * d, cy + s * .5); g.stroke();
-        for (const [x, y] of [[cx - s * .5 * d, cy + s * .02], [cx + s * .5 * d, cy + s * .5]]) { g.beginPath(); g.arc(x - s * .03, y - s * .04, s * .055, 0, Math.PI * 2); g.arc(x + s * .03, y + s * .04, s * .055, 0, Math.PI * 2); g.fill(); } }
-      g.beginPath(); g.ellipse(cx, cy - s * .16, s * .3, s * .27, 0, 0, Math.PI * 2); g.fill(); g.fillRect(cx - s * .17, cy - s * .02, s * .34, s * .2);
-      g.fillStyle = bg; g.beginPath(); g.ellipse(cx - s * .11, cy - s * .15, s * .08, s * .09, 0, 0, Math.PI * 2); g.ellipse(cx + s * .11, cy - s * .15, s * .08, s * .09, 0, 0, Math.PI * 2); g.fill();
-      g.beginPath(); g.moveTo(cx, cy - s * .06); g.lineTo(cx - s * .035, cy + s * .01); g.lineTo(cx + s * .035, cy + s * .01); g.fill();
-      for (const x of [-.08, 0, .08]) g.fillRect(cx + x * s - s * .012, cy + s * .08, s * .024, s * .1); },
-    star(g, cx, cy, s, col) { g.fillStyle = col; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? s * .22 : s * .55; g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); } g.closePath(); g.fill(); },
-    heart(g, cx, cy, s, col) { g.fillStyle = col; g.beginPath(); g.moveTo(cx, cy + s * .45); g.bezierCurveTo(cx - s * .75, cy - s * .05, cx - s * .4, cy - s * .55, cx, cy - s * .2); g.bezierCurveTo(cx + s * .4, cy - s * .55, cx + s * .75, cy - s * .05, cx, cy + s * .45); g.fill(); },
-    crown(g, cx, cy, s, col) { g.fillStyle = col; g.beginPath(); g.moveTo(cx - s * .5, cy + s * .3); g.lineTo(cx - s * .55, cy - s * .3); g.lineTo(cx - s * .25, cy); g.lineTo(cx, cy - s * .4); g.lineTo(cx + s * .25, cy); g.lineTo(cx + s * .55, cy - s * .3); g.lineTo(cx + s * .5, cy + s * .3); g.closePath(); g.fill(); },
-    flame(g, cx, cy, s, col) { g.fillStyle = col; g.beginPath(); g.moveTo(cx, cy + s * .45); g.bezierCurveTo(cx - s * .45, cy + s * .4, cx - s * .4, cy - s * .05, cx - s * .1, cy - s * .2); g.bezierCurveTo(cx - s * .12, cy - s * .02, cx, cy, cx + s * .02, cy - s * .5);
-      g.bezierCurveTo(cx + s * .3, cy - s * .2, cx + s * .48, cy + s * .2, cx, cy + s * .45); g.fill(); },
-    compass(g, cx, cy, s, col) { g.strokeStyle = col; g.fillStyle = col; g.lineWidth = s * .06; g.beginPath(); g.arc(cx, cy, s * .45, 0, Math.PI * 2); g.stroke();
-      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * .55, cy + Math.sin(a) * s * .55); g.lineTo(cx + Math.cos(a + Math.PI / 2) * s * .1, cy + Math.sin(a + Math.PI / 2) * s * .1); g.lineTo(cx + Math.cos(a - Math.PI / 2) * s * .1, cy + Math.sin(a - Math.PI / 2) * s * .1); g.fill(); } }
-  };
-  const contrast = hex => { const c = new T.Color(hex); return (c.r * .3 + c.g * .59 + c.b * .11) > .5 ? "#2A2420" : "#F3EAD6"; };
+  // emblems are the same 100×100 paths the flat map ship uses (voyage.js), drawn here onto canvas
+  const V = window.Voyage, paths = {};
+  function drawEmblem(g, id, cx, cy, size, ink, bg) {
+    const e = V.EMBLEMS[id]; if (!e) return;
+    const p = paths[id] || (paths[id] = { d: new Path2D(e.d), cut: e.cut ? new Path2D(e.cut) : null });
+    g.save(); g.translate(cx - size / 2, cy - size / 2); g.scale(size / 100, size / 100);
+    g.fillStyle = ink; g.fill(p.d, e.rule || "nonzero"); if (p.cut) { g.fillStyle = bg; g.fill(p.cut); } g.restore();
+  }
+  function tile(g, w, h, step, fn) { for (let y = step / 2, r = 0; y < h + step; y += step, r++) for (let x = (r % 2) * step / 2 + step / 4; x < w + step; x += step) fn(x, y); }
   function sailTexture(color, pattern, emblem) {
     return canvasTex(256, 256, (g, w, h) => {
-      if (pattern === "rainbow") { ["#F0564A", "#F59B3A", "#F4D03F", "#5DBB63", "#3D8BD9", "#8E5CC7"].forEach((c, i) => { g.fillStyle = c; g.fillRect(0, i * h / 6, w, h / 6 + 1); }); }
-      else if (pattern === "gold") { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, "#FFF0A8"); gr.addColorStop(.45, "#E9B53A"); gr.addColorStop(1, "#A9771A"); g.fillStyle = gr; g.fillRect(0, 0, w, h); }
+      let bg = color;
+      if (pattern === "rainbow") { ["#F0564A", "#F59B3A", "#F4D03F", "#5DBB63", "#3D8BD9", "#8E5CC7"].forEach((c, i) => { g.fillStyle = c; g.fillRect(0, i * h / 6, w, h / 6 + 1); }); bg = "#F4D03F"; }
+      else if (pattern === "gold") { const gr = g.createLinearGradient(0, 0, w, h); gr.addColorStop(0, "#FFF0A8"); gr.addColorStop(.45, "#E9B53A"); gr.addColorStop(1, "#A9771A"); g.fillStyle = gr; g.fillRect(0, 0, w, h); bg = "#E9B53A"; }
       else { g.fillStyle = color; g.fillRect(0, 0, w, h); }
       g.fillStyle = "rgba(0,0,0,.07)"; for (let x = 0; x < w; x += 32) g.fillRect(x, 0, 2, h);
-      const gr2 = g.createLinearGradient(0, 0, 0, h); gr2.addColorStop(0, "rgba(255,255,255,.08)"); gr2.addColorStop(1, "rgba(0,0,0,.18)"); g.fillStyle = gr2; g.fillRect(0, 0, w, h);
-      const ink = contrast(color);
-      if (pattern === "stripe") { g.fillStyle = ink === "#2A2420" ? "rgba(168,50,42,.85)" : "rgba(243,234,214,.8)"; for (let y = 18; y < h; y += 52) g.fillRect(0, y, w, 22); }
-      else if (pattern === "dots") { g.fillStyle = ink === "#2A2420" ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.75)"; for (let y = 20; y < h; y += 40) for (let x = (y / 40 % 2) * 20 + 20; x < w; x += 40) { g.beginPath(); g.arc(x, y, 8, 0, Math.PI * 2); g.fill(); } }
-      else if (emblem && EMBLEM[pattern]) EMBLEM[pattern](g, w / 2, h / 2, 170, ink, color);
-      g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 6; g.strokeRect(0, 0, w, h); });
+      const light = V.inkFor(color) !== "#FFFFFF", soft = light ? "rgba(255,255,255,.75)" : "rgba(255,255,255,.55)";
+      if (pattern === "stripe") { g.fillStyle = light ? "rgba(255,255,255,.7)" : "rgba(255,255,255,.45)"; for (let y = 18; y < h; y += 52) g.fillRect(0, y, w, 22); }
+      else if (pattern === "dots") { g.fillStyle = soft; tile(g, w, h, 40, (x, y) => { g.beginPath(); g.arc(x, y, 8, 0, Math.PI * 2); g.fill(); }); }
+      else if (pattern === "check") { g.fillStyle = light ? "rgba(255,255,255,.55)" : "rgba(255,255,255,.3)"; for (let y = 0; y < h; y += 32) for (let x = (y / 32 % 2) * 32; x < w; x += 64) g.fillRect(x, y, 32, 32); }
+      else if (pattern === "hearts") tile(g, w, h, 48, (x, y) => drawEmblem(g, "heart", x, y, 26, soft, color));
+      else if (pattern === "flowers") tile(g, w, h, 52, (x, y) => drawEmblem(g, "flower", x, y, 30, soft, "#F4D03F"));
+      else if (pattern === "starry") { tile(g, w, h, 46, (x, y) => drawEmblem(g, "star", x, y, 18, "#FFF3B8", color)); tile(g, w, h, 46, (x, y) => { g.fillStyle = "rgba(255,255,255,.8)"; g.beginPath(); g.arc(x + 20, y + 14, 2.4, 0, Math.PI * 2); g.fill(); }); }
+      const gr2 = g.createLinearGradient(0, 0, 0, h); gr2.addColorStop(0, "rgba(255,255,255,.08)"); gr2.addColorStop(1, "rgba(0,0,0,.16)"); g.fillStyle = gr2; g.fillRect(0, 0, w, h);
+      if (emblem) drawEmblem(g, emblem, w / 2, h / 2, 170, V.inkFor(bg), bg);
+      g.strokeStyle = "rgba(0,0,0,.22)"; g.lineWidth = 6; g.strokeRect(0, 0, w, h); });
   }
-  function flagTexture(kind, sailHex) {
-    if (!FLAG_BG[kind]) return canvasTex(256, 160, (g, w, h) => { g.fillStyle = sailHex; g.fillRect(0, 0, w, h); g.fillStyle = "rgba(0,0,0,.15)"; g.fillRect(0, h * .45, w, h * .1); });
-    return canvasTex(256, 160, (g, w, h) => { g.fillStyle = FLAG_BG[kind]; g.fillRect(0, 0, w, h); EMBLEM[FLAG_EMBLEM[kind]](g, w / 2, h / 2 + (kind === "jolly" ? 0 : -4), 150, FLAG_FG[kind] || "#F7F1E3", FLAG_BG[kind]); });
+  function flagTexture(cloth, emblem) {
+    return canvasTex(256, 160, (g, w, h) => { g.fillStyle = cloth; g.fillRect(0, 0, w, h);
+      if (emblem) drawEmblem(g, emblem, w / 2, h / 2, 140, V.inkFor(cloth), cloth); else { g.fillStyle = "rgba(255,255,255,.18)"; g.fillRect(0, h * .42, w, h * .16); } });
   }
 
   /* ----- ship ----- */
@@ -172,13 +166,24 @@ function build() {
   grp("cannon"); for (const side of [1, -1]) for (const u of [.28, .38, .48, .58]) { const p = sideP(u, .72, side);
     const port = add(new T.Mesh(new T.BoxGeometry(.34, .3, .06), M.iron), A.cannon); port.position.copy(p); port.lookAt(p.clone().add(new T.Vector3(0, 0, side)));
     const c = add(new T.Mesh(new T.CylinderGeometry(.08, .11, .62, 10), M.iron), A.cannon); c.rotation.x = Math.PI / 2; c.position.copy(p).add(new T.Vector3(0, 0, side * .2)); }
-  grp("dragon"); { const base = new T.Vector3(xAt(1) + .05, sheer(1) - .35, 0), at = (x, y, z = 0) => base.clone().add(new T.Vector3(x, y, z));
-    const neck = add(new T.Mesh(new T.CylinderGeometry(.16, .24, 1.3, 10), M.gold), A.dragon); neck.position.copy(at(.45, .4)); neck.rotation.z = -.95;
-    const head = add(new T.Mesh(new T.ConeGeometry(.24, .85, 10), M.gold), A.dragon); head.position.copy(at(1.2, .9)); head.rotation.z = -1.75;
-    add(new T.Mesh(new T.SphereGeometry(.27, 12, 10), M.gold), A.dragon).position.copy(at(.95, .92));
+  /* ----- figureheads on the bow (ids match "head" items in DECO): one at a time ----- */
+  const H = {}; const hgrp = k => (H[k] = new T.Group(), ship.add(H[k]), H[k]);
+  const bowBase = new T.Vector3(xAt(1) + .05, sheer(1) - .35, 0), at = (x, y, z = 0) => bowBase.clone().add(new T.Vector3(x, y, z));
+  hgrp("dragon"); {
+    const neck = add(new T.Mesh(new T.CylinderGeometry(.16, .24, 1.3, 10), M.gold), H.dragon); neck.position.copy(at(.45, .4)); neck.rotation.z = -.95;
+    const head = add(new T.Mesh(new T.ConeGeometry(.24, .85, 10), M.gold), H.dragon); head.position.copy(at(1.2, .9)); head.rotation.z = -1.75;
+    add(new T.Mesh(new T.SphereGeometry(.27, 12, 10), M.gold), H.dragon).position.copy(at(.95, .92));
     const eyeM = new T.MeshStandardMaterial({ color: 0xD9402F, emissive: 0xD9402F, emissiveIntensity: .8 });
-    for (const z of [-.14, .14]) { const horn = add(new T.Mesh(new T.ConeGeometry(.06, .45, 8), M.gold), A.dragon); horn.position.copy(at(.82, 1.25, z)); horn.rotation.z = .6;
-      add(new T.Mesh(new T.SphereGeometry(.05, 8, 6), eyeM), A.dragon).position.copy(at(1.08, 1.0, z * 1.15)); } }
+    for (const z of [-.14, .14]) { const horn = add(new T.Mesh(new T.ConeGeometry(.06, .45, 8), M.gold), H.dragon); horn.position.copy(at(.82, 1.25, z)); horn.rotation.z = .6;
+      add(new T.Mesh(new T.SphereGeometry(.05, 8, 6), eyeM), H.dragon).position.copy(at(1.08, 1.0, z * 1.15)); } }
+  hgrp("swan"); { const white = new T.MeshStandardMaterial({ color: 0xFFFFFF, roughness: .35, metalness: .1 });
+    const neck = new T.CatmullRomCurve3([at(0, 0), at(.55, .25), at(.95, .85), at(.85, 1.45), at(1.05, 1.75)]);
+    add(new T.Mesh(new T.TubeGeometry(neck, 24, .13, 10, false), white), H.swan);
+    add(new T.Mesh(new T.SphereGeometry(.2, 14, 12), white), H.swan).position.copy(at(1.1, 1.78));
+    const beak = add(new T.Mesh(new T.ConeGeometry(.07, .32, 10), new T.MeshStandardMaterial({ color: 0xF28A2E, roughness: .5 })), H.swan); beak.position.copy(at(1.38, 1.72)); beak.rotation.z = -Math.PI / 2 - .2;
+    for (const z of [-.11, .11]) add(new T.Mesh(new T.SphereGeometry(.035, 8, 6), M.iron), H.swan).position.copy(at(1.2, 1.84, z));
+    const wingM = new T.MeshStandardMaterial({ color: 0xF4EFE6, roughness: .4 });
+    for (const z of [-.42, .42]) { const wg = add(new T.Mesh(new T.SphereGeometry(.45, 14, 10), wingM), H.swan); wg.scale.set(1.1, .45, .25); wg.position.copy(at(.25, .1, z)); wg.rotation.z = .35; } }
   grp("nest"); { const y = deckY(.45) + 6.3, x = xAt(.45);
     add(new T.Mesh(new T.CylinderGeometry(.55, .45, .42, 16, 1, true), M.wood), A.nest).position.set(x, y, 0);
     add(new T.Mesh(new T.CylinderGeometry(.45, .45, .06, 16), M.wood), A.nest).position.set(x, y - .2, 0);
@@ -209,17 +214,57 @@ function build() {
     const arm = add(new T.Mesh(new T.TorusGeometry(.38, .05, 8, 20, Math.PI), M.iron), a); arm.rotation.z = Math.PI; arm.position.y = -.38;
     add(new T.Mesh(new T.TorusGeometry(.12, .03, 6, 16), M.iron), a).position.y = .62;
     const stock = add(new T.Mesh(new T.CylinderGeometry(.04, .04, .6, 8), M.iron), a); stock.rotation.z = Math.PI / 2; stock.position.y = .4; }
+  const PASTEL = [0xF7A8C4, 0xFFD3A8, 0xFFF1A8, 0xA8E6CF, 0xA8D8F7, 0xC9B6F2];
+  const mat = c => new T.MeshStandardMaterial({ color: c, roughness: .55 });
+  grp("flowers"); { const leaf = mat(0x6FAE5A), cols = [0xF7A8C4, 0xFFFFFF, 0xFFE27A, 0xC9B6F2].map(mat);
+    for (const side of [1, -1]) for (const [i, u] of [.22, .32, .42, .52, .62, .72].entries()) { const p = sideP(u, 0, side).add(new T.Vector3(0, .1, -side * .06));
+      for (let k = 0; k < 3; k++) add(new T.Mesh(new T.SphereGeometry(.11, 10, 8), cols[(i + k) % 4]), A.flowers).position.copy(p).add(new T.Vector3((k - 1) * .16, (k % 2) * .06, 0));
+      const lf = add(new T.Mesh(new T.SphereGeometry(.12, 8, 6), leaf), A.flowers); lf.scale.set(1.6, .35, .7); lf.position.copy(p).add(new T.Vector3(0, -.05, side * .05)); } }
+  grp("bunting"); { const pts = [bowTip.clone(), mastTops[0].clone().add(new T.Vector3(0, -.4, 0)), mastTops[1].clone().add(new T.Vector3(0, -.5, 0)), mastTops[2].clone().add(new T.Vector3(0, -.3, 0)), new T.Vector3(xAt(.01), sheer(0) + .35, 0)];
+    for (let s = 0; s < pts.length - 1; s++) { const a = pts[s], b = pts[s + 1], mid = a.clone().lerp(b, .5).add(new T.Vector3(0, -.9, 0)), curve = new T.QuadraticBezierCurve3(a, mid, b);
+      A.bunting.add(new T.Mesh(new T.TubeGeometry(curve, 16, .015, 4, false), M.rope));
+      const n = Math.max(3, Math.round(a.distanceTo(b) / .55));
+      for (let k = 1; k < n; k++) { const p = curve.getPoint(k / n), g = new T.BufferGeometry();
+        g.setAttribute("position", new T.Float32BufferAttribute([-.17, 0, 0, .17, 0, 0, 0, -.34, 0], 3)); g.computeVertexNormals();
+        const m = add(new T.Mesh(g, new T.MeshStandardMaterial({ color: PASTEL[(s * 7 + k) % 6], side: T.DoubleSide, roughness: .8 })), A.bunting); m.position.copy(p); m.rotation.y = Math.PI / 2; } } }
+  grp("balloons"); const balloons = [];
+  { const heart = (c) => { const g = new T.Group(), m = new T.MeshStandardMaterial({ color: c, roughness: .25, metalness: .05 });
+      for (const z of [-.17, .17]) add(new T.Mesh(new T.SphereGeometry(.26, 16, 12), m), g).position.set(0, .08, z);
+      const tip = add(new T.Mesh(new T.ConeGeometry(.33, .5, 16), m), g); tip.rotation.x = Math.PI; tip.position.y = -.26; tip.scale.set(1, 1, .9); return g; };
+    [[0xF28AB0, -.6, 2.6], [0xC9B6F2, 0, 3.1], [0xFFB6A3, .6, 2.4]].forEach(([c, z, h], i) => { const b = heart(c), anchorP = new T.Vector3(xAt(.03), sheer(0) + .1, z * .5);
+      b.position.set(xAt(.03) - .4 + i * .3, sheer(0) + h, z); b.rotation.y = Math.PI / 2; A.balloons.add(b); balloons.push({ g: b, y: b.position.y, ph: i * 1.7 });
+      const sg = new T.BufferGeometry().setFromPoints([anchorP, b.position.clone().add(new T.Vector3(0, -.5, 0))]); A.balloons.add(new T.Line(sg, M.rope)); }); }
+  grp("bowribbon"); { const pink = mat(0xF28AB0), x = xAt(0) - .12, y = sheer(0) - .25;
+    for (const z of [-.42, .42]) { const loop = add(new T.Mesh(new T.SphereGeometry(.3, 14, 10), pink), A.bowribbon); loop.scale.set(.35, .7, 1.1); loop.position.set(x, y + .05, z); loop.rotation.x = z > 0 ? .5 : -.5;
+      const tail = add(new T.Mesh(new T.BoxGeometry(.08, .6, .16), pink), A.bowribbon); tail.position.set(x, y - .38, z * .45); tail.rotation.x = z > 0 ? -.35 : .35; }
+    add(new T.Mesh(new T.SphereGeometry(.16, 12, 10), mat(0xE0608F)), A.bowribbon).position.set(x - .02, y + .05, 0); }
+  grp("cat"); { const fur = mat(0xF2A65A), belly = mat(0xFFF3E6), u = .8, x = xAt(u), y = deckY(u), c = new T.Group(); A.cat.add(c); c.position.set(x, y, .3); c.rotation.y = -.6;
+    add(new T.Mesh(new T.SphereGeometry(.3, 14, 12), fur), c).scale.set(1, 1.05, .85); c.children[0].position.y = .3;
+    add(new T.Mesh(new T.SphereGeometry(.18, 12, 10), belly), c).position.set(.16, .26, 0);
+    const head = add(new T.Mesh(new T.SphereGeometry(.24, 14, 12), fur), c); head.position.set(.12, .72, 0);
+    for (const z of [-.12, .12]) { const ear = add(new T.Mesh(new T.ConeGeometry(.08, .17, 8), fur), c); ear.position.set(.1, .94, z); ear.rotation.x = z > 0 ? -.25 : .25;
+      add(new T.Mesh(new T.SphereGeometry(.035, 8, 6), M.iron), c).position.set(.32, .76, z * .7); }
+    add(new T.Mesh(new T.SphereGeometry(.03, 6, 6), mat(0xE0608F)), c).position.set(.35, .69, 0);
+    const tail = add(new T.Mesh(new T.TorusGeometry(.26, .05, 8, 16, Math.PI * 1.1), fur), c); tail.position.set(-.3, .3, 0); tail.rotation.y = Math.PI / 2; }
+  grp("fairylights"); { const bulbs = [0xFFE27A, 0xF7A8C4, 0xA8D8F7, 0xA8E6CF].map(c => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.4 }));
+    for (const [a, b] of [[mastTops[1], bowTip], [mastTops[1], new T.Vector3(xAt(.01), sheer(0) + .3, 0)]]) {
+      const mid = a.clone().lerp(b, .5).add(new T.Vector3(0, -.6, 0)), curve = new T.QuadraticBezierCurve3(a.clone().add(new T.Vector3(0, -.3, 0)), mid, b);
+      A.fairylights.add(new T.Mesh(new T.TubeGeometry(curve, 20, .012, 4, false), M.rope));
+      const n = Math.round(a.distanceTo(b) / .45); for (let k = 1; k < n; k++) add(new T.Mesh(new T.SphereGeometry(.075, 8, 6), bulbs[k % 4]), A.fairylights).position.copy(curve.getPoint(k / n)); } }
 
   /* ----- wake behind the stern (the "wake" decoration changes its look) ----- */
   const foamN = 160, foamGeo = new T.BufferGeometry(), foamPos = new Float32Array(foamN * 3), foamCol = new Float32Array(foamN * 3), foamAge = new Float32Array(foamN);
   foamGeo.setAttribute("position", new T.BufferAttribute(foamPos, 3)); foamGeo.setAttribute("color", new T.BufferAttribute(foamCol, 3));
   const foamMat = new T.PointsMaterial({ map: glowTex, size: .55, transparent: true, opacity: .85, depthWrite: false, vertexColors: true });
   scene.add(new T.Points(foamGeo, foamMat));
+  const heartTex = canvasTex(64, 64, g => drawEmblem(g, "heart", 32, 32, 60, "#FFFFFF", "#FFFFFF"), false);
+  const petalTex = canvasTex(64, 64, g => { g.fillStyle = "#fff"; g.beginPath(); g.ellipse(32, 32, 14, 26, .6, 0, Math.PI * 2); g.fill(); }, false);
   let wakeKind = "", spread = 2.4;
   const tmpC = new T.Color();
   function resetFoam(i) { const bow = Math.random() < .3; foamAge[i] = 0;
     foamPos[i * 3] = bow ? xAt(.97) : xAt(0) - .2; foamPos[i * 3 + 1] = .1; foamPos[i * 3 + 2] = (Math.random() - .5) * (bow ? .6 : spread);
-    if (wakeKind === "rainbow") tmpC.setHSL(Math.random(), .85, .62); else if (wakeKind === "sparkle") tmpC.set(Math.random() < .7 ? "#FFE27A" : "#FFFFFF"); else if (wakeKind === "bubble") tmpC.set("#CFEFFF"); else tmpC.set("#FFFFFF");
+    if (wakeKind === "rainbow") tmpC.setHSL(Math.random(), .85, .62); else if (wakeKind === "sparkle") tmpC.set(Math.random() < .7 ? "#FFE27A" : "#FFFFFF"); else if (wakeKind === "bubble") tmpC.set("#CFEFFF");
+    else if (wakeKind === "hearts") tmpC.set(["#F28AB0", "#F7A8C4", "#FF6F91"][i % 3]); else if (wakeKind === "petals") tmpC.set(["#F7C6D9", "#FFFFFF", "#F28AB0"][i % 3]); else tmpC.set("#FFFFFF");
     foamCol[i * 3] = tmpC.r; foamCol[i * 3 + 1] = tmpC.g; foamCol[i * 3 + 2] = tmpC.b; }
   for (let i = 0; i < foamN; i++) { resetFoam(i); foamAge[i] = Math.random() * 3; }
 
@@ -257,20 +302,22 @@ function build() {
 
   /* ----- dressing the ship ----- */
   let lookKey = "";
-  function setLook(look = {}, sailHex = "#EFE4C8") {
-    const key = JSON.stringify([look, sailHex]); if (key === lookKey) return; lookKey = key;
+  // look: see parseLook in worker.js; sailHex/flagHex are the free colours already turned into hex
+  function setLook(look = {}, sailHex = "#EFE4C8", flagHex = sailHex) {
+    const key = JSON.stringify([look, sailHex, flagHex]); if (key === lookKey) return; lookKey = key;
     M.hull.color.set(HULL[look.hull] || HULL.wood); M.hull.map = look.hull ? null : plankTex;
     M.hull.metalness = look.hull === "gold" ? .75 : .05; M.hull.roughness = look.hull === "gold" ? .3 : .7; M.hull.needsUpdate = true;
     M.trim.color.set(TRIM[look.trim] || TRIM.gold);
     for (const m of [M.sailMain, M.sailPlain, M.flag]) m.map?.dispose();
     const p = look.pattern || "none";
-    M.sailMain.map = sailTexture(sailHex, p, true);
-    M.sailPlain.map = sailTexture(sailHex, ["stripe", "dots", "rainbow", "gold"].includes(p) ? p : "none", false);
-    M.flag.map = flagTexture(look.flag, sailHex);
+    M.sailMain.map = sailTexture(sailHex, p, look.se); M.sailPlain.map = sailTexture(sailHex, p, null);
+    M.flag.map = flagTexture(flagHex, look.fe);
     M.sailMain.needsUpdate = M.sailPlain.needsUpdate = M.flag.needsUpdate = true;
     const on = new Set(look.att || []); for (const k in A) A[k].visible = on.has(k);
+    for (const k in H) H[k].visible = look.head === k;
     wakeKind = look.wake || ""; spread = wakeKind === "splash" ? 3.6 : 2.4;
-    foamMat.size = { splash: .8, bubble: .9, sparkle: .5, rainbow: .7 }[wakeKind] || .55; foamMat.blending = wakeKind === "sparkle" ? T.AdditiveBlending : T.NormalBlending; foamMat.needsUpdate = true;
+    foamMat.map = wakeKind === "hearts" ? heartTex : wakeKind === "petals" ? petalTex : glowTex;
+    foamMat.size = { splash: .8, bubble: .9, sparkle: .5, rainbow: .7, hearts: .7, petals: .55 }[wakeKind] || .55; foamMat.blending = wakeKind === "sparkle" ? T.AdditiveBlending : T.NormalBlending; foamMat.needsUpdate = true;
     for (let i = 0; i < foamN; i++) { const a = foamAge[i]; resetFoam(i); foamAge[i] = a; }
   }
 
@@ -291,6 +338,7 @@ function build() {
     const f = flagGeo.attributes.position.array; for (let i = 0; i < f.length; i += 3) { const x = flagBase[i]; f[i + 2] = flagBase[i + 2] + Math.sin(x * 3.4 - t * 7) * .14 * (x / 1.6); }
     flagGeo.attributes.position.needsUpdate = true;
     bird.rotation.z = Math.sin(t * 3) * .08;
+    for (const b of balloons) { b.g.position.y = b.y + Math.sin(t * 1.4 + b.ph) * .14; b.g.rotation.z = Math.sin(t * 1.1 + b.ph) * .12; }
     for (let i = 0; i < foamN; i++) { foamAge[i] += dt; const k = i * 3; foamPos[k] -= dt * 2.4; foamPos[k + 2] *= 1 + dt * .35;
       foamPos[k + 1] = wave(foamPos[k] + sail, foamPos[k + 2], t) + (wakeKind === "bubble" ? .08 + foamAge[i] * .25 : .08); if (foamAge[i] > 3) resetFoam(i); }
     foamGeo.attributes.position.needsUpdate = true;
