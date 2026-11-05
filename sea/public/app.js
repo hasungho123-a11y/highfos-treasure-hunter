@@ -65,6 +65,15 @@ const weaponImg = id => WEAPON_ART[id] ? `<svg viewBox="0 0 72 36" aria-hidden="
 // where the weapon stands on each 2D ship [x at the middle of the picture, deck y, size]
 const WEAPON_SPOT = { dinghy: [40, 32.5, .2], sloop: [43, 31, .24], brig: [47, 30.5, .26], galleon: [46, 31, .33], ironclad: [50, 30.5, .3], destroyer: [50, 28.5, .3], cruiser: [50, 27.5, .34], carrier: [23, 26.2, .32] };
 const weaponOnShip = (ship, look) => { const art = WEAPON_ART[look.weapon], s = WEAPON_SPOT[ship]; return art && s ? `<g transform="translate(${s[0] - 36 * s[2]} ${s[1] - 34 * s[2]}) scale(${s[2]})">${art}</g>` : ""; };
+// where an approved photo goes on the 2D ship: over the main sail, or painted on the hull side of ships without sails
+const PHOTO_SAIL = { dinghy: [31, 12, 14, 19, "M31 12 L31 31 L45 31 Z"], sloop: [20, 18, 15.5, 12, "M20 18 H34 Q36 24 34 30 H20 Z"], brig: [31, 17, 15.5, 13, "M31 17 H45 Q47 23 45 30 H31 Z"] };
+const PHOTO_HULL = { ironclad: [20, 31.3, 10.2, 8.5], destroyer: [17, 30.9, 10.8, 9], cruiser: [17, 29.2, 13.8, 11.5], carrier: [20, 28.4, 14.8, 12.3] };
+function shipPhoto(id, look) {
+  const src = V.photoSrc(look); if (!src) return "";
+  if (PHOTO_SAIL[id]) return V.photoSVG(src, ...PHOTO_SAIL[id]);
+  const h = PHOTO_HULL[id]; if (!h) return "";
+  return V.photoSVG(src, h[0], h[1], h[2], h[3], `M${h[0]} ${h[1]} h${h[2]} v${h[3]} h${-h[2]} Z`) + `<rect x="${h[0]}" y="${h[1]}" width="${h[2]}" height="${h[3]}" fill="none" stroke="#F4EFE6" stroke-width=".4"/>`;
+}
 function shipSVG(id, look = {}, sailIdx = 0) {
   if (id === "galleon") return V.boatSVG(look, sailIdx).replace(/<\/g><\/svg>\s*$/, weaponOnShip(id, look) + "</g></svg>");
   const s = sail(sailIdx), wood = HULLS[look.hull] || "#7A4A28", grey = HULLS[look.hull] || "#5F6973", m = "#4E321E", st = "#8A949E", ir = "#23262B";
@@ -77,7 +86,7 @@ function shipSVG(id, look = {}, sailIdx = 0) {
     cruiser: `<path d="M26 16 V2 M38 18 V7" stroke="${ir}" stroke-width=".9"/>${flagSVG(26, 0, look, sailIdx)}<rect x="20" y="10" width="10" height="7" fill="${st}"/><rect x="16" y="16" width="20" height="8" fill="${st}"/><rect x="11" y="23" width="30" height="7" fill="${st}"/><rect x="33" y="14" width="4" height="9" fill="${ir}"/><rect x="38" y="15" width="4" height="8" fill="${ir}"/><path d="M47 26 h4 v3 h-4 Z M51 27 H57 M6 26 h4 v3 h-4 Z M6 27 H1" stroke="${ir}" fill="${ir}" stroke-width=".9"/><path d="M1 30 L59 27 L53 41 L6 41 Z" fill="${grey}"/>`,
     carrier: `<path d="M37 16 V4" stroke="${ir}" stroke-width=".9"/>${flagSVG(37, 1, look, sailIdx)}<rect x="32" y="15" width="11" height="6" fill="${st}"/><rect x="30" y="20" width="15" height="6" fill="${st}"/><rect x="0" y="26" width="60" height="2.2" fill="#3A4046"/><path d="M6 25.4 l4 -1 l1 1 Z M15 25.4 l4 -1 l1 1 Z M50 25.4 l4 -1 l1 1 Z" fill="${st}"/><path d="M3 28 L58 28 L53 41 L8 41 Z" fill="${HULLS[look.hull] || "#555E67"}"/>`
   };
-  return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">${parts[id] || parts.dinghy}${weaponOnShip(id, look)}</g></svg>`;
+  return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">${parts[id] || parts.dinghy}${shipPhoto(id, look)}${weaponOnShip(id, look)}</g></svg>`;
 }
 const shipBox = (ship, look, sailIdx, name, cls = "") => `<div class="deco-sea ${cls}"><div class="ship mine ${V.wakeClass(look)}" style="--sail:${sail(sailIdx)}">${shipSVG(ship, look, sailIdx)}${name ? `<span class="nmtag ${V.tagClass(look)}">${esc(name)}</span>` : ""}</div></div>`;
 
@@ -135,7 +144,7 @@ const ISLES = {
   memory: { x: 180, y: 150, px: 150, py: 170, r: 72, game: "memory" },
   battle: { x: 660, y: 490, px: 320, py: 790, r: 74 }
 };
-const DECO_TABS = [["ship", "배 종류"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["pattern", "돛 무늬"], ["hull", "배 색"], ["att", "부착물"], ["head", "선수상"], ["trim", "테두리"], ["wake", "물결"], ["tag", "이름표"]];
+const DECO_TABS = [["ship", "배 종류"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["photo", "내 사진"], ["pattern", "돛 무늬"], ["hull", "배 색"], ["att", "부착물"], ["head", "선수상"], ["trim", "테두리"], ["wake", "물결"], ["tag", "이름표"]];
 const withItem = (look, x) => x.slot === "att" ? { ...look, att: [...new Set([...(look.att || []), x.id])] } : x.slot === "emblem" ? { ...look, se: x.id } : { ...look, [x.slot]: x.id };
 const isWorn = (look, x) => x.slot === "att" ? (look.att || []).includes(x.id) : x.slot === "emblem" ? look.se === x.id || look.fe === x.id : look[x.slot] === x.id;
 const coin = n => `<span class="gold num">${n}</span>`;
@@ -149,7 +158,7 @@ async function kidLoad() { K.d = await api("/api/kid/state");
   if (open > seen) ls.set(mem, open); }
 async function kidStart() {
   document.body.classList.add("kid"); await kidLoad(); kidRender();
-  setInterval(async () => { if (document.hidden || K.busy || $(".game") || $(".fight")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); } catch (e) {} }, 20000);
+  setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); } catch (e) {} }, 20000);
 }
 function kidRender() {
   const d = K.d, me = d.me, keep = keepInputs(app);
@@ -161,7 +170,7 @@ function kidRender() {
     ${me.mustChange ? `<div class="modal" role="dialog" aria-modal="true"><div class="panel"><h2>나만의 비밀번호 정하기</h2><p class="small muted">임시 비밀번호 대신 나만 아는 숫자 4개로 바꿔요.</p>
       <form data-form="kpin" class="stack" style="gap:10px"><input type="password" id="kp1" inputmode="numeric" maxlength="4" placeholder="숫자 4개" data-keep="no" required><input type="password" id="kp2" inputmode="numeric" maxlength="4" placeholder="한 번 더" data-keep="no" required><button class="btn primary">정하기</button></form></div></div>` : ""}`;
   restoreInputs(keep);
-  if (K.tab === "deco") { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey); show3D($("#deco3d"), x ? withItem(me.look, x) : me.look, me.sail, K.tryShip || me.ship); }
+  if (K.tab === "deco") { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey), base = draftLook(me.look); show3D($("#deco3d"), x ? withItem(base, x) : base, me.sail, K.tryShip || me.ship); if (K.crop) drawCrop(); }
 }
 const tallMap = () => innerWidth < 640;
 const mapSize = () => tallMap() ? { w: 640, h: 920 } : { w: 1000, h: 620 };
@@ -239,8 +248,41 @@ function kMissions() {
     ${SUBJECTS.map(sub => { const list = qs.filter(q => q.subject === sub); return list.length ? `<h3>${sub}</h3><div class="mlist">${list.map(q => `<div class="mitem s-${esc(q.subject)}"><span class="bar"></span><span><span class="t">${esc(q.title)}</span><br><span class="tag kind">${KINDS[q.kind]}</span> <span class="small">행동력 +${q.energy}</span></span>${btn(q)}</div>`).join("")}</div>` : ""; }).join("") || `<p class="muted">아직 미션이 없어요.</p>`}</section>`;
 }
 const embTile = (id, cloth) => `<svg class="emb-tile" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="14" fill="${cloth}"/>${V.embSVG(id, 50, 50, 74, V.inkFor(cloth), cloth)}</svg>`;
+/* ---------- my photo on the ship ---------- */
+const CROP_W = 480, CROP_H = 400;
+const draftLook = look => K.photoDraft ? { ...look, photoSrc: K.photoDraft } : look;
+function kPhoto() {
+  const d = K.d, p = d.photo, L = d.me.look, gold = d.bal.gold, viewShip = d.ships.find(s => s.id === (K.tryShip || d.me.ship));
+  const where = viewShip.sails ? "돛" : "선체 옆면";
+  const rules = `<p class="small muted">내 사진을 골라 배에 달 수 있어요. 돛이 있는 배는 돛에, 돛이 없는 배는 선체 옆면에 크게 그려져요. 금화 <b class="num">${p.price}</b>개이고, 선생님이 확인한 뒤에 달려요. 신청은 일주일에 3번까지예요.</p><p class="small"><b>내 얼굴이나 친구 얼굴이 나온 사진은 올리지 마세요.</b></p>`;
+  if (K.crop) return `${rules}<div class="crop"><canvas id="cropCv" width="${CROP_W}" height="${CROP_H}" aria-label="사진 자르기"></canvas><p class="small muted">사진을 끌어서 위치를 맞춰요.</p><label class="f">크기<input type="range" id="cropZoom" min="1" max="4" step="0.01" value="${K.crop.zoom}" data-keep="no"></label><div class="row"><button class="btn primary" data-act="kcropOk">배에 달아 보기</button><button class="btn" data-act="kcropNo">취소</button></div></div>`;
+  if (K.photoDraft) return `${rules}<div class="photo-row"><img class="photo-thumb" src="${K.photoDraft}" alt="고른 사진"><div class="stack" style="gap:8px"><span>위에서 ${where}에 달린 모습을 볼 수 있어요. 금화 ${p.price}개를 내고 신청할까요? 남는 금화 ${gold - p.price}</span><div class="row"><button class="btn primary" data-act="kphotoSend">선생님께 신청</button><button class="btn" data-act="kcropNo">다시 고르기</button></div></div></div>`;
+  const current = L.photo ? `<h3>지금 달린 사진</h3><div class="photo-row"><img class="photo-thumb" src="/api/photo/${L.photo}" alt="지금 달린 사진"><button class="btn sm ghost" data-act="kphotoOff">사진 내리기</button></div>` : "";
+  if (p.pending) return `${rules}<h3>선생님 확인을 기다려요</h3><div class="photo-row"><img class="photo-thumb" src="/api/photo/${p.pending}" alt="신청한 사진"><div class="stack" style="gap:8px"><span class="pill wait">확인 중</span><button class="btn sm" data-act="kphotoCancel">신청 취소하고 금화 돌려받기</button></div></div>${current}`;
+  const why = !p.left ? "이번 주 신청을 다 했어요" : gold < p.price ? `금화가 ${p.price - gold}개 모자라요` : "";
+  return `${rules}${p.rejected ? `<div class="notice">선생님이 지난 사진을 돌려보냈어요. 금화는 돌려받았어요.</div>` : ""}${current}<div class="row">${why ? `<button class="btn" disabled>${why}</button>` : `<label class="btn primary">사진 고르기<input type="file" id="photoFile" accept="image/*" data-keep="no" hidden></label>`}<span class="small muted">이번 주 ${p.left}번 남음</span></div>`;
+}
+function drawCrop() {
+  const c = K.crop, cv = $("#cropCv"); if (!c || !cv) return;
+  const s = Math.max(CROP_W / c.img.naturalWidth, CROP_H / c.img.naturalHeight) * c.zoom, w = c.img.naturalWidth * s, h = c.img.naturalHeight * s;
+  c.x = Math.min(0, Math.max(CROP_W - w, c.x ?? (CROP_W - w) / 2)); c.y = Math.min(0, Math.max(CROP_H - h, c.y ?? (CROP_H - h) / 2));
+  cv.getContext("2d").drawImage(c.img, c.x, c.y, w, h);
+}
+function openCrop(file) {
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => { URL.revokeObjectURL(url); K.crop = { img, zoom: 1, x: null, y: null }; kidRender(); };
+  img.onerror = () => { URL.revokeObjectURL(url); toast("이 사진은 열 수 없어요. 다른 사진을 골라 주세요"); };
+  img.src = url;
+}
+document.addEventListener("change", e => { if (e.target.id === "photoFile" && e.target.files[0]) openCrop(e.target.files[0]); });
+document.addEventListener("input", e => { if (e.target.id !== "cropZoom" || !K.crop) return; const c = K.crop, z = Number(e.target.value), r = z / c.zoom; c.x = CROP_W / 2 - (CROP_W / 2 - c.x) * r; c.y = CROP_H / 2 - (CROP_H / 2 - c.y) * r; c.zoom = z; drawCrop(); });
+let cropDrag = null;
+document.addEventListener("pointerdown", e => { if (e.target.id === "cropCv" && K.crop) { cropDrag = { x: e.clientX, y: e.clientY, k: CROP_W / e.target.getBoundingClientRect().width }; e.preventDefault(); } });
+document.addEventListener("pointermove", e => { if (!cropDrag || !K.crop) return; K.crop.x += (e.clientX - cropDrag.x) * cropDrag.k; K.crop.y += (e.clientY - cropDrag.y) * cropDrag.k; cropDrag.x = e.clientX; cropDrag.y = e.clientY; drawCrop(); });
+document.addEventListener("pointerup", () => { cropDrag = null; });
+document.addEventListener("pointercancel", () => { cropDrag = null; });
 function kDeco() {
-  const d = K.d, me = d.me, L = me.look, gold = d.bal.gold, owned = new Set(d.owned), slot = K.slot, curShip = d.ships.find(s => s.id === me.ship);
+  const d = K.d, me = d.me, L = draftLook(me.look), gold = d.bal.gold, owned = new Set(d.owned), slot = K.slot, curShip = d.ships.find(s => s.id === me.ship);
   const conf = K.confirm && K.confirm.key && d.deco.find(x => x.key === K.confirm.key), shipConf = K.confirm && K.confirm.ship && d.ships.find(s => s.id === K.confirm.ship);
   const tryItem = K.tryKey && d.deco.find(x => x.key === K.tryKey);
   const buy = x => { const can = gold >= x.price; return `<button class="btn sm ${can ? "primary" : ""}" data-act="kdecoAsk" data-v="${x.key}" ${can ? "" : "disabled"}>${can ? "사기" : `${x.price - gold}개 모자라요`}</button>`; };
@@ -258,7 +300,7 @@ function kDeco() {
   const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
   const sw = (i, act, on, label) => `<button style="--sail:${V.SAILS[i]}" data-act="${act}" data-v="${i}" aria-pressed="${on}" aria-label="${label} ${i + 1}"></button>`;
   const noSail = !curShip.sails && ["pattern", "emblem", "color"].includes(slot) ? `<p class="small muted">지금 배에는 돛이 없어서 돛 꾸미기는 안 보여요. 깃발 색과 깃발 문양은 보여요.</p>` : "";
-  const body = slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
+  const body = slot === "photo" ? kPhoto() : slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
     : slot === "color" ? `<p class="small muted">돛 색과 깃발 색은 무료예요.</p><h3>돛 색</h3><div class="sails">${V.SAILS.map((c, i) => sw(i, "ksail", me.sail === i, "돛 색")).join("")}</div>
       <h3>깃발 색</h3><div class="sails"><button class="same" data-act="kflag" data-v="-1" aria-pressed="${L.fc == null}" style="--sail:${sail(me.sail)}">돛과 같게</button>${V.SAILS.map((c, i) => sw(i, "kflag", L.fc === i, "깃발 색")).join("")}</div>`
     : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => x.slot === slot).map(card).join("")}</div>`}`;
@@ -322,7 +364,7 @@ async function playFight() {
   m.remove(); await kidLoad(); kidRender(); K.busy = false;
 }
 const KID_ACTS = {
-  ktab: v => { K.tab = v; K.confirm = null; K.tryKey = null; K.tryShip = null; kidRender(); scrollTo(0, 0); },
+  ktab: v => { K.tab = v; K.confirm = null; K.tryKey = null; K.tryShip = null; K.crop = null; K.photoDraft = null; kidRender(); scrollTo(0, 0); },
   kisle: v => { K.confirm = null; if (!v) { K.isle = null; return kidRender(); } K.isle = v; const el = $("#wship"); if (el) el.style.cssText += ";" + shipAt(v); K.at = v; setTimeout(() => { kidRender(); $("#islePanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, el ? 620 : 0); },
   kplay: playGame, kfight: playFight,
   ksea: v => { const m = K.d.maps[Number(v)]; if (!seaOpen(m)) return toast(`${m.name}는 전투력 ${m.power}부터 열려요. 지금은 ${K.d.me.power}이에요`); K.map = m.id; K.isle = null; K.at = "port"; K.confirm = null; kidRender(); },
@@ -331,7 +373,13 @@ const KID_ACTS = {
   kgoShips: () => { K.tab = "deco"; K.slot = "ship"; kidRender(); scrollTo(0, 0); },
   krequest: v => kDo(() => api("/api/kid/request", { questId: Number(v) }), "선생님께 확인을 요청했어요"),
   kcancel: v => kDo(() => api(`/api/kid/cancel/${v}`, {})),
-  kslot: v => { K.slot = v; K.tryKey = null; K.tryShip = null; K.confirm = null; kidRender(); },
+  kslot: v => { K.slot = v; K.tryKey = null; K.tryShip = null; K.confirm = null; K.crop = null; K.photoDraft = null; kidRender(); },
+  kcropNo: () => { K.crop = null; K.photoDraft = null; kidRender(); },
+  // the canvas re-encodes the picture, which also drops the location and other data a phone stores inside photos
+  kcropOk: () => { const cv = $("#cropCv"); if (!cv) return; let data = ""; for (const q of [.8, .65, .5, .35]) { data = cv.toDataURL("image/jpeg", q); if (data.length < 190000) break; } K.photoDraft = data; K.crop = null; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
+  kphotoSend: async () => { const data = K.photoDraft; K.photoDraft = null; await kDo(() => api("/api/kid/photo", { data }), "선생님께 신청했어요. 확인하면 배에 달려요"); },
+  kphotoCancel: () => kDo(() => api("/api/kid/photo/cancel", {}), "신청을 취소하고 금화를 돌려받았어요"),
+  kphotoOff: () => { if (!K.photoOffArm) { K.photoOffArm = true; setTimeout(() => { K.photoOffArm = false; }, 5000); return toast("한 번 더 누르면 사진을 내려요. 금화는 돌아오지 않아요"); } K.photoOffArm = false; return kDo(() => api("/api/kid/photo/remove", {}), "사진을 내렸어요"); },
   ktry: v => { K.tryKey = v && K.tryKey !== v ? v : null; kidRender(); },
   ktryShip: v => { K.tryShip = K.tryShip === v ? null : v; kidRender(); },
   kdecoAsk: v => { K.confirm = { key: v }; K.tryKey = v; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
@@ -351,7 +399,7 @@ const KID_FORMS = {
    TEACHER
    ===================================================================== */
 const T = { d: null, tab: "grant", cls: "all", selQ: null, selS: new Set(), selR: new Set(), created: null, editQ: null, detail: null };
-const TTABS = [["grant", "미션 지급"], ["crew", "반·선원"], ["quests", "미션 관리"], ["give", "건네줄 것"], ["battle", "전투·설정"], ["log", "오늘 기록"]];
+const TTABS = [["grant", "미션 지급"], ["photo", "사진 승인"], ["crew", "반·선원"], ["quests", "미션 관리"], ["give", "건네줄 것"], ["battle", "전투·설정"], ["log", "오늘 기록"]];
 async function tLoad() { T.d = await api("/api/t/state"); }
 async function teacherStart() { await tLoad(); tRender(); setInterval(async () => { if (document.hidden) return; const a = document.activeElement; if (a && a.matches("input,select,textarea")) return; try { await tLoad(); tRender(); } catch (e) {} }, 15000); }
 const sname = id => T.d.students.find(s => s.id === id)?.nickname || "삭제된 학생";
@@ -361,8 +409,8 @@ const tChips = () => T.d.classes.length < 2 ? "" : `<div class="chips">${[["all"
 function tRender() {
   const d = T.d, keep = keepInputs(app);
   app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 제도</h1><small>선생님 · ${esc(d.teacher)}</small></div></div><div class="hright"><button class="btn ghost sm" data-act="logout">로그아웃</button></div></div>
-    <nav class="tabs" aria-label="화면">${TTABS.map(([k, l]) => `<button data-act="ttab" data-v="${k}" aria-current="${T.tab === k}">${l}${k === "grant" && d.requests.length ? `<span class="cnt">${d.requests.length}</span>` : ""}${k === "give" && d.orders.length ? `<span class="cnt">${d.orders.length}</span>` : ""}</button>`).join("")}</nav></header>
-    <main>${({ grant: tGrant, crew: tCrew, quests: tQuests, give: tGive, battle: tBattle, log: tLog })[T.tab]()}</main>`;
+    <nav class="tabs" aria-label="화면">${TTABS.map(([k, l]) => `<button data-act="ttab" data-v="${k}" aria-current="${T.tab === k}">${l}${k === "grant" && d.requests.length ? `<span class="cnt">${d.requests.length}</span>` : ""}${k === "give" && d.orders.length ? `<span class="cnt">${d.orders.length}</span>` : ""}${k === "photo" && d.photos.length ? `<span class="cnt">${d.photos.length}</span>` : ""}</button>`).join("")}</nav></header>
+    <main>${({ grant: tGrant, photo: tPhoto, crew: tCrew, quests: tQuests, give: tGive, battle: tBattle, log: tLog })[T.tab]()}</main>`;
   restoreInputs(keep);
 }
 function tGrant() {
@@ -374,6 +422,13 @@ function tGrant() {
       <div class="chips">${d.quests.filter(x => x.active).map(x => `<button class="chip" data-act="tpickq" data-v="${x.id}" aria-pressed="${x.id === T.selQ}">${esc(x.title)} +${x.energy}</button>`).join("") || `<span class="muted small">미션 관리에서 미션을 만들어 주세요.</span>`}</div>
       <div class="chips">${tList().map(s => `<button class="chip" data-act="tpicks" data-v="${s.id}" aria-pressed="${T.selS.has(s.id)}">${esc(s.nickname)} · 행동력 ${s.bal.energy}</button>`).join("")}</div>
       <div class="row"><button class="btn sm" data-act="tselAll">모두 선택</button><button class="btn primary" data-act="tgrant" ${q && T.selS.size ? "" : "disabled"}>${T.selS.size}명에게 지급</button></div></section>`;
+}
+function tPhoto() {
+  const d = T.d, onShips = d.students.filter(s => s.photo), who = id => { const s = d.students.find(x => x.id === id); return `<b>${esc(s?.nickname || "삭제된 학생")}</b> <span class="small muted">${esc(cname(s?.class_id))}</span>`; };
+  return `<section class="panel"><h2>확인을 기다리는 사진</h2><p class="small muted">승인하면 같은 반 친구들에게 보여요. 반려하면 사진은 지워지고 금화 150개는 아이에게 돌아가요.</p>
+    ${d.photos.length ? `<div class="photo-grid">${d.photos.map(p => `<div class="photo-card"><img src="/api/photo/${p.id}" alt="신청한 사진"><div>${who(p.student_id)}</div><span class="small muted">${fmtTime(p.created_at)}</span><div class="row"><button class="btn sm primary" data-act="tphotoOk" data-v="${p.id}">승인</button><button class="btn sm danger" data-act="tphotoNo" data-v="${p.id}">반려</button></div></div>`).join("")}</div>` : `<p class="muted small">새 신청이 없어요.</p>`}</section>
+    <section class="panel"><h2>지금 배에 달린 사진</h2><p class="small muted">내리면 사진이 지워져요. 금화는 돌아가지 않아요.</p>
+    ${onShips.length ? `<div class="photo-grid">${onShips.map(s => `<div class="photo-card"><img src="/api/photo/${s.photo}" alt="달려 있는 사진"><div>${who(s.id)}</div><div class="row"><button class="btn sm ghost" data-act="tphotoOff" data-v="${s.photo}">내리기</button></div></div>`).join("")}</div>` : `<p class="muted small">달려 있는 사진이 없어요.</p>`}</section>`;
 }
 function tCrew() {
   const d = T.d, base = location.origin, s = d.students.find(x => x.id === T.detail);
@@ -411,6 +466,9 @@ function tLog() {
 }
 async function tDo(fn, msg) { try { const r = await fn(); if (msg) toast(msg); await tLoad(); tRender(); return r; } catch (e) { toast(e.message); } }
 const T_ACTS = {
+  tphotoOk: v => tDo(() => api(`/api/t/photos/${v}/approve`, {}), "승인했어요. 아이의 배에 달렸어요"),
+  tphotoNo: v => tDo(() => api(`/api/t/photos/${v}/reject`, {}), "반려했어요. 사진을 지우고 금화를 돌려줬어요"),
+  tphotoOff: v => { if (T.photoArm !== v) { T.photoArm = v; return toast("한 번 더 누르면 사진을 내리고 지워요"); } T.photoArm = null; return tDo(() => api(`/api/t/photos/${v}/remove`, {}), "사진을 내렸어요"); },
   ttab: v => { T.tab = v; tRender(); scrollTo(0, 0); }, tcls: v => { T.cls = v === "all" ? "all" : Number(v); tRender(); },
   tselr: v => { const i = Number(v); T.selR.has(i) ? T.selR.delete(i) : T.selR.add(i); tRender(); }, tselrAll: () => { T.d.requests.forEach(r => T.selR.add(r.id)); tRender(); },
   tapprove: async () => { const ids = [...T.selR]; T.selR.clear(); const r = await tDo(() => api("/api/t/requests/approve", { ids })); if (r) toast(`${r.given}개 승인했어요${r.skipped.length ? ` · ${r.skipped.length}개는 이미 받은 미션이에요` : ""}`); },

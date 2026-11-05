@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS students (
   sail INTEGER NOT NULL DEFAULT 0,
   look TEXT NOT NULL DEFAULT '{}',    -- decorations being worn
   ship TEXT NOT NULL DEFAULT 'dinghy',
+  photo INTEGER NOT NULL DEFAULT 0,   -- the approved photo on the sail or hull (photos.id)
   pin_hash TEXT NOT NULL,
   salt TEXT NOT NULL,
   must_change INTEGER NOT NULL DEFAULT 1,
@@ -118,3 +119,18 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at INTEGER NOT NULL,
   decided_at INTEGER
 );
+
+-- photo sails: a kid's photo waits for the teacher before anyone else can see it
+CREATE TABLE IF NOT EXISTS photos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL REFERENCES students(id),
+  data TEXT NOT NULL DEFAULT '',      -- base64 JPEG, emptied as soon as the photo is no longer in use
+  status TEXT NOT NULL DEFAULT 'pending', -- pending | approved | rejected | canceled | replaced | removed
+  log_id INTEGER,                     -- the gold payment, deleted to refund on reject or cancel
+  date TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_photos_student ON photos(student_id, date);
+CREATE INDEX IF NOT EXISTS idx_photos_status ON photos(status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_photos_one_pending ON photos(student_id) WHERE status='pending';

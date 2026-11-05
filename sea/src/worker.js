@@ -65,6 +65,9 @@ function parseLook(s) {
   if (Number.isInteger(o.fc) && o.fc >= 0 && o.fc < SAILS) out.fc = o.fc;
   return out;
 }
+// the approved photo travels with the look, so every ship drawing gets it from one place
+const lookOf = row => { const look = parseLook(row.look); if (row.photo) look.photo = row.photo; return look; };
+const PHOTO_PRICE = 150, PHOTO_PER_WEEK = 3, PHOTO_MAX_CHARS = 200000;
 function wearItem(look, d, on = true, where = "sail") {
   if (d.slot === "att") { const a = new Set(look.att || []); on ? a.add(d.id) : a.delete(d.id); if (a.size) look.att = [...a]; else delete look.att; }
   else if (d.slot === "emblem") {
@@ -229,7 +232,10 @@ on("POST", "/api/kid/sail", "student", async ({ db, me, body }) => {
 on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const st = me.student, game = await getGame(db), today = kstDate(), ws = kstWeekStart(), month = today.slice(0, 7);
   const bal = (await balances(db, [st.id]))[st.id];
-  const mates = (await db.prepare("SELECT id, nickname, sail, look, ship FROM students WHERE class_id=? AND active=1 ORDER BY nickname").bind(st.class_id).all()).results;
+  const mates = (await db.prepare("SELECT id, nickname, sail, look, ship, photo FROM students WHERE class_id=? AND active=1 ORDER BY nickname").bind(st.class_id).all()).results;
+  const lastPhoto = await db.prepare("SELECT id, status, decided_at FROM photos WHERE student_id=? ORDER BY id DESC LIMIT 1").bind(st.id).first();
+  const photosThisWeek = (await db.prepare("SELECT COUNT(*) AS n FROM photos WHERE student_id=? AND date>=?").bind(st.id, ws).first()).n;
+  const photo = { price: PHOTO_PRICE, left: Math.max(0, PHOTO_PER_WEEK - photosThisWeek), pending: lastPhoto?.status === "pending" ? lastPhoto.id : null, rejected: lastPhoto?.status === "rejected" && Date.now() - lastPhoto.decided_at < 3 * 864e5 };
   const pw = await powers(db, mates);
   const quests = (await db.prepare("SELECT id, title, subject, kind, energy FROM quests WHERE active=1 AND deleted=0 ORDER BY subject, kind, id").all()).results;
   const done = (await db.prepare("SELECT quest_id, date FROM logs WHERE student_id=? AND kind='quest' AND date>=?").bind(st.id, ws).all()).results;
@@ -244,9 +250,9 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const pass = await db.prepare("SELECT status FROM orders WHERE student_id=? AND month=? AND status<>'canceled' LIMIT 1").bind(st.id, month).first();
   const orders = (await db.prepare("SELECT id, name, status, created_at FROM orders WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
   const h = kstHour(), open = !!st.class_battle && (game.hourFrom === game.hourTo || (h >= game.hourFrom && h < game.hourTo));
-  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: parseLook(st.look), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id] },
-    bal, game, quests, owned, log, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
-    mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: parseLook(m.look), ship: m.ship, power: pw[m.id] })),
+  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id] },
+    bal, game, quests, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
+    mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
     battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders };
 });
 on("POST", "/api/kid/request", "student", async ({ db, me, body }) => {
@@ -338,7 +344,7 @@ on("POST", "/api/kid/battle", "student", async ({ db, me }) => {
   if (game.hourFrom !== game.hourTo && !(h >= game.hourFrom && h < game.hourTo)) throw bad(`전투는 ${game.hourFrom}시부터 ${game.hourTo}시까지 할 수 있어요`);
   const fought = (await db.prepare("SELECT defender FROM battles WHERE attacker=? AND date=?").bind(st.id, today).all()).results.map(r => r.defender);
   if (fought.length >= game.battlesPerDay) throw bad("오늘 전투를 모두 했어요. 내일 다시 해요");
-  const mates = (await db.prepare("SELECT id, nickname, sail, look, ship FROM students WHERE class_id=? AND active=1").bind(st.class_id).all()).results, pw = await powers(db, mates);
+  const mates = (await db.prepare("SELECT id, nickname, sail, look, ship, photo FROM students WHERE class_id=? AND active=1").bind(st.class_id).all()).results, pw = await powers(db, mates);
   const near = mates.filter(m => m.id !== st.id && !fought.includes(m.id)).sort((a, b) => Math.abs(pw[a.id] - pw[st.id]) - Math.abs(pw[b.id] - pw[st.id])).slice(0, 3);
   if (!near.length) throw bad("오늘 겨룰 수 있는 친구가 없어요");
   const opp = near[randInt(near.length)], A = pw[st.id], B = pw[opp.id], chance = Math.min(75, Math.max(25, Math.round(A / (A + B) * 100))), won = randInt(100) < chance;
@@ -349,22 +355,68 @@ on("POST", "/api/kid/battle", "student", async ({ db, me }) => {
   if (!won && game.defend) ops.push(logStmt(db, { student_id: opp.id, kind: "battle", title: `${st.nickname}의 공격을 막았어요`, gold: game.defend }));
   await db.batch(ops);
   return { ok: true, won, delta, chance, left: game.battlesPerDay - fought.length - 1, rounds: simulate(won),
-    me: { nickname: st.nickname, sail: st.sail, look: parseLook(st.look), ship: st.ship, power: A }, opp: { nickname: opp.nickname, sail: opp.sail, look: parseLook(opp.look), ship: opp.ship, power: B } };
+    me: { nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, power: A }, opp: { nickname: opp.nickname, sail: opp.sail, look: lookOf(opp), ship: opp.ship, power: B } };
 });
+
+/* ----- photo sails ----- */
+// gold is paid when asking and handed back if the photo is turned down, so approval can never fail for lack of gold
+on("POST", "/api/kid/photo", "student", async ({ db, me, body }) => {
+  const sid = me.student.id, m = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+=*)$/.exec(String(body.data || ""));
+  if (!m || m[1].length > PHOTO_MAX_CHARS) throw bad("사진을 다시 골라 주세요");
+  if (!atob(m[1].slice(0, 8)).startsWith("\xFF\xD8\xFF")) throw bad("사진을 다시 골라 주세요");
+  const used = (await db.prepare("SELECT COUNT(*) AS n FROM photos WHERE student_id=? AND date>=?").bind(sid, kstWeekStart()).first()).n;
+  if (used >= PHOTO_PER_WEEK) throw bad(`사진 신청은 일주일에 ${PHOTO_PER_WEEK}번까지 할 수 있어요`);
+  const gold = (await balances(db, [sid]))[sid].gold; if (gold < PHOTO_PRICE) throw bad(`금화가 ${PHOTO_PRICE - gold}개 모자라요`);
+  const r = await db.prepare("INSERT OR IGNORE INTO photos (student_id, data, date, created_at) VALUES (?,?,?,?)").bind(sid, m[1], kstDate(), Date.now()).run();
+  if (!r.meta.changes) throw bad("이미 선생님께 확인을 요청한 사진이 있어요");
+  const lg = await logStmt(db, { student_id: sid, kind: "photo", title: "사진 돛 신청", gold: -PHOTO_PRICE }).run();
+  await db.prepare("UPDATE photos SET log_id=? WHERE id=?").bind(lg.meta.last_row_id, r.meta.last_row_id).run();
+  return { ok: true };
+});
+// a photo that is not used any more loses its picture data for good; turned down or cancelled ones also get their gold back
+const refundPhoto = (db, p, status) => [db.prepare("UPDATE photos SET status=?, data='', decided_at=? WHERE id=?").bind(status, Date.now(), p.id), db.prepare("DELETE FROM logs WHERE id=?").bind(p.log_id)];
+on("POST", "/api/kid/photo/cancel", "student", async ({ db, me }) => {
+  const p = await db.prepare("SELECT id, log_id FROM photos WHERE student_id=? AND status='pending'").bind(me.student.id).first(); if (!p) throw bad("이미 선생님이 확인한 사진이에요");
+  await db.batch(refundPhoto(db, p, "canceled")); return { ok: true };
+});
+const takeDownPhoto = (db, photoId) => [db.prepare("UPDATE photos SET status='removed', data='', decided_at=? WHERE id=? AND status='approved'").bind(Date.now(), photoId), db.prepare("UPDATE students SET photo=0 WHERE photo=?").bind(photoId)];
+on("POST", "/api/kid/photo/remove", "student", async ({ db, me }) => {
+  if (!me.student.photo) throw bad("달려 있는 사진이 없어요");
+  await db.batch(takeDownPhoto(db, me.student.photo)); return { ok: true };
+});
+// an approved photo is seen only by its own class; a waiting one only by its owner and the teacher
+on("GET", "/api/photo/:id", "any", async ({ db, me, params }) => {
+  const p = await db.prepare("SELECT p.data, p.status, p.student_id, s.class_id FROM photos p JOIN students s ON s.id=p.student_id WHERE p.id=?").bind(params.id).first();
+  const allowed = p && p.data && (me.role === "teacher" || p.student_id === me.student.id || (p.status === "approved" && p.class_id === me.student.class_id));
+  if (!allowed) throw new HttpError(404, "없는 사진이에요");
+  return new Response(Uint8Array.from(atob(p.data), c => c.charCodeAt(0)), { headers: { "content-type": "image/jpeg", "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff" } });
+});
+on("POST", "/api/t/photos/:id/approve", "teacher", async ({ db, params }) => {
+  const p = await db.prepare("SELECT p.id, p.student_id, s.photo AS old FROM photos p JOIN students s ON s.id=p.student_id WHERE p.id=? AND p.status='pending'").bind(params.id).first(); if (!p) throw bad("이미 처리된 사진이에요");
+  const ops = [db.prepare("UPDATE photos SET status='approved', decided_at=? WHERE id=?").bind(Date.now(), p.id), db.prepare("UPDATE students SET photo=? WHERE id=?").bind(p.id, p.student_id)];
+  if (p.old) ops.push(db.prepare("UPDATE photos SET status='replaced', data='', decided_at=? WHERE id=?").bind(Date.now(), p.old));
+  await db.batch(ops); return { ok: true };
+});
+on("POST", "/api/t/photos/:id/reject", "teacher", async ({ db, params }) => {
+  const p = await db.prepare("SELECT id, log_id FROM photos WHERE id=? AND status='pending'").bind(params.id).first(); if (!p) throw bad("이미 처리된 사진이에요");
+  await db.batch(refundPhoto(db, p, "rejected")); return { ok: true };
+});
+on("POST", "/api/t/photos/:id/remove", "teacher", async ({ db, params }) => { await db.batch(takeDownPhoto(db, Number(params.id))); return { ok: true }; });
 
 /* ----- teacher ----- */
 on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   const today = kstDate(), game = await getGame(db);
   const classes = (await db.prepare("SELECT id, name, code, battle FROM classes WHERE active=1 ORDER BY name").all()).results;
-  const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
+  const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, photo, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const bal = await balances(db, students.map(s => s.id)), pw = await powers(db, students);
-  for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = parseLook(s.look); s.locked = s.locked_until > Date.now(); delete s.locked_until; }
+  for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = lookOf(s); s.locked = s.locked_until > Date.now(); delete s.locked_until; }
   const quests = (await db.prepare("SELECT id, title, subject, kind, energy, active FROM quests WHERE deleted=0 ORDER BY active DESC, subject, kind, id").all()).results;
   const requests = (await db.prepare(`SELECT r.id, r.student_id, r.quest_id, r.created_at, q.title, q.energy, q.subject FROM requests r JOIN quests q ON q.id=r.quest_id JOIN students s ON s.id=r.student_id WHERE r.status='pending' AND s.active=1 ORDER BY r.id`).all()).results;
   const orders = (await db.prepare("SELECT o.id, o.student_id, o.name, o.cost, o.created_at FROM orders o JOIN students s ON s.id=o.student_id WHERE o.status='pending' AND s.active=1 ORDER BY o.id").all()).results;
   const logs = (await db.prepare("SELECT id, student_id, kind, title, energy, points, gold, at FROM logs WHERE date=? ORDER BY id DESC LIMIT 80").bind(today).all()).results;
   const battles = (await db.prepare("SELECT b.id, b.winner, b.attacker, b.delta, b.at, a.nickname AS a_name, d.nickname AS d_name FROM battles b JOIN students a ON a.id=b.attacker JOIN students d ON d.id=b.defender WHERE b.date=? ORDER BY b.id DESC LIMIT 60").bind(today).all()).results;
-  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, logs, battles, ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
+  const photos = (await db.prepare("SELECT p.id, p.student_id, p.created_at FROM photos p JOIN students s ON s.id=p.student_id WHERE p.status='pending' AND s.active=1 ORDER BY p.id").all()).results;
+  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, logs, battles, ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
 });
 on("POST", "/api/t/grant", "teacher", async ({ db, body }) => {
   const q = await db.prepare("SELECT * FROM quests WHERE id=? AND deleted=0").bind(int(body.questId, 1)).first(); if (!q) throw bad("미션을 골라 주세요");
@@ -384,6 +436,7 @@ on("POST", "/api/t/orders/:id/cancel", "teacher", async ({ db, params }) => {
 on("POST", "/api/t/logs/:id/undo", "teacher", async ({ db, params }) => {
   const l = await db.prepare("SELECT * FROM logs WHERE id=?").bind(params.id).first(); if (!l) throw bad("이미 취소된 기록이에요");
   if (l.kind === "exempt") throw bad("면제권은 '건네줄 것'에서 취소해 주세요");
+  if (l.kind === "photo") throw bad("사진 돛은 '사진 승인'에서 처리해 주세요");
   const ops = [db.prepare("DELETE FROM logs WHERE id=?").bind(l.id)];
   if (l.kind === "deco" || l.kind === "ship") { const o = await db.prepare("SELECT item FROM owned WHERE log_id=?").bind(l.id).first(), st = await db.prepare("SELECT look, ship FROM students WHERE id=?").bind(l.student_id).first();
     if (o && st) { ops.push(db.prepare("DELETE FROM owned WHERE log_id=?").bind(l.id));
@@ -402,7 +455,8 @@ on("POST", "/api/t/classes", "teacher", async ({ db, body }) => {
 });
 on("POST", "/api/t/classes/:id/battle", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET battle=? WHERE id=?").bind(body.on ? 1 : 0, params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/delete", "teacher", async ({ db, params }) => {
-  await db.batch([db.prepare("DELETE FROM sessions WHERE role='student' AND user_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE classes SET active=0 WHERE id=?").bind(params.id), db.prepare("UPDATE students SET active=0 WHERE class_id=?").bind(params.id)]); return { ok: true };
+  await db.batch([db.prepare("DELETE FROM sessions WHERE role='student' AND user_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE classes SET active=0 WHERE id=?").bind(params.id),
+    db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE class_id=?").bind(params.id)]); return { ok: true };
 });
 async function newStudent(db, classId, nickname, pin, mustChange) {
   if (await db.prepare("SELECT 1 FROM students WHERE class_id=? AND nickname=? AND active=1").bind(classId, nickname).first()) throw bad(`이 반에 '${nickname}' 이름이 이미 있어요`);
@@ -419,7 +473,7 @@ on("POST", "/api/t/students/:id/reset-pin", "teacher", async ({ db, params }) =>
   const pin = randomPin(), h = await hashSecret(pin);
   await db.batch([db.prepare("UPDATE students SET pin_hash=?, salt=?, must_change=1, failed=0, locked_until=0 WHERE id=?").bind(h.hash, h.salt, params.id), db.prepare("DELETE FROM sessions WHERE role='student' AND user_id=?").bind(params.id)]); return { ok: true, pin };
 });
-on("POST", "/api/t/students/:id/delete", "teacher", async ({ db, params }) => { await db.batch([db.prepare("UPDATE students SET active=0 WHERE id=?").bind(params.id), db.prepare("DELETE FROM sessions WHERE role='student' AND user_id=?").bind(params.id)]); return { ok: true }; });
+on("POST", "/api/t/students/:id/delete", "teacher", async ({ db, params }) => { await db.batch([db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id=?").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE id=?").bind(params.id), db.prepare("DELETE FROM sessions WHERE role='student' AND user_id=?").bind(params.id)]); return { ok: true }; });
 on("POST", "/api/t/quests", "teacher", async ({ db, body }) => {
   const d = [str(body.title, 40), SUBJECTS.includes(body.subject) ? body.subject : "공통", KINDS.includes(body.kind) ? body.kind : "daily", int(body.energy, 0, 50)];
   if (body.id) await db.prepare("UPDATE quests SET title=?, subject=?, kind=?, energy=? WHERE id=?").bind(...d, int(body.id, 1)).run();
@@ -459,6 +513,7 @@ export default {
       if (route.role && (!me || (route.role !== "any" && me.role !== route.role))) return json({ error: "다시 로그인해 주세요" }, 401);
       const body = req.method === "POST" ? await req.json().catch(() => ({})) : {};
       const out = await route.fn({ db, env, me, body, params: url.pathname.match(route.re).groups || {}, url, req });
+      if (out instanceof Response) return out;
       const headers = {}; if (out && out._cookie) { headers["set-cookie"] = out._cookie; delete out._cookie; }
       return json(out, 200, headers);
     } catch (e) {

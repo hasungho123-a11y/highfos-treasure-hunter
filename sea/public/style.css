@@ -385,3 +385,11 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .seabar { display: block; height: 5px; margin-top: 3px; border-radius: 3px; background: rgb(0 0 0 / .1); overflow: hidden } .seabar i { display: block; height: 100%; background: var(--gold-bg) }
 .f-ball.k-bolt { width: 26px; height: 3px; margin-left: -13px; border-radius: 0 3px 3px 0; background: linear-gradient(90deg, #7A4A28 78%, #23262B 78%) }
 .f-ball.k-stone { width: 18px; height: 18px; margin-left: -9px; background: #8A8478 }
+
+/* my photo on the ship */
+.crop canvas { display: block; width: 100%; max-width: 360px; aspect-ratio: 6 / 5; border-radius: 10px; touch-action: none; cursor: grab; background: #0C2440; margin-bottom: 8px; }
+.photo-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 8px 0; }
+.photo-thumb { width: 132px; aspect-ratio: 6 / 5; object-fit: cover; border-radius: 10px; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.photo-card { display: flex; flex-direction: column; gap: 6px; }
+.photo-card img { width: 100%; aspect-ratio: 6 / 5; object-fit: cover; border-radius: 10px; background: #0C2440; }

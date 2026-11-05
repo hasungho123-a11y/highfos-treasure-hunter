@@ -102,18 +102,22 @@ const ATT = {
   cat: `<ellipse cx="45.4" cy="29.4" rx="1.5" ry="1.1" fill="#F2A65A"/><circle cx="46.6" cy="28.1" r=".85" fill="#F2A65A"/><path d="M46 27.6 L46.2 26.7 L46.6 27.4 Z M46.8 27.4 L47.3 26.7 L47.4 27.7 Z" fill="#F2A65A"/><path d="M44 29.4 Q43 28.2 43.6 27.4" stroke="#F2A65A" stroke-width=".45" fill="none"/>`,
   fairylights: `<path d="M31 2 Q46 12 58.4 21.9" stroke="#6B5A4A" stroke-width=".25" fill="none"/>` + [[34, 4.6], [37.5, 7], [41, 9.6], [44.5, 12.2], [48, 14.6], [51.5, 17], [55, 19.4]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r=".6" fill="${["#FFE27A", "#F7A8C4", "#A8D8F7", "#A8E6CF"][i % 4]}"/>`).join("")
 };
+// look.photo is an approved photo; look.photoSrc is the kid's own preview before asking
+const photoSrc = look => look && (look.photoSrc || (look.photo ? `/api/photo/${look.photo}` : ""));
+let clipSeq = 0;
+function photoSVG(src, x, y, w, h, clipD) { const id = `pc${++clipSeq}`; return `<clipPath id="${id}"><path d="${clipD}"/></clipPath><image href="${src}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid slice" clip-path="url(#${id})"/>`; }
 // look: {hull, trim, pattern, se, fe, fc, head, att:[...]} (see parseLook in worker.js); missing parts draw the plain wooden ship
 function boatSVG(look = {}, sailIdx = 0) {
   const sailHex = sail(sailIdx), hull = HULLS[look.hull] || "#7A4A28", trim = TRIMS[look.trim] || "#F1C04B";
   const [fill, clothBg] = SAIL_FILL[look.pattern] || [sailHex, sailHex], overlay = SAIL_OVERLAY[look.pattern];
-  const flagHex = look.fc != null ? sail(look.fc) : sailHex, att = new Set(look.att || []);
+  const flagHex = look.fc != null ? sail(look.fc) : sailHex, att = new Set(look.att || []), photo = photoSrc(look);
   return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">
   <path d="M51 30.5 L59 21.5" stroke="#4E321E" stroke-width="1.2" stroke-linecap="round"/>
   <path d="M21 31 V10 M31 31 V1 M41 31 V7" stroke="#4E321E" stroke-width="1.3"/>
   <path d="M58.4 21.9 L41.8 8 L43.2 27 Z" fill="${fill}" opacity=".85"/>
   ${SAIL_SHAPES.map(d => `<path d="${d}" fill="${fill}"/>${overlay ? `<path d="${d}" fill="${overlay}"/>` : ""}`).join("")}
   <path d="M25 15.5 H37 M26 6 H36 M36 17.5 H46 M36.7 9.5 H45.3 M16.7 19 H25.3 M17.2 12 H24.8" stroke="#4E321E" stroke-width=".7"/>
-  ${embSVG(look.se, 31.6, 20.6, 8.6, inkFor(clothBg), clothBg)}
+  ${photo ? photoSVG(photo, 25, 15.5, 13.4, 10, SAIL_SHAPES[0]) : embSVG(look.se, 31.6, 20.6, 8.6, inkFor(clothBg), clothBg)}
   <path d="M31 .4 H38.6 V5.4 H31 Z" fill="${flagHex}"/>${embSVG(look.fe, 34.8, 2.9, 4.4, inkFor(flagHex), flagHex)}
   ${att.has("bunting") ? ATT.bunting : ""}${att.has("fairylights") ? ATT.fairylights : ""}${att.has("nest") ? ATT.nest : ""}${att.has("parrot") ? ATT.parrot : ""}${att.has("treasure") ? ATT.treasure : ""}${att.has("cat") ? ATT.cat : ""}${att.has("flowers") ? ATT.flowers : ""}${att.has("balloons") ? ATT.balloons : ""}
   <path d="M3 25.5 L15.5 26.5 L17.5 31.5 L49 30.6 L57 26.2 L53 38.6 Q33 44.6 12 41.6 L5 34.6 Z" fill="${hull}" ${["white", "lemon"].includes(look.hull) ? `stroke="#B9A47A" stroke-width=".6"` : ""}/>
@@ -405,5 +409,5 @@ async function stageChests(list, who, opener) {
   return opened;
 }
 
-window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, boatSVG, wakeClass, tagClass, EMBLEMS, inkFor, embSVG, get running() { return !!FX.running; } };
+window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, boatSVG, wakeClass, tagClass, EMBLEMS, inkFor, embSVG, photoSrc, photoSVG, get running() { return !!FX.running; } };
 })();

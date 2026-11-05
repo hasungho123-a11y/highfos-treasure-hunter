@@ -164,6 +164,7 @@ function build() {
     sailMain: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
     sailPlain: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
     flag: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
+    hullPhoto: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .8 }),
     warhead: new T.MeshStandardMaterial({ color: 0xB3362B, roughness: .5 }),
     steel: new T.MeshStandardMaterial({ color: 0x8A949E, roughness: .5, metalness: .45 }),
     deck2: new T.MeshStandardMaterial({ color: 0x3A4046, roughness: .85 }),
@@ -171,7 +172,7 @@ function build() {
     rope: new T.LineBasicMaterial({ color: 0x2B2118, transparent: true, opacity: .75 })
   };
   /* ----- ships: one spec per class in SHIPS below; each is built once on first use ----- */
-  let ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, shipSpec, shipK = 1;
+  let ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel, shipSpec, shipK = 1;
   function makeShip(spec) {
   const ship = new T.Group(); ship.visible = false; scene.add(ship);
   const { L, W, D, H0 } = spec;
@@ -320,11 +321,21 @@ function build() {
 
   if (spec.build) spec.build({ T, M, add, xAt, deckY, sheer, halfW, L });
   const mount = new T.Group(), wm = spec.wm; mount.position.set(xAt(wm.u), deckY(wm.u) + (wm.y || 0), wm.z || 0); mount.scale.setScalar(wm.s); ship.add(mount); mount.userData.models = {};
-  return { ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount };
+  // ships without sails carry the kid's photo as a painting that follows the curve of each hull side
+  const photoPanel = new T.Group(); photoPanel.visible = false; ship.add(photoPanel);
+  // long hulls are low for their length, so one picture would look tiny: they repeat it along the side
+  if (!spec.sailed) { const top = H0 * .1, bot = H0 * .92, uHalf = (bot - top) * 1.2 / 2 / L, copies = L < 14 ? 1 : L < 22 ? 2 : 3, NX = 12, NY = 4;
+    for (let n = 0; n < copies; n++) for (const side of [1, -1]) { const uMid = .15 + (n + .5) * .6 / copies, pos = [], uv = [], idx = [];
+      for (let i = 0; i <= NX; i++) for (let j = 0; j <= NY; j++) { const a = i / NX, b = j / NY, p = sideP(uMid - uHalf + a * 2 * uHalf, top + b * (bot - top), side);
+        pos.push(p.x, p.y, p.z + side * .06); uv.push(side > 0 ? a : 1 - a, 1 - b);
+        if (i < NX && j < NY) { const c = i * (NY + 1) + j, d = c + NY + 1; idx.push(c, c + 1, d, d, c + 1, d + 1); } }
+      const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new T.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+      photoPanel.add(new T.Mesh(g, M.hullPhoto)); } }
+  return { ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel };
   }
   const built = {};
   function useShip(id) { const spec = shipSpecs(window.THREE)[id] || shipSpecs(window.THREE).dinghy, b = built[id] || (built[id] = makeShip(spec));
-    if (ship) ship.visible = false; ({ ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount } = b); ship.visible = true; shipSpec = spec; shipK = Math.max(.72, spec.L / 11);
+    if (ship) ship.visible = false; ({ ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel } = b); ship.visible = true; shipSpec = spec; shipK = Math.max(.72, spec.L / 11);
     Object.assign(sun.shadow.camera, { left: -12 * shipK, right: 12 * shipK, top: 14 * shipK, bottom: -6 * shipK, far: 80 + 40 * shipK }); sun.shadow.camera.updateProjectionMatrix(); }
   useShip("dinghy");
   /* ----- wake behind the stern (the "wake" decoration changes its look) ----- */
@@ -390,6 +401,11 @@ function build() {
     M.sailMain.map = sailTexture(sailHex, p, look.se); M.sailPlain.map = sailTexture(sailHex, p, null);
     M.flag.map = flagTexture(flagHex, look.fe);
     M.sailMain.needsUpdate = M.sailPlain.needsUpdate = M.flag.needsUpdate = true;
+    photoPanel.visible = false;
+    const photo = V.photoSrc(look);
+    if (photo) { const im = new Image(); im.onload = () => { if (lookKey !== key) return;
+      const tex = canvasTex(512, 426, (g, w, h) => { g.drawImage(im, 0, 0, w, h); g.strokeStyle = "rgba(0,0,0,.22)"; g.lineWidth = 6; g.strokeRect(0, 0, w, h); });
+      const mat = shipSpec.sailed ? M.sailMain : M.hullPhoto; mat.map?.dispose(); mat.map = tex; mat.needsUpdate = true; if (!shipSpec.sailed) photoPanel.visible = true; }; im.src = photo; }
     const on = new Set(look.att || []); for (const k in A) A[k].visible = on.has(k);
     for (const k in H) H[k].visible = look.head === k;
     const wm = mount.userData.models; for (const k in wm) wm[k].visible = false;
