@@ -201,6 +201,7 @@ async function kidLoad() { K.d = await api("/api/kid/state");
 async function kidStart() {
   document.body.classList.add("kid"); await kidLoad(); kidRender(); kidNotices();
   setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight") || $(".modal")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); kidNotices(); } catch (e) {} }, 20000);
+  setInterval(duelPoll, 3000); duelPoll();
 }
 /* ---------- the class boss ---------- */
 // a still of the 3D ship, kept between visits; until it is ready (or where 3D can't run) the flat drawing stands in
@@ -356,6 +357,7 @@ function kIsle() {
   return `<section class="panel" id="islePanel">${head}<p class="small muted">전투력이 비슷한 친구와 자동으로 겨뤄요. 이기면 금화 +${d.game.win}, 지면 최대 -${d.game.lose}. 공격받은 쪽은 금화를 잃지 않아요.</p>
     <div class="row"><span>내 전투력 <b class="num">${d.me.power}</b></span><span class="muted">· 오늘 남은 전투 ${b.left}번</span></div>
     <button class="btn primary lg" data-act="kfight" ${can ? "" : "disabled"}>${b.off ? "선생님이 전투를 쉬게 했어요" : !b.open ? `전투는 ${d.game.hourFrom}~${d.game.hourTo}시에만 해요` : b.left ? "전투 시작!" : "내일 다시 해요"}</button>
+    <button class="btn" data-act="ktab" data-v="crew">친구 골라서 실시간 대결</button>
     ${b.fights.length ? `<div class="plist">${b.fights.slice(0, 6).map(f => `<div class="prow"><span>${esc(f.opp)} ${f.attacked ? "공격" : "방어"}</span><span class="pill ${f.won ? "ok" : ""}">${f.won ? "승리" : "패배"}</span><span class="small num">${f.gold ? `${f.gold > 0 ? "+" : ""}${f.gold}금화` : "-"}</span></div>`).join("")}</div>` : ""}</section>`;
 }
 function kMissions() {
@@ -454,12 +456,13 @@ function kDex() { const d = K.d, has = new Set(d.owned), now = d.me.look.ttl, ba
 /* ---------- classmates' ships ---------- */
 function kCrew() { const d = K.d, me = d.me, friends = d.mates.filter(m => m.id !== me.id), v = friends.find(m => m.id === K.mate), mine = new Set(d.likes.mine), count = id => d.likes.counts[id] || 0;
   const heart = m => mine.has(m.id) ? `<span class="pill ok">좋아요 눌렀어요</span>` : `<button class="btn sm primary" data-act="klike" data-v="${m.id}">좋아요</button>`, shipName = id => d.ships.find(s => s.id === id)?.name || "";
-  const hearts = n => n ? `<span class="likes"><i></i><span class="num">${n}</span></span>` : "";
+  const hearts = n => n ? `<span class="likes"><i></i><span class="num">${n}</span></span>` : "", online = new Set(K.online || []), canDuel = d.battle.open && d.battle.duelLeft > 0, duelBtn = m => online.has(m.id) && canDuel ? `<button class="btn sm" data-act="kduel" data-v="${m.id}">대결 신청</button>` : "", order = [...friends].sort((p, q) => online.has(q.id) - online.has(p.id));
   return `${v ? `<section class="panel"><div class="row between"><h2>${esc(v.nickname)}의 ${esc(shipName(v.ship))}</h2><button class="btn sm ghost" data-act="kmate" data-v="${v.id}">닫기</button></div>
       <div class="deco3d" id="mate3d">${shipBox(v.ship, v.look, v.sail, v.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
-      <div class="row between"><span class="small">전투력 <b class="num">${v.power}</b>${titleName(v.look) ? ` · <b>${esc(titleName(v.look))}</b>` : ""}</span><span class="row">${hearts(count(v.id))}${heart(v)}</span></div></section>` : ""}
+      <div class="row between"><span class="small">전투력 <b class="num">${v.power}</b>${titleName(v.look) ? ` · <b>${esc(titleName(v.look))}</b>` : ""}</span><span class="row">${hearts(count(v.id))}${heart(v)}${duelBtn(v)}</span></div></section>` : ""}
     <section class="panel"><div class="row between"><h2>우리 반 친구 배</h2>${count(me.id) ? `<span class="small">내 배 좋아요 ${hearts(count(me.id))}</span>` : ""}</div><p class="small muted">배를 누르면 3D로 크게 볼 수 있어요. 마음에 드는 배에 좋아요를 눌러요. 친구마다 일주일에 한 번 누를 수 있어요.</p>
-      ${friends.length ? `<div class="deco-grid">${friends.map(m => `<div class="deco-item ${K.mate === m.id ? "sel" : ""}" data-act="kmate" data-v="${m.id}">${shipBox(m.ship, m.look, m.sail, "", "tiny")}<b>${esc(m.nickname)}</b><span class="small muted">${esc(shipName(m.ship))}${titleName(m.look) ? ` · ${esc(titleName(m.look))}` : ""}</span><span class="row">${hearts(count(m.id))}${heart(m)}</span></div>`).join("")}</div>` : `<p class="muted small">아직 같은 반 친구가 없어요.</p>`}</section>`; }
+      <p class="duel-note small"><b>실시간 대결</b> ${d.battle.off ? "선생님이 전투를 쉬게 했어요." : !d.battle.open ? `전투는 ${d.game.hourFrom}~${d.game.hourTo}시에만 해요.` : `접속 중인 친구에게 신청하면 바로 겨뤄요. 오늘 <b class="num">${d.battle.duelLeft}</b>번 남았어요. 금화 보상은 없어요.`}</p>
+      ${friends.length ? `<div class="deco-grid">${order.map(m => `<div class="deco-item ${K.mate === m.id ? "sel" : ""}" data-act="kmate" data-v="${m.id}">${shipBox(m.ship, m.look, m.sail, "", "tiny")}<b>${online.has(m.id) ? `<i class="on-dot" title="접속 중"></i>` : ""}${esc(m.nickname)}</b><span class="small muted">${esc(shipName(m.ship))}${titleName(m.look) ? ` · ${esc(titleName(m.look))}` : ""}</span><span class="row">${hearts(count(m.id))}${heart(m)}${duelBtn(m)}</span></div>`).join("")}</div>` : `<p class="muted small">아직 같은 반 친구가 없어요.</p>`}</section>`; }
 function kLog() {
   const d = K.d;
   return `${d.orders.length ? `<section class="panel"><h3>선생님이 챙겨 줄 것</h3><div class="plist">${d.orders.map(o => `<div class="prow"><span>${esc(o.name)}</span><span class="small muted">${fmtTime(o.created_at)}</span><span class="pill wait">준비 중</span></div>`).join("")}</div></section>` : ""}
@@ -541,7 +544,7 @@ async function playFight() {
     try { fx = await v3d.fight(m.querySelector(".f-view"), side3(r.me), side3(r.opp)); } catch (e) { fx = null; } }
   if (fx) { let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
     const dmgEl = m.querySelector(".f-dmg"), hurt = m.querySelector(".f-hurt"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i");
-    fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); }; fx.onSortie = () => Sfx.jet(); fx.onStrafe = () => Sfx.shot("gun");
+    fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); }; fx.onSortie = () => Sfx.jet(); fx.onStrafe = () => Sfx.shot("gun"); fx.onBlast = k => Sfx.boom(k);
     if (!fast) await fx.intro();
     for (const s of r.rounds) { const fromA = s.by === "a";
       if (!fast) { Sfx.shot(kindOf(fromA ? r.me : r.opp)); await fx.fire(s.by, s.dmg, kindOf(fromA ? r.me : r.opp));
@@ -573,7 +576,63 @@ async function playFight() {
   await new Promise(res => { const b = m.querySelector("[data-close]"); b.focus(); b.onclick = res; });
   m.remove(); await kidLoad(); kidRender(); K.busy = false;
 }
+/* ---------- live duels with a classmate who is online: no gold, and counted apart from ordinary battles ---------- */
+const DUEL_END = { declined: "친구가 대결을 거절했어요", expired: "친구가 응답하지 않았어요", cancelled: "신청을 취소했어요" };
+async function duelPoll() { if (document.hidden || !K.d || K.d.me.mustChange || K.duelOn) return; const free = !(K.busy || K.crop || $(".game") || $(".fight")); let r; try { r = await api(`/api/kid/duel/poll${free ? "?free=1" : ""}`); } catch (e) { return; }
+  const before = (K.online || []).join(), now = [...r.online].sort((a, b) => a - b); K.online = now; const el = K.inviteEl;
+  if (el && r.invite?.id !== K.inviteId) { el.remove(); K.inviteEl = null; if (K.inviteId) toast("대결 신청이 끝났어요"); K.inviteId = null; }
+  if (!free || K.busy || K.duelOn) return;
+  if (r.duel?.status === "live") return playDuel(r.duel.id);
+  if (before !== now.join() && K.tab === "crew" && !$(".modal")) kidRender();
+  if (r.invite && !$(".modal")) duelInvite(r.invite); }
+function duelInvite(inv) { const who = K.d.mates.find(m => m.id === inv.from), m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); K.inviteEl = m; K.inviteId = inv.id;
+  m.innerHTML = `<div class="panel reward">${who ? shipBox(who.ship, who.look, who.sail, "", "tiny") : ""}<h2>${esc(who?.nickname || "친구")}의 대결 신청!</h2><p class="small muted">지금 바로 실시간으로 겨뤄요. 금화 보상은 없어요.</p><div class="row"><button class="btn primary lg" data-yes>수락</button><button class="btn" data-no>거절</button></div></div>`; document.body.appendChild(m); thumbScan(); Sfx.lock(); m.querySelector("[data-yes]").focus();
+  const close = () => { m.remove(); K.inviteEl = null; K.inviteId = null; };
+  m.querySelector("[data-no]").onclick = () => { close(); api(`/api/kid/duel/${inv.id}/answer`, { accept: false }).catch(() => {}); };
+  m.querySelector("[data-yes]").onclick = async () => { close(); try { await api(`/api/kid/duel/${inv.id}/answer`, { accept: true }); playDuel(inv.id); } catch (e) { toast(e.message); } }; }
+async function duelChallenge(id) { if (K.busy) return; K.busy = true; let duel; try { duel = await api(`/api/kid/duel/challenge/${id}`, {}); } catch (e) { toast(e.message); K.busy = false; return; }
+  const who = K.d.mates.find(x => x.id === id), m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.innerHTML = `<div class="panel reward"><h2>${esc(who?.nickname || "친구")}에게 신청했어요</h2><p>대답을 기다리고 있어요… <b class="num" data-left>30</b>초</p><button class="btn" data-no>취소</button></div>`; document.body.appendChild(m); let stop = false; const out = m.querySelector("[data-no]"); out.focus();
+  out.onclick = () => { stop = true; api(`/api/kid/duel/${duel.id}/quit`, {}).catch(() => {}); };
+  let live = false; while (!stop) { await sleep(1000); let v; try { v = await api(`/api/kid/duel/${duel.id}`); } catch (e) { continue; } m.querySelector("[data-left]").textContent = Math.ceil(v.ms / 1000); if (v.status === "wait") continue; if (v.status === "live") live = true; else toast(DUEL_END[v.status] || "대결이 끝났어요"); break; }
+  m.remove(); K.busy = false; if (live) playDuel(duel.id); else kidRender(); }
+// the two ships and the shots; the same battle picture as an ordinary fight, or the flat one where 3D can't run
+async function duelStage(me, opp) { const m = document.createElement("div"); m.className = "fight"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.innerHTML = `<p class="f-load">출항 준비 중…</p>`; document.body.appendChild(m);
+  const kindOf = p => K.d.deco.find(x => x.key === `weapon.${p.look.weapon}`)?.kind || "cannon", side = (p, cls, tag) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">${titleName(p.look) ? esc(titleName(p.look)) : tag} · 전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`, top = `<div class="f-top">${side(me, "a", "내 배")}<span class="f-vs">VS</span>${side(opp, "d", "친구")}</div>`, bottom = `<div class="f-bottom"><div class="duel-panel"></div><div class="row"><button type="button" class="btn sm" data-giveup>기권</button>${sndBtn()}</div></div>`;
+  let fx = null, v3d = null; if (window.Ship3D?.available()) try { v3d = await Promise.race([Ship3D.get(), sleep(6000)]); } catch (e) {}
+  if (v3d) { const side3 = p => ({ look: p.look, sailHex: sail(p.sail), flagHex: p.look.fc != null ? sail(p.look.fc) : sail(p.sail), ship: p.ship }); m.className = "fight f3"; m.innerHTML = `<div class="f-view"></div><i class="f-hurt"></i>${top}<span class="f-dmg" hidden></span>${bottom}`; try { fx = await v3d.fight(m.querySelector(".f-view"), side3(me), side3(opp)); } catch (e) { fx = null; } }
+  if (!fx) { m.className = "fight"; m.innerHTML = `${top}<div class="f-sea"><div class="f-ship a" style="--sail:${sail(me.sail)}">${shipSVG(me.ship, me.look, me.sail)}</div><div class="f-ship d" style="--sail:${sail(opp.sail)}">${shipSVG(opp.ship, opp.look, opp.sail)}</div><i class="f-ball" hidden></i><span class="f-dmg" hidden></span></div>${bottom}`; }
+  const dmgEl = m.querySelector(".f-dmg"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i"), hurt = m.querySelector(".f-hurt"), ball = m.querySelector(".f-ball");
+  if (fx) { fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); }; fx.onSortie = () => Sfx.jet(); fx.onStrafe = () => Sfx.shot("gun"); fx.onBlast = k => Sfx.boom(k); }
+  const hp = (a, d) => { hpA.style.width = a + "%"; hpD.style.width = d + "%"; };
+  return { m, panel: m.querySelector(".duel-panel"), hp, intro: () => fx ? fx.intro() : sleep(350), close() { fx?.close(); m.remove(); },
+    async shot(fromMe, dmg, a, d) { const p = fromMe ? me : opp, kind = kindOf(p); Sfx.shot(kind);
+      if (fx) await fx.fire(fromMe ? "a" : "b", dmg, kind); else { ball.className = `f-ball k-${kind}${fromMe ? "" : " rev"}`; ball.hidden = false; ball.style.transition = "none"; ball.style.left = fromMe ? "26%" : "74%"; ball.offsetWidth; ball.style.transition = "left .42s linear"; ball.style.left = fromMe ? "74%" : "26%"; await sleep(430); ball.hidden = true; }
+      if (!dmg) Sfx.splash(); else if (fromMe) Sfx.boom(); else Sfx.hurt();
+      dmgEl.className = `f-dmg pop ${fromMe ? "to-d" : "to-a"} ${dmg ? "" : "miss"}`; dmgEl.hidden = false; dmgEl.textContent = dmg ? `-${dmg}` : "빗나감"; if (!fx) dmgEl.style.left = fromMe ? "74%" : "26%"; hp(a, d); await sleep(dmg ? 720 : 560); dmgEl.hidden = true; },
+    async end(won) { if (fx) await fx.finish(won, false); else { if (won != null) m.querySelector(won ? ".f-ship.d" : ".f-ship.a").classList.add("sunk"); await sleep(500); } } }; }
+// one press on the sliding gauge: 2 perfect, 1 near, 0 miss. Five seconds, then it counts as a miss.
+const duelGauge = (panel, round) => new Promise(done => { panel.innerHTML = `<p class="duel-msg"><b>${round}라운드</b> 초록 칸에 맞춰 눌러요!</p><div class="aim-bar"><i class="aim-zone"><b></b></i><i class="aim-needle"></i></div><div class="duel-time"><i></i></div><button type="button" class="btn primary lg" data-aim>발사!</button>`;
+  const zone = panel.querySelector(".aim-zone"), needle = panel.querySelector(".aim-needle"), bar = panel.querySelector(".duel-time i"), center = 18 + Math.random() * 64, began = performance.now(); let t = Math.random() * 6, last = began, live = true; zone.style.left = center + "%"; Sfx.lock();
+  const pick = v => { if (!live) return; live = false; done(v); }; panel.querySelector("[data-aim]").onclick = () => { const off = Math.abs(50 - Math.cos(t) * 50 - center); pick(off <= 5 ? 2 : off <= 12 ? 1 : 0); };
+  (function tick(now) { if (!live) return; const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt * Math.min(5, 2.6 + round * .25); needle.style.left = 50 - Math.cos(t) * 50 + "%"; const left = 1 - (now - began) / 5000; bar.style.width = Math.max(0, left) * 100 + "%"; if (left <= 0) return pick(0); requestAnimationFrame(tick); })(began);
+  setTimeout(() => pick(0), 5400); }); // the animation stops in a hidden tab; this one doesn't
+async function playDuel(id) { if (K.duelOn) return; K.duelOn = true; K.busy = true; let st = null;
+  try { const first = await api(`/api/kid/duel/${id}`), opp = K.d.mates.find(x => x.id === first.oppId); if (!opp) throw new Error("친구를 찾을 수 없어요"); const mine = first.mine;
+    st = await duelStage({ ...K.d.me }, opp); const hpOf = h => [h[mine], h[mine === "a" ? "b" : "a"]]; st.hp(...hpOf(first.hp)); st.panel.innerHTML = `<p class="duel-msg">곧 시작해요!</p>`;
+    let sure = false, giveUp = false; st.m.querySelector("[data-giveup]").onclick = async e => { if (!sure) { sure = true; e.target.textContent = "정말 기권할까요?"; setTimeout(() => { sure = false; if (e.target.isConnected) e.target.textContent = "기권"; }, 3000); return; } giveUp = true; e.target.disabled = true; try { await api(`/api/kid/duel/${id}/quit`, {}); } catch (err) {} };
+    await st.intro(); let played = first.log.length, aimed = 0, fails = 0, v;
+    for (;;) { try { v = await api(`/api/kid/duel/${id}`); fails = 0; } catch (e) { if (++fails > 15) { toast("연결이 끊겼어요"); v = null; break; } await sleep(1000); continue; }
+      if (played < v.log.length) { st.panel.innerHTML = ""; for (; played < v.log.length; played++) for (const s of v.log[played]) { const [a, d] = hpOf(s.hp); await st.shot(s.by === mine, s.dmg, a, d); } continue; }
+      if (v.status !== "live") break;
+      if (!v.iAimed && v.round > aimed && !giveUp) { aimed = v.round; const aim = await duelGauge(st.panel, v.round); st.panel.innerHTML = `<p class="duel-msg">${["빗나갔어요", "괜찮아요", "정확해요!"][aim]} ${esc(opp.nickname)}을(를) 기다려요…</p>`; try { await api(`/api/kid/duel/${id}/aim`, { round: v.round, aim }); } catch (e) {} continue; }
+      await sleep(700); }
+    if (v) { st.m.querySelector("[data-giveup]").hidden = true; st.panel.innerHTML = ""; const won = v.winner ? v.winner === K.d.me.id : null; st.hp(...hpOf(v.hp)); await st.end(won); if (won != null) Sfx[won ? "win" : "lose"](); await kidLoad();
+      st.panel.innerHTML = `<div class="f-result ${won ? "win" : won === false ? "lose" : ""}"><h2>${won ? "승리!" : won === false ? "패배" : "무승부"}</h2>${v.forfeit ? `<p>${won ? "친구가 대결을 나갔어요" : "대결을 나왔어요"}</p>` : ""}<p class="small">친선 대결이라 금화는 오가지 않아요 · 오늘 남은 대결 ${K.d.battle.duelLeft}번</p><button class="btn primary lg" data-close>확인</button></div>`;
+      await new Promise(res => { const b = st.panel.querySelector("[data-close]"); b.focus(); b.onclick = res; }); }
+  } catch (e) { toast(e.message); }
+  st?.close(); K.duelOn = false; K.busy = false; try { await kidLoad(); kidRender(); } catch (e) {} kidNotices(); }
 const KID_ACTS = {
+  kduel: v => duelChallenge(Number(v)),
   ksnd: () => { Sfx.toggle(); document.querySelectorAll(".snd").forEach(el => el.outerHTML = sndBtn()); },
   kmate: v => { K.mate = K.mate === Number(v) ? null : Number(v); kidRender(); if (K.mate) scrollTo({ top: 0, behavior: "smooth" }); },
   klike: v => { Sfx.coin(); return kDo(() => api(`/api/kid/like/${v}`, {})); },

@@ -576,7 +576,7 @@ function build() {
       Object.assign(sun.shadow.camera, { left: -(gap + La), right: gap + La, top: gap + La, bottom: -(gap + La), far: 240 }); sun.shadow.camera.updateProjectionMatrix();
       sun.target.position.set(b.userData.x / 2, 0, 0); sun.position.add(sun.target.position); sun.target.updateMatrixWorld();
       camera.fov = 52; camera.updateProjectionMatrix();
-      const glow = fxPool(420, T.AdditiveBlending), soft = fxPool(520, T.NormalBlending);
+      const glow = fxPool(900, T.AdditiveBlending), soft = fxPool(1100, T.NormalBlending);
       const flash = new T.PointLight(0xFFB070, 0, 60, 1.6); scene.add(flash); let flashV = 0;
       const shots = [], shotGeo = new T.SphereGeometry(1, 10, 8); let shake = 0, redrawn = 0;
 
@@ -588,11 +588,15 @@ function build() {
       // a missile rack is tall and wide, so a ship carrying one is seen from up on the bridge, with the rack low in the picture and the other ship clear above it
       const rack = new T.Box3(), racked = roundsOf(a).length > 0; if (racked) wm0.children.forEach(m => { if (m.visible) rack.expandByObject(m); });
       const eyeX = wm0.position.x - (racked ? 2 * s + 4 : 1.9 * s + 1.8), eyeY = racked ? rack.max.y + 2.5 + La * .12 : wm0.position.y + 1.4 * s + 1.05, eyeZ = wm0.position.z * .55, shoulder = 1.05 * s + .35; // over the gun's shoulder
+      // aircraft parked ahead of the camera wait high above the picture; from the deck they stay out of sight until they take off
+      a.userData.air.forEach(o => { if (o.position.x > eyeX - 4) { o.position.x = Math.min(o.position.x, eyeX + 4); o.position.y = Math.max(o.position.y, eyeY + 7); } }); a.updateMatrixWorld(true);
       const fpHide = []; { const bb = new T.Box3(); a.traverse(o => { if (!o.isMesh || !o.visible) return; let w = o; while (w && w !== wm0) w = w.parent; if (w === wm0) return; o.geometry.boundingBox || o.geometry.computeBoundingBox(); bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); if (bb.max.y > eyeY - .1 && bb.max.x > eyeX - .2 && bb.min.y > .3 && bb.max.x - bb.min.x < spec.L * .6) fpHide.push(o); }); }
 
       const v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), poseA = { p: new T.Vector3(), l: new T.Vector3() }, poseB = { p: new T.Vector3(), l: new T.Vector3() };
       let view = "intro", blend = 1, blendFrom = "intro", clock0 = 0, won = null;
+      let sinker = null;
       const pose = (name, o, t) => { const bx = b.position.x, far = Math.max(1, .82 / camera.aspect); // phones stand tall: step back so the whole ship fits across
+        if (name === "sink" && sinker) { const x = sinker.position.x, L = sinker.userData.spec.L; o.p.set(x - (L * .4 + 2.5) * far, (L * .22 + 3.5) * far, (L * .62 + 7) * far); o.l.set(x, 2 + L * .08, 0); return; }
         if (name === "fp") { a.localToWorld(o.p.set(eyeX, eyeY, eyeZ + shoulder * Math.min(1, Math.max(.3, camera.aspect - .15)))); o.l.set(bx, 1.3 + Lb * .1, Math.sin(t * .4) * .25); }
         else if (name === "intro") { const d = t * .5; o.p.set((-La * .55 + d) * far, (La * .34 + 4) * far, (La * .92 + 7) * far); o.l.set(0, 2 + La * .07, 0); }
         else if (won) { o.p.set((-La * .75 - 4) * far, (La * .4 + 5) * far, (La * 1.15 + 11) * far); o.l.set(La * .28, 1.6 + La * .05, 0); }
@@ -654,18 +658,40 @@ function build() {
         if (o.hit) { if (o.big) { burst(p, 1 + Math.min(.6, o.target.userData.spec.L / 40)); shake = Math.max(shake, o.target === a ? 1.1 : .3); if (o.target.userData.fires.length < 3) o.target.userData.fires.push(o.target.worldToLocal(p.clone())); if (o.target === a) ctrl.onHurt?.(); } else burst(p, .4); }
         else splash(p, o.big ? 1.15 : .5); o.onDone?.(); }
 
+      /* ----- a ship going down: blasts run along the hull, the magazine goes up with a fireball and a ring across the water, wreckage flies, and she sinks burning ----- */
+      const chunks = [], rings = [], chunkGeo = new T.BoxGeometry(1, 1, 1), ringGeo = new T.RingGeometry(.82, 1, 56).rotateX(-Math.PI / 2), ballGeo = new T.SphereGeometry(1, 18, 14);
+      function debris(p, n, k) { const pool = [M.iron, M.steel, M.deck2, M.wood].filter(Boolean); for (let i = 0; i < n && chunks.length < 42; i++) { const m = new T.Mesh(chunkGeo, pool[i % pool.length]), z = (.14 + Math.random() * .34) * Math.min(1.4, k); m.scale.set(z * (1 + Math.random() * 1.4), z * .55, z); m.position.copy(p); m.castShadow = true; root.add(m); chunks.push({ m, vx: R(8 * k), vy: 6 + Math.random() * 11 * k, vz: R(5) - 2 * k, sx: R(9), sz: R(9), smoke: Math.random() < .5 }); } }
+      const FLAME = [[1, .78, .2], [1, .5, .1], [.92, .26, .06], [1, .92, .55]];
+      function fireCloud(p, n, k, spread = 0) { for (let i = 0; i < n; i++) { const t = Math.random() * 6.28, v = (1.5 + Math.random() * 5.5) * k; soft.add(p.x + R(spread), p.y + Math.random() * k, p.z + R(spread * .3), Math.cos(t) * v, 1.5 + Math.random() * 6 * k, Math.sin(t) * v, .55 + Math.random() * .7, FLAME[i % 4], 1, (1.6 + Math.random() * 2.2) * k, (3 + Math.random() * 2) * k, -.8, 1.4); } }
+      function megaBlast(c) { const L = c.userData.spec.L, k = 1 + Math.min(1.1, L / 22), p = c.localToWorld(new T.Vector3(0, c.userData.spec.H0 + .4, 0));
+        burst(p, k * 1.3); ctrl.onBlast?.(1.8); shake = Math.max(shake, c === a ? 1.5 : .9); flash.position.copy(p).setY(p.y + 5); flashV = 11;
+        for (let i = 0; i < 80; i++) { const n = Math.random() * 6.28, u = Math.random() * 1.4 - .2, v = (4 + Math.random() * 9) * k; glow.add(p.x, p.y, p.z, Math.cos(n) * v, u * v + 2, Math.sin(n) * v, .45 + Math.random() * .55, i % 3 ? ORANGE : YELLOW, 1, (2.6 + Math.random() * 2) * k, .6); }
+        for (let i = 0; i < 46; i++) soft.add(p.x + R(L * .25), p.y, p.z + R(1.2), R(1.2), 2.5 + Math.random() * 5.5, R(1.2), 2 + Math.random() * 2.2, SMOKE_C, .85, 2 * k, 8 * k, -.5, .25);
+        fireCloud(p, 70, k * 1.5, L * .3);
+        for (let i = 0; i < 4; i++) splash(new T.Vector3(p.x + R(L * .55), .1, (i % 2 ? 1 : -1) * (c.userData.spec.W + 1 + Math.random() * 2)), 1.3);
+        debris(p, 22, k);
+        const ball = new T.Mesh(ballGeo, new T.MeshBasicMaterial({ color: 0xFFB24A, transparent: true, opacity: .95, depthWrite: false })); ball.position.copy(p); root.add(ball); rings.push({ m: ball, age: 0, life: .55, from: 1, to: 5 + L * .34, y: 1 });
+        for (let i = 0; i < 2; i++) { const ring = new T.Mesh(ringGeo, new T.MeshBasicMaterial({ color: i ? 0xFFFFFF : 0xFFD9A0, transparent: true, opacity: .85, blending: T.AdditiveBlending, depthWrite: false, side: T.DoubleSide })); ring.position.set(p.x, .32, p.z); root.add(ring); rings.push({ m: ring, age: -i * .14, life: 1, from: 2, to: 16 + L * 1.25, y: 0 }); } }
+      function sinkShow(c, fast) { const u = c.userData, sp = u.spec, n = Math.round(Math.min(9, 5 + sp.L / 5)), gapMs = fast ? 90 : 300; u.doomed = true;
+        const later = (ms, fn) => setTimeout(() => { if (fightOn === step) fn(); }, ms);
+        for (let i = 0; i < n; i++) later(i * gapMs, () => { const s0 = i / Math.max(1, n - 1) * 2 - 1, q = new T.Vector3(s0 * sp.L * .42 + R(sp.L * .05), sp.H0 + R(.5), R(sp.W * .55)); c.localToWorld(q); burst(q, .95 + Math.min(.7, sp.L / 34) + Math.random() * .3); fireCloud(q, 22, .8 + sp.L / 40); debris(q, 3, 1 + sp.L / 40); ctrl.onBlast?.(.75 + Math.random() * .3); shake = Math.max(shake, c === a ? .75 : .42); if (u.fires.length < 7) u.fires.push(c.worldToLocal(q.clone())); });
+        later(n * gapMs + 120, () => { megaBlast(c); u.sink = .001; }); return n * gapMs + 120; } // she stays afloat through the chain of blasts and only then starts to go down
+
       let doneRes = null, ending = 0;
       const step = (dt, t, sail) => { clock0 += dt;
         const wantFov = camera.aspect < .75 ? 68 : 52; if (camera.fov !== wantFov) { camera.fov = wantFov; camera.updateProjectionMatrix(); } // phones: a wider view so the gun stays in the picture
         for (const c of [a, b]) { const u = c.userData, x = c.position.x, h0 = wave(x + sail, 0, t), hb = wave(x + 3.5 + sail, 0, t), hs = wave(x - 3.5 + sail, 0, t), hl = wave(x + sail, 1.6, t), hr = wave(x + sail, -1.6, t);
-          if (u.sink > 0) u.sink = Math.min(c === a ? .6 : 1, u.sink + dt / 4.2); // my own ship settles and lists but stays in the picture
+          if (u.sink > 0 && c.visible) { u.sink = Math.min(1, u.sink + dt / 7.5); if (u.sink >= 1) c.visible = false; // all the way down, then gone
+            if (u.sink < .72 && Math.random() < dt * 2.6) { v3.set(R(u.spec.L * .4), u.spec.H0, R(u.spec.W * .5)); c.localToWorld(v3); if (v3.y > .2) { burst(v3.clone(), .5); fireCloud(v3, 12, .6); ctrl.onBlast?.(.35); } } }
           const dip = u.sink * u.sink * (u.spec.L * .5 + u.spec.H0 * 3 + 6), k = c === a ? .55 : 1;
           c.position.y = h0 * .7 * k + .05 - dip; c.rotation.z = (hb - hs) * .06 * k + u.tilt * u.sink * .34; c.rotation.x = (hr - hl) * .09 * k + u.tilt * u.sink * .24; c.rotation.y = u.yaw;
           u.kick = Math.max(0, u.kick - dt * 5); u.wm.children.forEach(o => o.position.x = -u.kick * .32);
           for (const r of u.rotors) r.rotation.y = t * 22;
           for (const f of u.fires) { if (Math.random() < dt * 22 && u.sink < 1) { v1.copy(f); c.localToWorld(v1); if (v1.y > .1) { const near = c === a && view === "fp", z = near ? .3 : 1; // my own fires blow away from the camera and stay small, so they never block the view
               soft.add(v1.x, v1.y + .3, v1.z, near ? 1.5 : -.6 + R(.4), (near ? .9 : 1.7) + Math.random(), R(.4), (near ? .8 : 1.5) + Math.random() * z, SMOKE_C, near ? .36 : .52, 1.05 * z, 4.3 * z, -.15, .2); if (Math.random() < .55) glow.add(v1.x, v1.y + .1, v1.z, R(.4), 1 + Math.random() * 1.3, R(.4), .35 + Math.random() * .3, Math.random() < .5 ? ORANGE : YELLOW, .9, near ? .5 : 1, .25); } } }
-          if (u.sink > 0 && u.sink < 1 && Math.random() < dt * 30) soft.add(x + R(u.spec.L * .45), .15, R(u.spec.W + 1), R(.6), 1 + Math.random() * 2, R(.6), .8, WATER, .75, .6, 1.5, 3); }
+          if (u.sink > 0 && u.sink < 1 && Math.random() < dt * 70) soft.add(x + R(u.spec.L * .5), .15, R(u.spec.W + 1.5), R(.8), 1 + Math.random() * 3, R(.8), 1, WATER, .8, .7, 2, 3); }
+        for (let i = chunks.length - 1; i >= 0; i--) { const q = chunks[i], o = q.m; q.vy -= 15 * dt; o.position.x += q.vx * dt; o.position.y += q.vy * dt; o.position.z += q.vz * dt; o.rotation.x += q.sx * dt; o.rotation.z += q.sz * dt; if (q.smoke && Math.random() < dt * 24) soft.add(o.position.x, o.position.y, o.position.z, 0, .3, 0, .7, SMOKE_C, .6, .4, 1.3); if (o.position.y < .1) { soft.add(o.position.x, .1, o.position.z, 0, 3, 0, .5, WATER, .8, .6, .3, 8); root.remove(o); chunks.splice(i, 1); } }
+        for (let i = rings.length - 1; i >= 0; i--) { const q = rings[i]; q.age += dt; if (q.age < 0) { q.m.visible = false; continue; } q.m.visible = true; const k = Math.min(1, q.age / q.life), s2 = q.from + (q.to - q.from) * (1 - Math.pow(1 - k, 3)); q.m.scale.set(s2, q.y ? s2 : 1, s2); q.m.material.opacity = (q.y ? .95 : .85) * (1 - k) * (1 - k); if (k >= 1) { root.remove(q.m); q.m.material.dispose(); rings.splice(i, 1); } }
         for (let i = reloads.length - 1; i >= 0; i--) { const r = reloads[i]; r.age += dt; if (r.age < .9) continue; r.round.visible = true; const q = Math.min(1, (r.age - .9) / .4); r.round.scale.setScalar(.25 + .75 * q); if (q >= 1) reloads.splice(i, 1); } // the next one comes up from below the deck
         for (let i = flights.length - 1; i >= 0; i--) { const f = flights[i]; f.age += dt; const k = Math.min(1, f.age / f.plan.dur), e = k * k * (3 - 2 * k) * .35 + k * .65, e1 = Math.min(e, .98); f.curve.getPointAt(e, v1); f.o.position.copy(v1); f.curve.getTangentAt(e1, v2); f.curve.getTangentAt(e1 + .02, v3);
           const turn = v2.x * v3.z - v2.z * v3.x, bank = f.plan.flat === 1 ? Math.max(-.9, Math.min(.9, turn * 14)) : Math.max(-.3, Math.min(.3, turn * 8)); v2.y *= f.plan.flat; faceAlong(f.o, v2, bank);
@@ -700,8 +726,8 @@ function build() {
         fire(by, dmg, kind) { const c = by === "a" ? a : b, sh = SHOT[kind] ? kind : "cannon", n = SHOT[sh][2]; sortie(c);
           return new Promise(res => { launch(c, sh, dmg > 0, n === 1, n === 1 ? res : null);
             for (let i = 1; i < n; i++) { const last = i === n - 1; setTimeout(() => { if (fightOn) launch(c, sh, dmg > 0, last, last ? res : null); else res(); }, i * 75); } }); },
-        finish(didWin, fast) { won = didWin; const loser = didWin ? b : a; loser.userData.sink = .001; for (let i = 0; i < 3; i++) setTimeout(() => { if (!fightOn) return; const sp = loser.userData.spec; v3.set(R(sp.L * .35), sp.H0, R(sp.W * .5)); loser.localToWorld(v3); burst(v3.clone(), 1.2); }, fast ? 0 : i * 420); shake = didWin ? .4 : 1.2; goView("end"); return wait(fast ? 300 : 1500); },
-        close() { fightOn = null; shots.forEach(o => { root.remove(o.mesh); o.mesh.material?.dispose(); }); rBody.dispose(); rNose.dispose(); scene.remove(root, flash); a.userData.mats.concat(b.userData.mats).forEach(m => m.dispose()); shotGeo.dispose(); glow.remove(); soft.remove();
+        finish(didWin, fast) { if (didWin == null) { won = false; goView("end"); return wait(fast ? 300 : 1200); } won = didWin; sinker = didWin ? b : a; goView("sink"); const t = sinkShow(sinker, fast); return wait(fast ? 500 : t + 1500); },
+        close() { fightOn = null; shots.forEach(o => { root.remove(o.mesh); o.mesh.material?.dispose(); }); rBody.dispose(); rNose.dispose(); rings.forEach(q => q.m.material.dispose()); chunkGeo.dispose(); ringGeo.dispose(); ballGeo.dispose(); scene.remove(root, flash); a.userData.mats.concat(b.userData.mats).forEach(m => m.dispose()); shotGeo.dispose(); glow.remove(); soft.remove();
           homeShip.visible = true; foamPts.visible = true; hidden.forEach(e => e.style.display = ""); cv.style.cursor = ""; camera.fov = oldFov; camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); sun.target.position.set(0, 0, 0); sun.target.updateMatrixWorld(); ocean.scale.set(1, 1, 1); oceanMat.roughness = oldSea[1]; [scene.fog.near, scene.fog.far] = [oldSea[2], oldSea[3]]; time = oldTime; applyTime(); useShip(homeId); lookKey = ""; if (stage.parentNode) stage.parentNode.removeChild(stage); } };
       fightOn = step;
       if (stage.parentNode !== host) host.appendChild(stage); start();

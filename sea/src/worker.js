@@ -343,7 +343,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
     upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
     bal, game, quests, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
-    battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates), titles: await titlesFor(db, st.id, owned),
+    battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), duelLeft: await duelLeft(db, st.id, game, today), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates), titles: await titlesFor(db, st.id, owned),
     approved: (await db.prepare("SELECT id, title, energy FROM logs WHERE student_id=? AND kind='quest' ORDER BY id DESC LIMIT 20").bind(st.id).all()).results,
     likes: { counts: Object.fromEntries((await db.prepare("SELECT l.target AS id, COUNT(*) AS n FROM likes l JOIN students s ON s.id=l.target WHERE s.class_id=? GROUP BY l.target").bind(st.class_id).all()).results.map(r => [r.id, r.n])), mine: (await db.prepare("SELECT target FROM likes WHERE liker=? AND week=?").bind(st.id, ws).all()).results.map(r => r.target) } };
 });
@@ -488,6 +488,51 @@ on("POST", "/api/kid/battle", "student", async ({ db, me, body }) => {
   return { ok: true, won, delta, chance, aim, left: game.battlesPerDay - fought.length - 1, rounds: simulate(won),
     me: { nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, power: A }, opp: { nickname: opp.nickname, sail: opp.sail, look: lookOf(opp), ship: opp.ship, power: B } };
 });
+
+/* ----- live duels: two classmates online at once. Each round both press a timing gauge and the server works out the shots. No gold moves; the daily count is separate from ordinary battles. ----- */
+const DUEL_WAIT = 30000, DUEL_FIRST = 22000, DUEL_TURN = 16000, DUEL_ONLINE = 25000, DUEL_MAX_ROUNDS = 12;
+const duelLeft = async (db, id, game, today = kstDate()) => Math.max(0, game.battlesPerDay - (await db.prepare("SELECT COUNT(*) AS n FROM duels WHERE (a=? OR b=?) AND date=?").bind(id, id, today).first()).n);
+const duelRow = (db, id) => db.prepare("SELECT * FROM duels WHERE id=?").bind(id).first();
+const duelOpenOf = (db, id) => db.prepare("SELECT * FROM duels WHERE (a=? OR b=?) AND status IN ('wait','live') ORDER BY id DESC LIMIT 1").bind(id, id).first();
+async function duelEnd(db, d, winner, forfeit, extra = {}) { const names = (await db.prepare("SELECT id, nickname FROM students WHERE id IN (?,?)").bind(d.a, d.b).all()).results, nick = id => names.find(n => n.id === id)?.nickname || "친구";
+  const r = await db.prepare("UPDATE duels SET status='done', winner=?, forfeit=?, round=?, hp_a=?, hp_b=?, log=? WHERE id=? AND status='live' AND round=?").bind(winner, forfeit ? 1 : 0, d.round, extra.hp_a ?? d.hp_a, extra.hp_b ?? d.hp_b, extra.log ?? d.log, d.id, d.round).run(); if (!r.meta.changes) return false;
+  const line = (id, opp) => logStmt(db, { student_id: id, kind: "duel", title: `${nick(opp)}${(nick(opp).charCodeAt(nick(opp).length - 1) - 44032) % 28 ? "과" : "와"} 실시간 대결 ${!winner ? "무승부" : winner === id ? "승리" : "패배"}` }); await db.batch([line(d.a, d.b), line(d.b, d.a)]); return true; }
+// moves a duel on when both have answered or time is up; safe to call from either player at any moment
+async function duelStep(db, d) { const now = Date.now();
+  if (d.status === "wait" && now - d.created_at > DUEL_WAIT) { await db.prepare("UPDATE duels SET status='expired' WHERE id=? AND status='wait'").bind(d.id).run(); return duelRow(db, d.id); }
+  if (d.status !== "live" || ((d.aim_a == null || d.aim_b == null) && now < d.deadline)) return d;
+  const missA = d.aim_a == null ? d.miss_a + 1 : 0, missB = d.aim_b == null ? d.miss_b + 1 : 0, hp = { a: d.hp_a, b: d.hp_b }, shots = [], order = randInt(2) ? ["a", "b"] : ["b", "a"], log = JSON.parse(d.log);
+  const edge = (m, o) => Math.max(.8, Math.min(1.2, 1 + (m - o) / (m + o) * .6)); // battle power matters a little; the aim matters most
+  for (const by of order) { const aim = (by === "a" ? d.aim_a : d.aim_b) ?? 0, to = by === "a" ? "b" : "a", base = aim === 2 ? 24 + randInt(7) : aim === 1 ? 14 + randInt(6) : 0, dmg = Math.round(base * (by === "a" ? edge(d.pa, d.pb) : edge(d.pb, d.pa))); hp[to] = Math.max(0, hp[to] - dmg); shots.push({ by, aim, dmg, hp: { ...hp } }); if (!hp[to]) break; }
+  log.push(shots); const text = JSON.stringify(log); let winner = null, forfeit = false;
+  if (!hp.a || !hp.b) winner = hp.a ? d.a : d.b; else if (missA >= 2 && missB >= 2) winner = 0; else if (missA >= 2) { winner = d.b; forfeit = true; } else if (missB >= 2) { winner = d.a; forfeit = true; } else if (d.round >= DUEL_MAX_ROUNDS) winner = hp.a === hp.b ? 0 : hp.a > hp.b ? d.a : d.b;
+  if (winner !== null) await duelEnd(db, d, winner, forfeit, { hp_a: hp.a, hp_b: hp.b, log: text });
+  else await db.prepare("UPDATE duels SET round=round+1, hp_a=?, hp_b=?, aim_a=NULL, aim_b=NULL, miss_a=?, miss_b=?, deadline=?, log=? WHERE id=? AND round=? AND status='live'").bind(hp.a, hp.b, missA, missB, now + DUEL_TURN, text, d.id, d.round).run();
+  return duelRow(db, d.id); }
+const duelView = (d, sid) => { const mine = d.a === sid ? "a" : "b"; return { id: d.id, status: d.status, mine, oppId: mine === "a" ? d.b : d.a, round: d.round, hp: { a: d.hp_a, b: d.hp_b }, log: JSON.parse(d.log), winner: d.winner, forfeit: !!d.forfeit, iAimed: (mine === "a" ? d.aim_a : d.aim_b) != null, ms: Math.max(0, DUEL_WAIT - (Date.now() - d.created_at)) }; };
+async function duelMine(db, sid, id) { const d = await duelRow(db, id); if (!d || (d.a !== sid && d.b !== sid)) throw new HttpError(404, "없는 대결이에요"); return d; }
+const duelGate = (st, game) => { const h = kstHour(); if (!st.class_battle) throw bad("지금은 선생님이 전투를 쉬게 했어요"); if (game.hourFrom !== game.hourTo && !(h >= game.hourFrom && h < game.hourTo)) throw bad(`전투는 ${game.hourFrom}시부터 ${game.hourTo}시까지 할 수 있어요`); };
+// asked every few seconds by every open app; "free" means not in the middle of a game, so a kid who is busy doesn't show as ready to duel
+on("GET", "/api/kid/duel/poll", "student", async ({ db, me, req }) => { const st = me.student, now = Date.now();
+  if (new URL(req.url).searchParams.get("free") === "1" && now - st.seen_at > 10000) await db.prepare("UPDATE students SET seen_at=? WHERE id=?").bind(now, st.id).run();
+  const online = (await db.prepare("SELECT id FROM students WHERE class_id=? AND active=1 AND seen_at>? AND id<>?").bind(st.class_id, now - DUEL_ONLINE, st.id).all()).results.map(r => r.id);
+  let d = await duelOpenOf(db, st.id); if (d) d = await duelStep(db, d); const open = d && (d.status === "wait" || d.status === "live");
+  return { online, invite: open && d.status === "wait" && d.b === st.id ? { id: d.id, from: d.a, ms: Math.max(0, DUEL_WAIT - (now - d.created_at)) } : null, duel: open && (d.status === "live" || d.a === st.id) ? duelView(d, st.id) : null }; });
+on("GET", "/api/kid/duel/:id", "student", async ({ db, me, params }) => duelView(await duelStep(db, await duelMine(db, me.student.id, Number(params.id))), me.student.id));
+on("POST", "/api/kid/duel/challenge/:id", "student", async ({ db, me, params }) => { const st = me.student, target = Number(params.id), game = await getGame(db); duelGate(st, game);
+  if (target === st.id) throw bad("나와는 대결할 수 없어요"); const t = await db.prepare("SELECT id, seen_at FROM students WHERE id=? AND class_id=? AND active=1").bind(target, st.class_id).first(); if (!t) throw bad("같은 반 친구에게만 신청할 수 있어요"); if (Date.now() - t.seen_at > DUEL_ONLINE) throw bad("친구가 지금 접속해 있지 않아요");
+  if (await duelLeft(db, st.id, game) <= 0) throw bad("오늘 실시간 대결을 모두 했어요. 내일 다시 해요"); if (await duelLeft(db, target, game) <= 0) throw bad("친구가 오늘 실시간 대결을 모두 했어요");
+  for (const id of [st.id, target]) { let o = await duelOpenOf(db, id); if (o) o = await duelStep(db, o); if (o && (o.status === "wait" || o.status === "live")) throw bad(id === st.id ? "이미 진행 중인 대결이 있어요" : "친구가 지금 다른 대결 중이에요"); }
+  const r = await db.prepare("INSERT INTO duels (class_id, a, b, created_at) VALUES (?,?,?,?)").bind(st.class_id, st.id, target, Date.now()).run(); return { id: r.meta.last_row_id }; });
+on("POST", "/api/kid/duel/:id/answer", "student", async ({ db, me, params, body }) => { const st = me.student, game = await getGame(db); let d = await duelStep(db, await duelMine(db, st.id, Number(params.id))); if (d.b !== st.id) throw bad("받은 신청이 아니에요"); if (d.status !== "wait") throw bad("이미 끝난 신청이에요");
+  if (!body.accept) { await db.prepare("UPDATE duels SET status='declined' WHERE id=? AND status='wait'").bind(d.id).run(); return { ok: true }; } duelGate(st, game);
+  if (await duelLeft(db, d.a, game) <= 0 || await duelLeft(db, d.b, game) <= 0) { await db.prepare("UPDATE duels SET status='expired' WHERE id=?").bind(d.id).run(); throw bad("오늘 실시간 대결을 모두 했어요"); }
+  const rows = (await db.prepare("SELECT id, ship, look, photo FROM students WHERE id IN (?,?)").bind(d.a, d.b).all()).results, pw = await powers(db, rows);
+  const r = await db.prepare("UPDATE duels SET status='live', date=?, round=1, pa=?, pb=?, deadline=? WHERE id=? AND status='wait'").bind(kstDate(), pw[d.a], pw[d.b], Date.now() + DUEL_FIRST, d.id).run(); if (!r.meta.changes) throw bad("이미 끝난 신청이에요"); return { ok: true }; });
+on("POST", "/api/kid/duel/:id/aim", "student", async ({ db, me, params, body }) => { const sid = me.student.id; let d = await duelMine(db, sid, Number(params.id)), col = d.a === sid ? "aim_a" : "aim_b";
+  await db.prepare(`UPDATE duels SET ${col}=? WHERE id=? AND round=? AND status='live' AND ${col} IS NULL`).bind(int(body.aim, 0, 2), d.id, int(body.round, 1, DUEL_MAX_ROUNDS)).run(); return duelView(await duelStep(db, await duelRow(db, d.id)), sid); });
+on("POST", "/api/kid/duel/:id/quit", "student", async ({ db, me, params }) => { const sid = me.student.id, d = await duelMine(db, sid, Number(params.id));
+  if (d.status === "wait") await db.prepare("UPDATE duels SET status=? WHERE id=? AND status='wait'").bind(d.a === sid ? "cancelled" : "declined", d.id).run(); else if (d.status === "live") await duelEnd(db, d, d.a === sid ? d.b : d.a, true); return { ok: true }; });
 
 /* ----- photo sails ----- */
 // gold is paid when asking and handed back if the photo is turned down, so approval can never fail for lack of gold
