@@ -27,8 +27,27 @@ if ("serviceWorker" in navigator) addEventListener("load", () => navigator.servi
 /* ---------- ship pictures: the galleon comes from voyage.js, the other classes are drawn here ---------- */
 const HULLS = { red: "#8E2A22", navy: "#1F3A63", mint: "#2F8C78", pink: "#D97A9A", lavender: "#9A84C9", sky: "#6FA8D6", lemon: "#E8C85A", ebony: "#2A221D", white: "#E8DFC9", gold: "url(#dk-gold)" };
 const flagSVG = (x, y, look, sailIdx) => { const c = look.fc != null ? sail(look.fc) : sail(sailIdx); return `<path d="M${x} ${y} h7 v4.6 h-7 Z" fill="${c}"/>${V.embSVG(look.fe, x + 3.5, y + 2.3, 4, V.inkFor(c), c)}`; };
+/* weapon pictures: 72×36, bow to the right, deck at y = 34. The same picture is the item image and what sits on the 2D ship. */
+const WC = { iron: "#2B2F36", steel: "#8A949E", wood: "#7A4A28", dark: "#4B525A", paint: "#EDEDE6", red: "#C9392B", gold: "#D9A93A" };
+const artCannon = (bore, x1) => `<path d="M12 23 H${x1 - 12} L${x1 - 16} 30 H12 Z" fill="${WC.wood}"/><circle cx="20" cy="30" r="4.2" fill="${WC.iron}"/><circle cx="${x1 - 22}" cy="30" r="4.2" fill="${WC.iron}"/><path d="M7 ${18 - bore} Q7 ${15 - bore} 12 ${15 - bore} L${x1} ${17 - bore / 2} Q${x1 + 3} ${17 - bore / 2} ${x1 + 3} 18 Q${x1 + 3} ${19 + bore / 2} ${x1} ${19 + bore / 2} L12 ${21 + bore} Q7 ${21 + bore} 7 ${18 - bore} Z" fill="${WC.iron}"/><rect x="22" y="${14 - bore}" width="3.5" height="${8 + bore * 2}" fill="${WC.gold}"/>`;
+const artMissile = (x, y, len, r, deg) => `<g transform="rotate(${deg} ${x} ${y})"><path d="M${x + 1} ${y - r} L${x - 3} ${y - r - 3.5} H${x + 4} L${x + 8} ${y - r} Z M${x + 1} ${y + r} L${x - 3} ${y + r + 3.5} H${x + 4} L${x + 8} ${y + r} Z" fill="${WC.dark}"/><rect x="${x}" y="${y - r}" width="${len}" height="${r * 2}" fill="#FBFBF6" stroke="${WC.dark}" stroke-width=".8"/><path d="M${x + len} ${y - r} L${x + len + r * 3} ${y} L${x + len} ${y + r} Z" fill="${WC.red}" stroke="${WC.dark}" stroke-width=".8"/></g>`;
+const WEAPON_ART = {
+  swivel: `<rect x="31" y="18" width="5" height="16" fill="${WC.wood}"/><rect x="25" y="31" width="17" height="3" fill="${WC.wood}"/><path d="M12 12 L58 13 Q62 13 62 15.5 Q62 18 58 18 L12 20 Q8 16 12 12 Z" fill="${WC.iron}"/><rect x="2" y="15" width="10" height="2" fill="${WC.wood}"/>`,
+  pdr12: artCannon(0, 56),
+  pdr32: artCannon(2, 66),
+  mg: `<path d="M32 18 L20 34 M32 18 L44 34 M32 18 V34" stroke="${WC.steel}" stroke-width="2.5" fill="none"/><rect x="20" y="11" width="24" height="8" rx="1" fill="${WC.iron}"/><rect x="44" y="13.5" width="26" height="3" fill="${WC.iron}"/><rect x="66" y="12.5" width="4" height="5" fill="${WC.iron}"/><rect x="24" y="19" width="10" height="7" fill="${WC.dark}"/><path d="M38 4 H43 V24 H38 Z" fill="${WC.steel}"/>`,
+  ac40: `<path d="M16 34 L19 26 H45 L48 34 Z" fill="${WC.steel}"/><path d="M14 26 V13 Q14 10 18 10 H40 L46 16 V26 Z" fill="${WC.steel}"/><rect x="45" y="11" width="25" height="3.4" fill="${WC.iron}"/><rect x="45" y="18" width="25" height="3.4" fill="${WC.iron}"/><rect x="64" y="10" width="6" height="5.4" fill="${WC.iron}"/><rect x="64" y="17" width="6" height="5.4" fill="${WC.iron}"/><rect x="20" y="14" width="10" height="5" fill="${WC.iron}"/>`,
+  torpedo: `<path d="M22 34 L25 28 H41 L44 34 Z" fill="${WC.steel}"/><rect x="6" y="7" width="50" height="6" rx="2" fill="${WC.dark}"/><rect x="6" y="14" width="50" height="6" rx="2" fill="${WC.dark}"/><rect x="6" y="21" width="50" height="6" rx="2" fill="${WC.dark}"/><rect x="54" y="6" width="3" height="22" fill="${WC.steel}"/><path d="M57 14.5 H64 L69 17 L64 19.5 H57 Z" fill="${WC.red}"/>`,
+  gun127: `<path d="M8 34 V29 H50 V34 Z" fill="${WC.dark}"/><path d="M12 29 L15 13 Q16 10 20 10 H36 L46 17 V29 Z" fill="${WC.steel}"/><rect x="45" y="17" width="26" height="4.2" fill="${WC.iron}"/><rect x="45" y="15.5" width="6" height="7.2" fill="${WC.dark}"/><rect x="22" y="6" width="8" height="4" fill="${WC.iron}"/>`,
+  asm: `<path d="M16 34 L19 25 H46 L50 34 Z" fill="${WC.steel}"/><path d="M12 26 L58 11 L60 15 L14 30 Z" fill="${WC.iron}"/>${artMissile(14, 24, 40, 3, -18)}${artMissile(14, 15, 40, 3, -18)}`,
+  cruise: `<path d="M10 34 L13 26 H38 L42 34 Z" fill="${WC.steel}"/><path d="M12 28 L52 8 L54 12 L14 32 Z" fill="${WC.iron}"/><path d="M30 13 L42 2 H47 L40 20 Z" fill="${WC.dark}"/>${artMissile(10, 24, 44, 4, -26)}`
+};
+const weaponImg = id => WEAPON_ART[id] ? `<svg viewBox="0 0 72 36" aria-hidden="true">${WEAPON_ART[id]}</svg>` : "";
+// where the weapon stands on each 2D ship [x at the middle of the picture, deck y, size]
+const WEAPON_SPOT = { dinghy: [40, 32.5, .2], sloop: [43, 31, .24], brig: [47, 30.5, .26], galleon: [46, 31, .33], ironclad: [50, 30.5, .3], destroyer: [50, 28.5, .3], cruiser: [50, 27.5, .34], carrier: [23, 26.2, .32] };
+const weaponOnShip = (ship, look) => { const art = WEAPON_ART[look.weapon], s = WEAPON_SPOT[ship]; return art && s ? `<g transform="translate(${s[0] - 36 * s[2]} ${s[1] - 34 * s[2]}) scale(${s[2]})">${art}</g>` : ""; };
 function shipSVG(id, look = {}, sailIdx = 0) {
-  if (id === "galleon") return V.boatSVG(look, sailIdx);
+  if (id === "galleon") return V.boatSVG(look, sailIdx).replace(/<\/g><\/svg>\s*$/, weaponOnShip(id, look) + "</g></svg>");
   const s = sail(sailIdx), wood = HULLS[look.hull] || "#7A4A28", grey = HULLS[look.hull] || "#5F6973", m = "#4E321E", st = "#8A949E", ir = "#23262B";
   const parts = {
     dinghy: `<path d="M30 33 V11" stroke="${m}" stroke-width="1.3"/><path d="M31 12 L31 31 L45 31 Z" fill="${s}"/><path d="M29 16 L29 31 L18 31 Z" fill="#FFF8EA"/>${flagSVG(30, 7, look, sailIdx)}<path d="M14 32 L46 32 L42 40 Q30 43 18 40 Z" fill="${wood}"/>`,
@@ -39,14 +58,14 @@ function shipSVG(id, look = {}, sailIdx = 0) {
     cruiser: `<path d="M26 16 V2 M38 18 V7" stroke="${ir}" stroke-width=".9"/>${flagSVG(26, 0, look, sailIdx)}<rect x="20" y="10" width="10" height="7" fill="${st}"/><rect x="16" y="16" width="20" height="8" fill="${st}"/><rect x="11" y="23" width="30" height="7" fill="${st}"/><rect x="33" y="14" width="4" height="9" fill="${ir}"/><rect x="38" y="15" width="4" height="8" fill="${ir}"/><path d="M47 26 h4 v3 h-4 Z M51 27 H57 M6 26 h4 v3 h-4 Z M6 27 H1" stroke="${ir}" fill="${ir}" stroke-width=".9"/><path d="M1 30 L59 27 L53 41 L6 41 Z" fill="${grey}"/>`,
     carrier: `<path d="M37 16 V4" stroke="${ir}" stroke-width=".9"/>${flagSVG(37, 1, look, sailIdx)}<rect x="32" y="15" width="11" height="6" fill="${st}"/><rect x="30" y="20" width="15" height="6" fill="${st}"/><rect x="0" y="26" width="60" height="2.2" fill="#3A4046"/><path d="M6 25.4 l4 -1 l1 1 Z M15 25.4 l4 -1 l1 1 Z M50 25.4 l4 -1 l1 1 Z" fill="${st}"/><path d="M3 28 L58 28 L53 41 L8 41 Z" fill="${HULLS[look.hull] || "#555E67"}"/>`
   };
-  return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">${parts[id] || parts.dinghy}</g></svg>`;
+  return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">${parts[id] || parts.dinghy}${weaponOnShip(id, look)}</g></svg>`;
 }
 const shipBox = (ship, look, sailIdx, name, cls = "") => `<div class="deco-sea ${cls}"><div class="ship mine ${V.wakeClass(look)}" style="--sail:${sail(sailIdx)}">${shipSVG(ship, look, sailIdx)}${name ? `<span class="nmtag ${V.tagClass(look)}">${esc(name)}</span>` : ""}</div></div>`;
 
 /* ---------- 3D ---------- */
 function show3D(host, look, sailIdx, shipId) {
   if (!host || !window.Ship3D) return;
-  Ship3D.get().then(v => { if (!host.isConnected) return; v.setLook(look, sail(sailIdx), look.fc != null ? sail(look.fc) : sail(sailIdx), shipId); v.mount(host); host.classList.add("ready"); })
+  Ship3D.get().then(v => { if (!host.isConnected) return; v.setLook(look, sail(sailIdx), look.fc != null ? sail(look.fc) : sail(sailIdx), shipId); v.focusWeapon(K.slot === "weapon"); v.mount(host); host.classList.add("ready"); })
     .catch(e => { host.classList.add("failed"); const m = host.querySelector(".s3d-msg"); if (m) m.textContent = e.message; });
 }
 
@@ -181,22 +200,22 @@ function kDeco() {
   const tryItem = K.tryKey && d.deco.find(x => x.key === K.tryKey);
   const buy = x => { const can = gold >= x.price; return `<button class="btn sm ${can ? "primary" : ""}" data-act="kdecoAsk" data-v="${x.key}" ${can ? "" : "disabled"}>${can ? "사기" : `${x.price - gold}개 모자라요`}</button>`; };
   const card = x => { const has = owned.has(x.key), on = isWorn(L, x);
-    const pic = x.slot === "emblem" ? embTile(x.id, sail(me.sail)) : x.slot === "weapon" ? `<div class="wtile r-${x.rarity}" style="--fx:${x.fx}"><i></i><b class="num">+${x.power}</b></div>` : shipBox(me.ship, withItem(L, x), me.sail, "", "tiny");
+    const pic = x.slot === "emblem" ? embTile(x.id, sail(me.sail)) : x.slot === "weapon" ? `<div class="wtile r-${x.rarity}">${weaponImg(x.id)}<b class="num">+${x.power}</b></div>` : shipBox(me.ship, withItem(L, x), me.sail, "", "tiny");
     const ctl = x.dropOnly && !has ? `<span class="small muted">미니게임에서 발견해요</span>` : !has ? buy(x)
       : x.slot === "emblem" ? `<div class="row" style="gap:6px"><button class="btn sm" data-act="kwear" data-v="${x.key}|sail" aria-pressed="${L.se === x.id}">돛</button><button class="btn sm" data-act="kwear" data-v="${x.key}|flag" aria-pressed="${L.fe === x.id}">깃발</button></div>`
       : x.slot === "att" ? `<button class="btn sm ${on ? "" : "primary"}" data-act="kwear" data-v="${x.key}">${on ? "떼기" : "달기"}</button>`
-      : on ? `<span class="pill ok">쓰는 중</span>` : `<button class="btn sm" data-act="kwear" data-v="${x.key}">쓰기</button>`;
+      : on ? `<span class="pill ok">${x.slot === "weapon" ? "장착 중" : "쓰는 중"}</span>` : `<button class="btn sm ${x.slot === "weapon" ? "primary" : ""}" data-act="kwear" data-v="${x.key}">${x.slot === "weapon" ? "장착" : "쓰기"}</button>`;
     return `<div class="deco-item ${K.tryKey === x.key ? "sel" : ""}" data-act="ktry" data-v="${x.key}">${pic}<b>${esc(x.name)}</b>${x.slot === "weapon" ? `<span class="rar r-${x.rarity}">${x.rarity}</span>` : has ? "" : `<span class="gold num">${x.price}</span>`}${ctl}</div>`; };
   const shipCard = s => { const has = !s.price || owned.has(`ship.${s.id}`), on = me.ship === s.id, can = gold >= s.price;
     return `<div class="deco-item ${K.tryShip === s.id ? "sel" : ""}" data-act="ktryShip" data-v="${s.id}">${shipBox(s.id, L, me.sail, "", "tiny")}<b>${esc(s.name)}</b><span class="small muted">전투력 +${s.power}${s.sails ? "" : " · 돛 없음"}</span>${has ? "" : `<span class="gold num">${s.price}</span>`}
       ${on ? `<span class="pill ok">타는 중</span>` : has ? `<button class="btn sm" data-act="kshipUse" data-v="${s.id}">타기</button>` : `<button class="btn sm ${can ? "primary" : ""}" data-act="kshipAsk" data-v="${s.id}" ${can ? "" : "disabled"}>${can ? "사기" : `${s.price - gold}개 모자라요`}</button>`}</div>`; };
-  const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b>기본</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
+  const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
   const sw = (i, act, on, label) => `<button style="--sail:${V.SAILS[i]}" data-act="${act}" data-v="${i}" aria-pressed="${on}" aria-label="${label} ${i + 1}"></button>`;
   const noSail = !curShip.sails && ["pattern", "emblem", "color"].includes(slot) ? `<p class="small muted">지금 배에는 돛이 없어서 돛 꾸미기는 안 보여요. 깃발 색과 깃발 문양은 보여요.</p>` : "";
   const body = slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p><div class="deco-grid">${d.ships.map(shipCard).join("")}</div>`
     : slot === "color" ? `<p class="small muted">돛 색과 깃발 색은 무료예요.</p><h3>돛 색</h3><div class="sails">${V.SAILS.map((c, i) => sw(i, "ksail", me.sail === i, "돛 색")).join("")}</div>
       <h3>깃발 색</h3><div class="sails"><button class="same" data-act="kflag" data-v="-1" aria-pressed="${L.fc == null}" style="--sail:${sail(me.sail)}">돛과 같게</button>${V.SAILS.map((c, i) => sw(i, "kflag", L.fc === i, "깃발 색")).join("")}</div>`
-    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요.</p>` : slot === "weapon" ? `<p class="small muted">무기는 미니게임에서 낮은 확률로 발견해요. 하나를 달면 전투력이 올라가요.</p>` : ""}<div class="deco-grid">${plain}${d.deco.filter(x => x.slot === slot).map(card).join("")}</div>`;
+    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요.</p>` : slot === "weapon" ? `<p class="small muted">무기는 미니게임에서 낮은 확률로 발견해요. 장착하면 배 위에 올라가고 전투력도 올라가요. 그림을 누르면 위에서 미리 볼 수 있어요.</p>` : ""}<div class="deco-grid">${plain}${d.deco.filter(x => x.slot === slot).map(card).join("")}</div>`;
   return `<section class="panel deco-hero"><div class="row between"><h2>${esc(me.nickname)}의 ${esc((d.ships.find(s => s.id === (K.tryShip || me.ship)) || curShip).name)}</h2><span class="small">전투력 <b class="num">${me.power}</b> · ${coin(gold)}</span></div>
       <div class="deco3d" id="deco3d">${shipBox(K.tryShip || me.ship, tryItem ? withItem(L, tryItem) : L, me.sail, me.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
       ${conf ? `<div class="confirm"><span><b>${esc(conf.name)}</b>을(를) 금화 ${conf.price}개로 살까요? 남는 금화 ${gold - conf.price}</span><button class="btn sm primary" data-act="kdecoBuy" data-v="${conf.key}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
@@ -226,7 +245,7 @@ function rewardCard(r) {
   return new Promise(done => {
     const it = r.item, m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
     m.innerHTML = `<div class="panel reward"><div class="stars" aria-label="별 ${r.stars}개">${[0, 1, 2].map(i => `<i class="${i < r.stars ? "on" : ""}"></i>`).join("")}</div><h2>${r.stars ? "잘했어요!" : "아쉬워요!"}</h2><p class="num">점수 ${r.score} · ${pts(`+${r.points}`)}</p>
-      ${it ? `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span><b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? "내 배 → 무기에서 달 수 있어요" : "내 배에서 쓸 수 있어요"}</small></div>` : ""}<button class="btn primary lg" data-close>확인</button></div>`;
+      ${it ? `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? "내 배 → 무기에서 장착할 수 있어요" : "내 배에서 쓸 수 있어요"}</small></div>` : ""}<button class="btn primary lg" data-close>확인</button></div>`;
     document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); b.onclick = () => { m.remove(); done(); };
   });
 }
@@ -236,7 +255,7 @@ async function playFight() {
   try { r = await api("/api/kid/battle", {}); } catch (e) { toast(e.message); K.busy = false; return; }
   const m = document.createElement("div"); m.className = "fight"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
   const side = (p, cls) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
-  const fxOf = p => { const w = K.d.deco.find(x => x.key === `weapon.${p.look.weapon}`); return w ? w.fx : "#23262B"; };
+  const kindOf = p => K.d.deco.find(x => x.key === `weapon.${p.look.weapon}`)?.kind || "cannon";
   m.innerHTML = `<div class="f-top">${side(r.me, "a")}<span class="f-vs">VS</span>${side(r.opp, "d")}</div>
     <div class="f-sea"><div class="f-ship a" style="--sail:${sail(r.me.sail)}">${shipSVG(r.me.ship, r.me.look, r.me.sail)}</div><div class="f-ship d" style="--sail:${sail(r.opp.sail)}">${shipSVG(r.opp.ship, r.opp.look, r.opp.sail)}</div><i class="f-ball" hidden></i><span class="f-dmg" hidden></span></div>
     <div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button></div>`;
@@ -245,7 +264,7 @@ async function playFight() {
   const ball = m.querySelector(".f-ball"), dmgEl = m.querySelector(".f-dmg"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i"), shipA = m.querySelector(".f-ship.a"), shipD = m.querySelector(".f-ship.d");
   await sleep(350);
   for (const s of r.rounds) {
-    if (!fast) { const fromA = s.by === "a"; ball.hidden = false; ball.style.background = fxOf(fromA ? r.me : r.opp); ball.style.transition = "none"; ball.style.left = fromA ? "26%" : "74%"; ball.offsetWidth; ball.style.transition = "left .42s linear"; ball.style.left = fromA ? "74%" : "26%"; await sleep(430); ball.hidden = true;
+    if (!fast) { const fromA = s.by === "a"; ball.className = `f-ball k-${kindOf(fromA ? r.me : r.opp)}${fromA ? "" : " rev"}`; ball.hidden = false; ball.style.transition = "none"; ball.style.left = fromA ? "26%" : "74%"; ball.offsetWidth; ball.style.transition = "left .42s linear"; ball.style.left = fromA ? "74%" : "26%"; await sleep(430); ball.hidden = true;
       const hit = fromA ? shipD : shipA; dmgEl.hidden = false; dmgEl.textContent = s.dmg ? `-${s.dmg}` : "빗나감"; dmgEl.style.left = fromA ? "74%" : "26%"; if (s.dmg) { hit.classList.add("hit"); setTimeout(() => hit.classList.remove("hit"), 260); } }
     hpA.style.width = s.hp.a + "%"; hpD.style.width = s.hp.d + "%";
     if (!fast) { await sleep(420); dmgEl.hidden = true; }

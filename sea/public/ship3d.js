@@ -16,6 +16,35 @@ function loadThree() {
 }
 function webglOK() { try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch (e) { return false; } }
 
+// real naval weapons, built facing the bow (+x) with the deck at y = 0; ids match WEAPONS in worker.js
+function weaponModel(T, M, id) {
+  const g = new T.Group();
+  const put = (mesh, x, y, z = 0) => { mesh.position.set(x, y, z); mesh.castShadow = true; g.add(mesh); return mesh; };
+  const box = (x, y, z, w, h, d, m) => put(new T.Mesh(new T.BoxGeometry(w, h, d), m), x, y, z);
+  const cyl = (x, y, z, r1, r2, h, m) => put(new T.Mesh(new T.CylinderGeometry(r1, r2, h, 14), m), x, y, z);
+  const barrel = (x, y, z, r1, r2, len, m = M.iron, up = 0) => { const b = cyl(x, y, z, r1, r2, len, m); b.rotation.z = -Math.PI / 2 + up; return b; };
+  const wheel = (x, z, r) => { const w = cyl(x, r, z, r, r, .1, M.iron); w.rotation.x = Math.PI / 2; };
+  const missile = (x, y, z, len, r, up) => { const f = new T.Group(); f.position.set(x, y, z); f.rotation.z = up; g.add(f);
+    const add = (m, px, py = 0, pz = 0) => { m.position.set(px, py, pz); m.castShadow = true; f.add(m); return m; };
+    add(new T.Mesh(new T.CylinderGeometry(r, r, len, 12), M.paint), 0).rotation.z = -Math.PI / 2;
+    add(new T.Mesh(new T.ConeGeometry(r, len * .22, 12), M.warhead), len * .61).rotation.z = -Math.PI / 2;
+    add(new T.Mesh(new T.BoxGeometry(len * .16, .03, r * 5), M.steel), -len * .42); add(new T.Mesh(new T.BoxGeometry(len * .16, r * 5, .03), M.steel), -len * .42); return add; };
+  const cannon = s => { box(-.1 * s, .3 * s, 0, 1.3 * s, .28 * s, .72 * s, M.wood); for (const x of [-.5, .3]) for (const z of [-.42, .42]) wheel(x * s, z * s, .2 * s);
+    barrel(.25 * s, .6 * s, 0, .13 * s, .21 * s, 1.9 * s, M.iron, .04); cyl(.25 * s, .6 * s, 0, .24 * s, .24 * s, .1 * s, M.gold).rotation.z = -Math.PI / 2; };
+  ({
+    swivel() { cyl(0, .3, 0, .07, .1, .6, M.wood); barrel(.2, .68, 0, .08, .13, 1.15); box(-.5, .68, 0, .4, .05, .05, M.wood); },
+    pdr12() { cannon(1); },
+    pdr32() { cannon(1.3); barrel(.4, .78, 0, .24, .24, .12, M.gold, .04); },
+    mg() { cyl(0, .35, 0, .07, .13, .7, M.steel); box(0, .78, 0, .55, .2, .18, M.iron); barrel(.75, .8, 0, .035, .05, 1, M.iron); box(.3, .85, 0, .06, .45, .6, M.steel); box(-.1, .62, .18, .25, .18, .16, M.deck2); },
+    ac40() { cyl(0, .22, 0, .6, .68, .44, M.steel); box(-.1, .72, 0, 1, .55, .95, M.steel); for (const z of [-.2, .2]) { barrel(1.05, .82, z, .05, .08, 1.5, M.iron, .08); cyl(1.78, .88, z, .08, .08, .16, M.iron).rotation.z = -Math.PI / 2; } },
+    torpedo() { cyl(0, .12, 0, .55, .6, .24, M.steel); for (const z of [-.3, 0, .3]) { barrel(0, .5, z, .13, .13, 2.2, M.deck2); cyl(1.12, .5, z, .15, .15, .08, M.steel).rotation.z = -Math.PI / 2; }
+      const nose = put(new T.Mesh(new T.ConeGeometry(.11, .28, 12), M.warhead), 1.3, .5, 0); nose.rotation.z = -Math.PI / 2; },
+    gun127() { cyl(0, .12, 0, .85, .9, .24, M.steel); box(-.05, .6, 0, 1.45, .72, 1.15, M.steel); box(.75, .55, 0, .2, .45, .8, M.steel); barrel(1.65, .68, 0, .07, .11, 1.9, M.iron, .1); box(-.2, 1.02, 0, .3, .12, .3, M.iron); },
+    asm() { box(0, .2, 0, 1.3, .4, 1, M.steel); const rail = box(0, .55, 0, 1.9, .08, .95, M.iron); rail.rotation.z = .35; for (const z of [-.25, .25]) missile(.05, .78, z, 1.9, .12, .35); },
+    cruise() { box(-.1, .25, 0, 1.6, .5, 1.1, M.steel); const rail = box(.1, .8, 0, 2.5, .1, .5, M.iron); rail.rotation.z = .5; const add = missile(.0, 1.07, 0, 2.5, .16, .5); add(new T.Mesh(new T.BoxGeometry(.32, .04, 1.5), M.steel), .1); }
+  })[id]?.();
+  return g;
+}
 // ids match DECO in worker.js; anything missing falls back to the plain wooden ship
 // the 8 ship classes, smallest to largest. masts: [{u along the hull, h, sails:[[w,h,y0]...]}]
 function shipSpecs(T) {
@@ -27,17 +56,17 @@ function shipSpecs(T) {
   const funnel = (add, M, x, y, r, h) => { cyl(add, x, y + h / 2, 0, r, r * 1.08, h, M.iron); cyl(add, x, y + h + .03, 0, r * 1.06, r * 1.06, .1, M.trim); };
   const plane = (add, M, x, y, z, s) => { box(add, M, x, y + .1 * s, z, 1.3 * s, .14 * s, .18 * s, M.steel); box(add, M, x + .05 * s, y + .1 * s, z, .34 * s, .05 * s, 1.15 * s, M.steel); box(add, M, x - .55 * s, y + .24 * s, z, .22 * s, .26 * s, .05 * s, M.steel); };
   return shipSpecs.c = {
-    dinghy: { L: 5.2, W: .95, D: .6, H0: .6, stern: .12, bow: .25, sailed: true, lookY: 2.1, masts: [{ u: .52, h: 4.6, sails: [[2, 2.6, 1]] }] },
-    sloop: { L: 7.4, W: 1.25, D: .85, H0: .8, stern: .4, bow: .4, sailed: true, lookY: 2.6, masts: [{ u: .55, h: 6.6, sails: [[2.6, 2.4, 1.1], [2, 1.7, 3.8]] }] },
-    brig: { L: 9, W: 1.55, D: 1.1, H0: .95, stern: .7, cabin: true, sailed: true, lookY: 2.9, masts: [{ u: .66, h: 7, sails: [[3, 2.3, 1.3], [2.4, 1.8, 3.9]] }, { u: .32, h: 7.6, sails: [[3.2, 2.4, 1.3], [2.5, 1.9, 4.1]] }] },
-    galleon: { L: 11, W: 1.85, D: 1.35, H0: 1.1, cabin: true, sailed: true, masts: [{ u: .7, h: 7.6, sails: [[3.4, 2.4, 1.4], [2.7, 1.9, 4.3]] }, { u: .45, h: 9.2, sails: [[3.9, 2.8, 1.5], [3.1, 2.2, 4.8], [2.3, 1.5, 7.3]] }, { u: .2, h: 6.6, sails: [[2.8, 2, 1.4], [2.1, 1.5, 3.9]] }] },
-    ironclad: { L: 13, W: 2, D: 1.3, H0: .85, stern: .1, bow: .3, hull: "#3C3F44", lookY: 2.8, masts: [{ u: .68, h: 6.4, sails: [] }],
+    dinghy: { wm: { u: .76, s: .42 }, L: 5.2, W: .95, D: .6, H0: .6, stern: .12, bow: .25, sailed: true, lookY: 2.1, masts: [{ u: .52, h: 4.6, sails: [[2, 2.6, 1]] }] },
+    sloop: { wm: { u: .76, s: .55 }, L: 7.4, W: 1.25, D: .85, H0: .8, stern: .4, bow: .4, sailed: true, lookY: 2.6, masts: [{ u: .55, h: 6.6, sails: [[2.6, 2.4, 1.1], [2, 1.7, 3.8]] }] },
+    brig: { wm: { u: .82, s: .65 }, L: 9, W: 1.55, D: 1.1, H0: .95, stern: .7, cabin: true, sailed: true, lookY: 2.9, masts: [{ u: .66, h: 7, sails: [[3, 2.3, 1.3], [2.4, 1.8, 3.9]] }, { u: .32, h: 7.6, sails: [[3.2, 2.4, 1.3], [2.5, 1.9, 4.1]] }] },
+    galleon: { wm: { u: .84, s: .8 }, L: 11, W: 1.85, D: 1.35, H0: 1.1, cabin: true, sailed: true, masts: [{ u: .7, h: 7.6, sails: [[3.4, 2.4, 1.4], [2.7, 1.9, 4.3]] }, { u: .45, h: 9.2, sails: [[3.9, 2.8, 1.5], [3.1, 2.2, 4.8], [2.3, 1.5, 7.3]] }, { u: .2, h: 6.6, sails: [[2.8, 2, 1.4], [2.1, 1.5, 3.9]] }] },
+    ironclad: { wm: { u: .69, s: .9 }, L: 13, W: 2, D: 1.3, H0: .85, stern: .1, bow: .3, hull: "#3C3F44", lookY: 2.8, masts: [{ u: .68, h: 6.4, sails: [] }],
       build({ add, M, xAt, deckY }) { const y = deckY(.45); box(add, M, xAt(.45), y + .6, 0, 5, 1.2, 2.7, M.steel); funnel(add, M, xAt(.5), y + 1.2, .36, 2.3); funnel(add, M, xAt(.38), y + 1.2, .36, 2.3); gun(add, M, xAt(.8), deckY(.8), 1.1, 1); gun(add, M, xAt(.14), deckY(.14), 1.1, -1); } },
-    destroyer: { L: 15, W: 1.75, D: 1.2, H0: 1, stern: 0, bow: .9, hull: "#6A737C", lookY: 2.8, masts: [{ u: .58, h: 7, sails: [] }],
+    destroyer: { wm: { u: .9, s: .95 }, L: 15, W: 1.75, D: 1.2, H0: 1, stern: 0, bow: .9, hull: "#6A737C", lookY: 2.8, masts: [{ u: .58, h: 7, sails: [] }],
       build({ add, M, xAt, deckY }) { const y = deckY(.55); box(add, M, xAt(.56), y + .55, 0, 3, 1.1, 2, M.steel); box(add, M, xAt(.6), y + 1.5, 0, 1.5, .8, 1.5, M.steel); funnel(add, M, xAt(.42), deckY(.42), .4, 1.9); gun(add, M, xAt(.8), deckY(.8), 1, 1); gun(add, M, xAt(.7), deckY(.7) + .4, .85, 1); gun(add, M, xAt(.13), deckY(.13), 1, -1); box(add, M, xAt(.27), deckY(.27) + .3, 0, 1.6, .55, .8, M.iron); } },
-    cruiser: { L: 19, W: 2.3, D: 1.5, H0: 1.25, stern: 0, bow: 1, hull: "#5F6973", lookY: 3.8, masts: [{ u: .62, h: 9.5, sails: [] }, { u: .36, h: 7.5, sails: [] }],
+    cruiser: { wm: { u: .93, s: 1.1 }, L: 19, W: 2.3, D: 1.5, H0: 1.25, stern: 0, bow: 1, hull: "#5F6973", lookY: 3.8, masts: [{ u: .62, h: 9.5, sails: [] }, { u: .36, h: 7.5, sails: [] }],
       build({ add, M, xAt, deckY }) { const y = deckY(.55); box(add, M, xAt(.54), y + .7, 0, 5.4, 1.4, 2.8, M.steel); box(add, M, xAt(.62), y + 2, 0, 2.4, 1.2, 2.1, M.steel); box(add, M, xAt(.64), y + 3, 0, 1.3, .8, 1.6, M.iron); funnel(add, M, xAt(.47), y + 1.4, .5, 2.2); funnel(add, M, xAt(.4), y + 1.4, .5, 2); gun(add, M, xAt(.84), deckY(.84), 1.4, 1); gun(add, M, xAt(.75), deckY(.75) + .5, 1.3, 1); gun(add, M, xAt(.2), deckY(.2) + .5, 1.3, -1); gun(add, M, xAt(.1), deckY(.1), 1.4, -1); } },
-    carrier: { L: 26, W: 3.3, D: 1.9, H0: 1.7, stern: 0, bow: .7, hull: "#555E67", lookY: 4.6, masts: [{ u: .6, h: 11, sails: [] }],
+    carrier: { wm: { u: .9, s: 2, y: .85, z: 1.5 }, L: 26, W: 3.3, D: 1.9, H0: 1.7, stern: 0, bow: .7, hull: "#555E67", lookY: 4.6, masts: [{ u: .6, h: 11, sails: [] }],
       build({ add, M, xAt, deckY, L }) { const y = deckY(.5) + .7; box(add, M, xAt(.5), y, 0, L * .98, .3, 6.9, M.deck2);
         box(add, M, xAt(.6), y + 1.2, 2.5, 3.4, 2.2, 1.2, M.steel); box(add, M, xAt(.62), y + 2.75, 2.5, 2, .9, 1, M.iron);
         for (const u of [.2, .42, .78]) box(add, M, xAt(u), y + .16, 0, L * .2, .012, .1, M.paint);
@@ -132,13 +161,14 @@ function build() {
     sailMain: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
     sailPlain: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
     flag: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
+    warhead: new T.MeshStandardMaterial({ color: 0xB3362B, roughness: .5 }),
     steel: new T.MeshStandardMaterial({ color: 0x8A949E, roughness: .5, metalness: .45 }),
     deck2: new T.MeshStandardMaterial({ color: 0x3A4046, roughness: .85 }),
     paint: new T.MeshStandardMaterial({ color: 0xF2F2E8, roughness: .8 }),
     rope: new T.LineBasicMaterial({ color: 0x2B2118, transparent: true, opacity: .75 })
   };
   /* ----- ships: one spec per class in SHIPS below; each is built once on first use ----- */
-  let ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, shipSpec, shipK = 1;
+  let ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, shipSpec, shipK = 1;
   function makeShip(spec) {
   const ship = new T.Group(); ship.visible = false; scene.add(ship);
   const { L, W, D, H0 } = spec;
@@ -286,11 +316,12 @@ function build() {
       const n = Math.round(a.distanceTo(b) / .45); for (let k = 1; k < n; k++) add(new T.Mesh(new T.SphereGeometry(.075, 8, 6), bulbs[k % 4]), A.fairylights).position.copy(curve.getPoint(k / n)); } }
 
   if (spec.build) spec.build({ T, M, add, xAt, deckY, sheer, halfW, L });
-  return { ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt };
+  const mount = new T.Group(), wm = spec.wm; mount.position.set(xAt(wm.u), deckY(wm.u) + (wm.y || 0), wm.z || 0); mount.scale.setScalar(wm.s); ship.add(mount); mount.userData.models = {};
+  return { ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount };
   }
   const built = {};
   function useShip(id) { const spec = shipSpecs(window.THREE)[id] || shipSpecs(window.THREE).dinghy, b = built[id] || (built[id] = makeShip(spec));
-    if (ship) ship.visible = false; ({ ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt } = b); ship.visible = true; shipSpec = spec; shipK = Math.max(.72, spec.L / 11);
+    if (ship) ship.visible = false; ({ ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount } = b); ship.visible = true; shipSpec = spec; shipK = Math.max(.72, spec.L / 11);
     Object.assign(sun.shadow.camera, { left: -12 * shipK, right: 12 * shipK, top: 14 * shipK, bottom: -6 * shipK, far: 80 + 40 * shipK }); sun.shadow.camera.updateProjectionMatrix(); }
   useShip("dinghy");
   /* ----- wake behind the stern (the "wake" decoration changes its look) ----- */
@@ -311,6 +342,7 @@ function build() {
 
   /* ----- camera: drag to orbit, pinch or wheel to zoom, buttons for fixed views ----- */
   const target = new T.Vector3(0, 3.2, 0), cam = { th: .85, ph: 1.22, r: 21 };
+  let focusOn = false, focusK = 0, look3D = {};
   let auto = true, tween = null;
   const cv = renderer.domElement, pts = new Map(); let pinch0 = 0, r0 = 0;
   const viewsEl = stage.querySelector(".s3d-views");
@@ -346,7 +378,7 @@ function build() {
   // look: see parseLook in worker.js; sailHex/flagHex are the free colours already turned into hex
   function setLook(look = {}, sailHex = "#EFE4C8", flagHex = sailHex, shipId = "dinghy") {
     const key = JSON.stringify([look, sailHex, flagHex, shipId]); if (key === lookKey) return; lookKey = key;
-    useShip(shipId);
+    useShip(shipId); look3D = look;
     M.hull.color.set(HULL[look.hull] || shipSpec.hull || HULL.wood); M.hull.map = look.hull || !shipSpec.sailed ? null : plankTex;
     M.hull.metalness = look.hull === "gold" ? .75 : .05; M.hull.roughness = look.hull === "gold" ? .3 : .7; M.hull.needsUpdate = true;
     M.trim.color.set(TRIM[look.trim] || TRIM.gold);
@@ -357,6 +389,8 @@ function build() {
     M.sailMain.needsUpdate = M.sailPlain.needsUpdate = M.flag.needsUpdate = true;
     const on = new Set(look.att || []); for (const k in A) A[k].visible = on.has(k);
     for (const k in H) H[k].visible = look.head === k;
+    const wm = mount.userData.models; for (const k in wm) wm[k].visible = false;
+    if (look.weapon) { if (!wm[look.weapon]) mount.add(wm[look.weapon] = weaponModel(T, M, look.weapon)); wm[look.weapon].visible = true; }
     wakeKind = look.wake || ""; spread = wakeKind === "splash" ? 3.6 : 2.4;
     foamMat.map = wakeKind === "hearts" ? heartTex : wakeKind === "petals" ? petalTex : glowTex;
     foamMat.size = { splash: .8, bubble: .9, sparkle: .5, rainbow: .7, hearts: .7, petals: .55 }[wakeKind] || .55; foamMat.blending = wakeKind === "sparkle" ? T.AdditiveBlending : T.NormalBlending; foamMat.needsUpdate = true;
@@ -388,7 +422,9 @@ function build() {
       for (const key of ["th", "ph", "r"]) cam[key] = tween.from[key] + (tween.to[key] - tween.from[key]) * e; if (k >= 1) tween = null; }
     else if (auto && !reduced) cam.th += dt * .18;
     // step back on tall, narrow screens so the whole ship still fits across
-    const r = cam.r * shipK * Math.max(1, .95 / camera.aspect), s = Math.sin(cam.ph); target.y = shipSpec.lookY ?? 3.2;
+    focusK += ((focusOn && look3D.weapon ? 1 : 0) - focusK) * Math.min(1, dt * 4); // ease in on the mounted weapon while the weapon list is open
+    const r = cam.r * shipK * Math.max(1, .95 / camera.aspect) * (1 - .62 * focusK), s = Math.sin(cam.ph), wx = mount.position.x, wy = mount.position.y + .6 * mount.scale.x + ship.position.y, wz = mount.position.z;
+    target.set(wx * focusK, (shipSpec.lookY ?? 3.2) * (1 - focusK) + wy * focusK, wz * focusK);
     camera.position.set(target.x + r * s * Math.cos(cam.th), target.y + r * Math.cos(cam.ph), target.z + r * s * Math.sin(cam.th)); camera.lookAt(target);
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
@@ -396,7 +432,7 @@ function build() {
   function start() { if (running || !stage.isConnected) return; running = true; clock.getDelta(); requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) start(); });
   return {
-    el: stage, setLook,
+    el: stage, setLook, focusWeapon(on) { focusOn = !!on; },
     mount(host) { if (stage.parentNode !== host) host.appendChild(stage); start(); },
     view(k) { viewsEl.querySelector(`[data-view="${k}"]`)?.click(); }
   };

@@ -40,12 +40,12 @@ const DECO = [
   ["wake", "splash", "물보라", 50], ["wake", "sparkle", "반짝이 물결", 100], ["wake", "bubble", "비눗방울", 100], ["wake", "hearts", "하트 물결", 100], ["wake", "petals", "꽃잎 물결", 100], ["wake", "rainbow", "무지개 물결", 200],
   ["tag", "pink", "분홍 이름표", 60], ["tag", "lavender", "라벤더 이름표", 60], ["tag", "gold", "금빛 이름표", 60], ["tag", "rainbow", "무지개 이름표", 150]
 ].map(([slot, id, name, price]) => ({ key: `${slot}.${id}`, slot, id, name, price, rarity: price <= 40 ? "보통" : price <= 100 ? "희귀" : "전설" }));
-// Weapons only come from mini-games. One is mounted at a time and adds to battle power; fx colours the shot.
+// Weapons only come from mini-games. One is mounted at a time and adds to battle power; kind picks the shot seen in battle.
 const WEAPONS = [
-  ["water", "물대포", "보통", 5, "#7CC7F2"], ["harpoon", "작살 발사기", "보통", 6, "#C9D3DC"], ["bow", "대형 쇠뇌", "보통", 7, "#B98A5A"],
-  ["twin", "쌍둥이 대포", "희귀", 14, "#F2B134"], ["fire", "불꽃 대포", "희귀", 16, "#F0643C"], ["ice", "얼음 대포", "희귀", 16, "#A8E6FF"],
-  ["thunder", "번개 대포", "전설", 30, "#FFE45C"], ["rainbow", "무지개 포", "전설", 32, "#F28AB0"], ["dragon", "용의 숨결", "전설", 36, "#FF4D2E"]
-].map(([id, name, rarity, power, fx]) => ({ key: `weapon.${id}`, slot: "weapon", id, name, price: 0, rarity, power, fx, dropOnly: true }));
+  ["swivel", "선회포", "보통", 5, "cannon"], ["pdr12", "12파운드 함포", "보통", 6, "cannon"], ["mg", "기관총", "보통", 7, "gun"],
+  ["pdr32", "32파운드 함포", "희귀", 14, "cannon"], ["ac40", "40mm 기관포", "희귀", 16, "gun"], ["torpedo", "어뢰 발사관", "희귀", 16, "torpedo"],
+  ["gun127", "127mm 함포", "전설", 30, "turret"], ["asm", "대함 미사일", "전설", 32, "missile"], ["cruise", "순항 미사일", "전설", 36, "missile"]
+].map(([id, name, rarity, power, kind]) => ({ key: `weapon.${id}`, slot: "weapon", id, name, price: 0, rarity, power, kind, dropOnly: true }));
 const ITEMS = [...DECO, ...WEAPONS];
 const itemOf = k => ITEMS.find(d => d.key === k);
 function parseLook(s) {
