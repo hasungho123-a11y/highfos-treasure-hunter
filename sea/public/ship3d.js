@@ -56,7 +56,7 @@ function shipSpecs(T) {
   const cyl = (add, x, y, z, r1, r2, h, m) => { const c = add(new T.Mesh(new T.CylinderGeometry(r1, r2, h, 14), m)); c.position.set(x, y, z); return c; };
   const gun = (add, M, x, y, s = 1, dir = 1) => { cyl(add, x, y + .14 * s, 0, .42 * s, .5 * s, .28 * s, M.steel);
     for (const z of [-.11 * s, .11 * s]) { const b = cyl(add, x + dir * .62 * s, y + .2 * s, z, .05 * s, .06 * s, .95 * s, M.iron); b.rotation.z = dir * -Math.PI / 2; } };
-  const funnel = (add, M, x, y, r, h) => { cyl(add, x, y + h / 2, 0, r, r * 1.08, h, M.iron); cyl(add, x, y + h + .03, 0, r * 1.06, r * 1.06, .1, M.trim); };
+  const funnel = (add, M, x, y, r, h) => { add.stacks.push(new T.Vector3(x, y + h + .1, 0)); cyl(add, x, y + h / 2, 0, r, r * 1.08, h, M.iron); cyl(add, x, y + h + .03, 0, r * 1.06, r * 1.06, .1, M.trim); };
   const plane = (add, M, x, y, z, s) => { box(add, M, x, y + .1 * s, z, 1.3 * s, .14 * s, .18 * s, M.steel); box(add, M, x + .05 * s, y + .1 * s, z, .34 * s, .05 * s, 1.15 * s, M.steel); box(add, M, x - .55 * s, y + .24 * s, z, .22 * s, .26 * s, .05 * s, M.steel); };
   return shipSpecs.c = {
     dinghy: { wm: { u: .76, s: .42 }, L: 5.2, W: .95, D: .6, H0: .6, stern: .12, bow: .25, sailed: true, lookY: 2.1, masts: [{ u: .52, h: 4.6, sails: [[2, 2.6, 1]] }] },
@@ -67,10 +67,10 @@ function shipSpecs(T) {
       build({ add, M, xAt, deckY }) { const y = deckY(.45); box(add, M, xAt(.45), y + .6, 0, 5, 1.2, 2.7, M.steel); funnel(add, M, xAt(.5), y + 1.2, .36, 2.3); funnel(add, M, xAt(.38), y + 1.2, .36, 2.3); gun(add, M, xAt(.8), deckY(.8), 1.1, 1); gun(add, M, xAt(.14), deckY(.14), 1.1, -1); } },
     destroyer: { wm: { u: .9, s: .95 }, L: 15, W: 1.75, D: 1.2, H0: 1, stern: 0, bow: .9, hull: "#6A737C", lookY: 2.8, masts: [{ u: .58, h: 7, sails: [] }],
       build({ add, M, xAt, deckY }) { const y = deckY(.55); box(add, M, xAt(.56), y + .55, 0, 3, 1.1, 2, M.steel); box(add, M, xAt(.6), y + 1.5, 0, 1.5, .8, 1.5, M.steel); funnel(add, M, xAt(.42), deckY(.42), .4, 1.9); gun(add, M, xAt(.8), deckY(.8), 1, 1); gun(add, M, xAt(.7), deckY(.7) + .4, .85, 1); gun(add, M, xAt(.13), deckY(.13), 1, -1); box(add, M, xAt(.27), deckY(.27) + .3, 0, 1.6, .55, .8, M.iron); } },
-    cruiser: { wm: { u: .93, s: 1.1 }, L: 19, W: 2.3, D: 1.5, H0: 1.25, stern: 0, bow: 1, hull: "#5F6973", lookY: 3.8, masts: [{ u: .62, h: 9.5, sails: [] }, { u: .36, h: 7.5, sails: [] }],
+    cruiser: { air: { heli: [.08, 3, 0, 1.2], drone: [.9, 5, 0, 1.1] }, wm: { u: .93, s: 1.1 }, L: 19, W: 2.3, D: 1.5, H0: 1.25, stern: 0, bow: 1, hull: "#5F6973", lookY: 3.8, masts: [{ u: .62, h: 9.5, sails: [] }, { u: .36, h: 7.5, sails: [] }],
       build({ add, M, xAt, deckY }) { const y = deckY(.55); box(add, M, xAt(.54), y + .7, 0, 5.4, 1.4, 2.8, M.steel); box(add, M, xAt(.62), y + 2, 0, 2.4, 1.2, 2.1, M.steel); box(add, M, xAt(.64), y + 3, 0, 1.3, .8, 1.6, M.iron); funnel(add, M, xAt(.47), y + 1.4, .5, 2.2); funnel(add, M, xAt(.4), y + 1.4, .5, 2); gun(add, M, xAt(.84), deckY(.84), 1.4, 1); gun(add, M, xAt(.75), deckY(.75) + .5, 1.3, 1); gun(add, M, xAt(.2), deckY(.2) + .5, 1.3, -1); gun(add, M, xAt(.1), deckY(.1), 1.4, -1); } },
-    carrier: { wm: { u: .9, s: 2, y: .85, z: 1.5 }, L: 26, W: 3.3, D: 1.9, H0: 1.7, stern: 0, bow: .7, hull: "#555E67", lookY: 4.6, masts: [{ u: .6, h: 11, sails: [] }],
-      build({ add, M, xAt, deckY, L }) { const y = deckY(.5) + .7; box(add, M, xAt(.5), y, 0, L * .98, .3, 6.9, M.deck2);
+    carrier: { air: { heli: [.22, 4, 1.6, 1.7], drone: [.8, 7.5, 0, 1.6], vtol: [.9, 3.6, -1.6, 1.5], fighter: [.32, 8, 0, 1.7], awacs: [.55, 6.2, -2.2, 2] }, wm: { u: .9, s: 2, y: .85, z: 1.5 }, L: 26, W: 3.3, D: 1.9, H0: 1.7, stern: 0, bow: .7, hull: "#555E67", lookY: 4.6, masts: [{ u: .6, h: 11, sails: [] }],
+      build({ add, M, xAt, deckY, L }) { const y = deckY(.5) + .7; add.stacks.push(new T.Vector3(xAt(.62), y + 3.3, 2.5)); box(add, M, xAt(.5), y, 0, L * .98, .3, 6.9, M.deck2);
         box(add, M, xAt(.6), y + 1.2, 2.5, 3.4, 2.2, 1.2, M.steel); box(add, M, xAt(.62), y + 2.75, 2.5, 2, .9, 1, M.iron);
         for (const u of [.2, .42, .78]) box(add, M, xAt(u), y + .16, 0, L * .2, .012, .1, M.paint);
         box(add, M, xAt(.5), y + .16, -1.2, L * .85, .012, .12, M.paint);
@@ -172,7 +172,15 @@ function build() {
     rope: new T.LineBasicMaterial({ color: 0x2B2118, transparent: true, opacity: .75 })
   };
   /* ----- ships: one spec per class in SHIPS below; each is built once on first use ----- */
-  let ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel, shipSpec, shipK = 1;
+  let ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel, rotors, stacks, shipSpec, shipK = 1;
+  const AIRCRAFT = ["heli", "drone", "vtol", "fighter", "awacs"];
+  // real ship camouflage painted over the hull, as a repeating tile (see CAMO in voyage.js)
+  const camoTex = {};
+  function camoTexture(id) {
+    if (camoTex[id]) return camoTex[id];
+    const c = V.CAMO[id], t = canvasTex(256, 256, (g, w) => { g.fillStyle = c.bg; g.fillRect(0, 0, w, w); g.scale(w / 100, w / 100); for (const [f, d] of c.p) { g.fillStyle = f; g.fill(new Path2D(d)); } });
+    t.wrapS = t.wrapT = T.RepeatWrapping; return camoTex[id] = t;
+  }
   function makeShip(spec) {
   const ship = new T.Group(); ship.visible = false; scene.add(ship);
   const { L, W, D, H0 } = spec;
@@ -182,6 +190,7 @@ function build() {
   const xAt = u => -L / 2 + u * L, deckY = u => sheer(u) - .34;
   function sideP(u, drop, side = 1) { const top = sheer(u), d = depth(u), s = Math.min(1, drop / (top + d)), a = Math.asin(s); return new T.Vector3(xAt(u), top - drop, side * halfW(u) * Math.cos(a) * (.82 + .18 * (1 - s))); }
   const add = (mesh, parent = ship) => { mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh; };
+  add.stacks = []; // funnel tops, where coloured smoke comes out
   (function hull() {
     const NS = 48, NC = 18, pos = [], uv = [], idx = [];
     for (let i = 0; i <= NS; i++) { const u = i / NS, top = sheer(u), d = depth(u), w = halfW(u);
@@ -319,6 +328,20 @@ function build() {
       A.fairylights.add(new T.Mesh(new T.TubeGeometry(curve, 20, .012, 4, false), M.rope));
       const n = Math.round(a.distanceTo(b) / .45); for (let k = 1; k < n; k++) add(new T.Mesh(new T.SphereGeometry(.075, 8, 6), bulbs[k % 4]), A.fairylights).position.copy(curve.getPoint(k / n)); } }
 
+  /* ----- aircraft over the larger warships (ids match "att" items with group "air"); spec.air gives [u along the ship, height above the deck, z, size] ----- */
+  const rotors = [];
+  { const navy = mat(0x2F4A5F), steel = mat(0x7F90A0), dark = mat(0x3E4A55), light = mat(0xAEB8C2);
+    const part = (g, geo, m, x = 0, y = 0, z = 0) => { const p = add(new T.Mesh(geo, m), g); p.position.set(x, y, z); return p; }, bx = (w, h, d) => new T.BoxGeometry(w, h, d);
+    const jet = (g, x, y, z) => { const j = new T.Group(); j.position.set(x, y, z); g.add(j); part(j, bx(1.5, .16, .2), steel); part(j, new T.ConeGeometry(.1, .4, 8), steel, .92).rotation.z = -Math.PI / 2; part(j, bx(.5, .05, 1.3), steel, -.05); part(j, bx(.22, .32, .04), dark, -.65, .2); part(j, bx(.25, .05, .5), steel, -.65); };
+    const models = {
+      heli(g) { part(g, new T.SphereGeometry(.45, 12, 10), navy).scale.set(1.5, .85, .85); part(g, bx(1.3, .12, .12), navy, -1.1, .08); part(g, bx(.12, .4, .05), navy, -1.7, .24); part(g, bx(.22, .12, .22), dark, 0, .48);
+        for (const sx of [-.32, .32]) part(g, bx(.9, .05, .05), dark, 0, -.5, sx); rotors.push(part(g, bx(3, .03, .12), dark, 0, .58), part(g, bx(.12, .03, 3), dark, 0, .58)); },
+      drone(g) { part(g, bx(1.2, .14, .18), steel); part(g, bx(.3, .03, 2.2), light, .05, .06); part(g, bx(.2, .22, .03), dark, -.6, .12); },
+      vtol(g) { jet(g, 0, 0, 0); for (const z of [-.5, .5]) part(g, new T.CylinderGeometry(.14, .14, .3, 10), dark, .05, -.2, z); },
+      fighter(g) { jet(g, 0, 0, 0); jet(g, -1.8, -.1, 1.5); jet(g, -1.8, -.1, -1.5); },
+      awacs(g) { part(g, bx(2.2, .28, .32), light); part(g, bx(.5, .06, 3), light, 0, .02); part(g, bx(.28, .42, .05), light, -1.05, .28); part(g, new T.CylinderGeometry(.62, .62, .1, 18), dark, -.2, .46); part(g, bx(.08, .22, .08), dark, -.2, .3); }
+    };
+    for (const [id, [u, up, z, size]] of Object.entries(spec.air || {})) { grp(id); const g = new T.Group(); g.position.set(xAt(u), deckY(u) + up, z); g.scale.setScalar(size); A[id].add(g); models[id](g); } }
   if (spec.build) spec.build({ T, M, add, xAt, deckY, sheer, halfW, L });
   const mount = new T.Group(), wm = spec.wm; mount.position.set(xAt(wm.u), deckY(wm.u) + (wm.y || 0), wm.z || 0); mount.scale.setScalar(wm.s); ship.add(mount); mount.userData.models = {};
   // ships without sails carry the kid's photo as a painting that follows the curve of each hull side
@@ -331,11 +354,11 @@ function build() {
         if (i < NX && j < NY) { const c = i * (NY + 1) + j, d = c + NY + 1; idx.push(c, c + 1, d, d, c + 1, d + 1); } }
       const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new T.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
       photoPanel.add(new T.Mesh(g, M.hullPhoto)); } }
-  return { ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel };
+  return { ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel, rotors, stacks: add.stacks };
   }
   const built = {};
   function useShip(id) { const spec = shipSpecs(window.THREE)[id] || shipSpecs(window.THREE).dinghy, b = built[id] || (built[id] = makeShip(spec));
-    if (ship) ship.visible = false; ({ ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel } = b); ship.visible = true; shipSpec = spec; shipK = Math.max(.72, spec.L / 11);
+    if (ship) ship.visible = false; ({ ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel, rotors, stacks } = b); ship.visible = true; shipSpec = spec; shipK = Math.max(.72, spec.L / 11);
     Object.assign(sun.shadow.camera, { left: -12 * shipK, right: 12 * shipK, top: 14 * shipK, bottom: -6 * shipK, far: 80 + 40 * shipK }); sun.shadow.camera.updateProjectionMatrix(); }
   useShip("dinghy");
   /* ----- wake behind the stern (the "wake" decoration changes its look) ----- */
@@ -353,6 +376,12 @@ function build() {
     else if (wakeKind === "hearts") tmpC.set(["#F28AB0", "#F7A8C4", "#FF6F91"][i % 3]); else if (wakeKind === "petals") tmpC.set(["#F7C6D9", "#FFFFFF", "#F28AB0"][i % 3]); else tmpC.set("#FFFFFF");
     foamCol[i * 3] = tmpC.r; foamCol[i * 3 + 1] = tmpC.g; foamCol[i * 3 + 2] = tmpC.b; }
   for (let i = 0; i < foamN; i++) { resetFoam(i); foamAge[i] = Math.random() * 3; }
+  /* ----- coloured funnel smoke; the points live inside the ship so they ride the waves with it ----- */
+  const smokeN = 90, smokeGeo = new T.BufferGeometry(), smokePos = new Float32Array(smokeN * 3), smokeCol = new Float32Array(smokeN * 3), smokeAge = new Float32Array(smokeN);
+  smokeGeo.setAttribute("position", new T.BufferAttribute(smokePos, 3)); smokeGeo.setAttribute("color", new T.BufferAttribute(smokeCol, 3));
+  const smokeMat = new T.PointsMaterial({ map: glowTex, size: 1.1, transparent: true, opacity: .75, depthWrite: false, vertexColors: true }), smokeObj = new T.Points(smokeGeo, smokeMat); smokeObj.visible = false; smokeObj.frustumCulled = false;
+  let smokeColors = [];
+  function resetSmoke(i) { const p = stacks[i % stacks.length]; smokeAge[i] = 0; smokePos[i * 3] = p.x; smokePos[i * 3 + 1] = p.y; smokePos[i * 3 + 2] = p.z; tmpC.set(smokeColors[i % smokeColors.length]); smokeCol[i * 3] = tmpC.r; smokeCol[i * 3 + 1] = tmpC.g; smokeCol[i * 3 + 2] = tmpC.b; }
 
   /* ----- camera: drag to orbit, pinch or wheel to zoom, buttons for fixed views ----- */
   const target = new T.Vector3(0, 3.2, 0), cam = { th: .85, ph: 1.22, r: 21 };
@@ -393,8 +422,11 @@ function build() {
   function setLook(look = {}, sailHex = "#EFE4C8", flagHex = sailHex, shipId = "dinghy") {
     const key = JSON.stringify([look, sailHex, flagHex, shipId]); if (key === lookKey) return; lookKey = key;
     useShip(shipId); look3D = look;
-    M.hull.color.set(HULL[look.hull] || shipSpec.hull || HULL.wood); M.hull.map = look.hull || !shipSpec.sailed ? null : plankTex;
-    M.hull.metalness = look.hull === "gold" ? .75 : .05; M.hull.roughness = look.hull === "gold" ? .3 : .7; M.hull.needsUpdate = true;
+    const camo = !shipSpec.sailed && V.CAMO[look.camo] ? look.camo : "", goldHull = look.hull === "gold" && !camo;
+    M.hull.color.set(camo ? "#FFFFFF" : HULL[look.hull] || shipSpec.hull || HULL.wood); M.hull.map = camo ? camoTexture(camo) : look.hull || !shipSpec.sailed ? null : plankTex;
+    M.hull.metalness = goldHull ? .75 : .05; M.hull.roughness = goldHull ? .3 : .7; M.hull.needsUpdate = true;
+    smokeColors = (!shipSpec.sailed && V.SMOKE[look.smoke]) || []; smokeObj.visible = !!smokeColors.length && !!stacks.length;
+    if (smokeObj.visible) { ship.add(smokeObj); smokeMat.size = 1.5 * shipK; for (let i = 0; i < smokeN; i++) { resetSmoke(i); smokeAge[i] = -Math.random() * 3; smokePos[i * 3 + 1] = -100; } }
     M.trim.color.set(TRIM[look.trim] || TRIM.gold);
     for (const m of [M.sailMain, M.sailPlain, M.flag]) m.map?.dispose();
     const p = look.pattern || "none";
@@ -406,8 +438,9 @@ function build() {
     if (photo) { const im = new Image(); im.onload = () => { if (lookKey !== key) return;
       const tex = canvasTex(512, 426, (g, w, h) => { g.drawImage(im, 0, 0, w, h); g.strokeStyle = "rgba(0,0,0,.22)"; g.lineWidth = 6; g.strokeRect(0, 0, w, h); });
       const mat = shipSpec.sailed ? M.sailMain : M.hullPhoto; mat.map?.dispose(); mat.map = tex; mat.needsUpdate = true; if (!shipSpec.sailed) photoPanel.visible = true; }; im.src = photo; }
-    const on = new Set(look.att || []); for (const k in A) A[k].visible = on.has(k);
-    for (const k in H) H[k].visible = look.head === k;
+    // hand-placed sailing-ship attachments sit under the raised decks of steel ships, so those ships show only aircraft
+    const on = new Set((look.att || []).filter(k => shipSpec.sailed || AIRCRAFT.includes(k))); for (const k in A) A[k].visible = on.has(k);
+    for (const k in H) H[k].visible = look.head === k && shipSpec.sailed;
     const wm = mount.userData.models; for (const k in wm) wm[k].visible = false;
     if (look.weapon) { if (!wm[look.weapon]) mount.add(wm[look.weapon] = weaponModel(T, M, look.weapon)); wm[look.weapon].visible = true; }
     wakeKind = look.wake || ""; spread = wakeKind === "splash" ? 3.6 : 2.4;
@@ -437,6 +470,10 @@ function build() {
     for (let i = 0; i < foamN; i++) { foamAge[i] += dt; const k = i * 3; foamPos[k] -= dt * 2.4; foamPos[k + 2] *= 1 + dt * .35;
       foamPos[k + 1] = wave(foamPos[k] + sail, foamPos[k + 2], t) + (wakeKind === "bubble" ? .08 + foamAge[i] * .25 : .08); if (foamAge[i] > 3) resetFoam(i); }
     foamGeo.attributes.position.needsUpdate = true;
+    for (const r of rotors) r.rotation.y = t * 22;
+    if (smokeObj.visible) { for (let i = 0; i < smokeN; i++) { smokeAge[i] += dt; if (smokeAge[i] < 0) continue; if (smokeAge[i] > 3 || smokePos[i * 3 + 1] < -50) { const a = Math.max(0, smokeAge[i] - 3); resetSmoke(i); smokeAge[i] = a; }
+        // every puff keeps its own speed and drift, so the smoke spreads out into a cloud instead of a straight line
+        const k = i * 3; smokePos[k] -= dt * (.9 + (i % 5) * .22) * shipK; smokePos[k + 1] += dt * (.7 + (i % 7) * .14) * shipK; smokePos[k + 2] += Math.sin(i * 1.7) * dt * .75 * shipK; } smokeGeo.attributes.position.needsUpdate = true; }
     if (tween) { const k = Math.min(1, (performance.now() - tween.t0) / 800), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       for (const key of ["th", "ph", "r"]) cam[key] = tween.from[key] + (tween.to[key] - tween.from[key]) * e; if (k >= 1) tween = null; }
     else if (auto && !reduced) cam.th += dt * .18;

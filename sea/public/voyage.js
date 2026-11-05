@@ -25,6 +25,20 @@ function stopPts(L) {
 }
 
 /* ---------- ship decorations (names and prices come from the server) ---------- */
+// camouflage for ships without sails: shapes on a 100×100 tile, used by the 2D patterns below and the 3D hull texture
+const cells = list => list.map(([x, y]) => `M${x} ${y} h10 v10 h-10 Z`).join(" ");
+const CAMO = {
+  ocean: { bg: "#2F5F86", p: [["#234B6C", "M0 20 L35 8 L60 28 L38 48 L0 40 Z M62 62 L100 50 V92 L70 100 Z"], ["#5389B0", "M55 0 H100 V25 L72 34 Z M5 66 L40 60 L48 88 L12 100 Z"]] },
+  splinter: { bg: "#8893A0", p: [["#5B6670", "M0 0 L42 0 L18 46 L0 38 Z M48 48 L100 30 V70 L62 100 L40 80 Z"], ["#B4BEC6", "M50 0 H100 V18 L60 34 Z M0 60 L32 52 L26 100 H0 Z"]] },
+  dazzle: { bg: "#ECECE4", p: [["#1E2329", "M0 0 H28 L0 46 Z M46 0 H70 L18 100 H0 V86 Z M88 0 H100 V48 L62 100 H40 Z"], ["#5F7A96", "M100 62 V100 H76 Z"]] },
+  digital: { bg: "#6F7B85", p: [["#4F5A64", cells([[0, 0], [10, 0], [10, 10], [50, 10], [60, 10], [60, 20], [30, 40], [40, 40], [40, 50], [80, 50], [90, 50], [90, 60], [10, 70], [20, 70], [20, 80], [60, 80], [70, 80]])], ["#93A0AA", cells([[30, 0], [30, 10], [80, 20], [90, 20], [0, 40], [10, 40], [60, 50], [60, 60], [40, 80], [40, 90], [80, 80], [0, 90]])]] },
+  pink: { bg: "#F2A7C3", p: [["#E3749F", "M0 15 L30 5 L52 25 L30 50 L0 44 Z M60 60 L100 48 V90 L72 100 Z"], ["#FBD6E4", "M58 0 H100 V22 L72 36 Z M6 68 L38 60 L46 90 L14 100 Z"]] },
+  pastel: { bg: "#BFD8F2", p: [["#D8C6F2", "M0 15 L30 5 L52 25 L30 50 L0 44 Z"], ["#F8D3E0", "M60 60 L100 48 V90 L72 100 Z"], ["#C8EBD9", "M58 0 H100 V22 L72 36 Z M6 68 L38 60 L46 90 L14 100 Z"]] },
+  stealth: { bg: "#454A50", p: [["#383C41", "M0 30 L50 10 L100 40 V60 L50 30 L0 52 Z"], ["#54595F", "M0 80 L50 62 L100 90 V100 H0 Z"]] }
+};
+const camoDefs = Object.entries(CAMO).map(([id, c]) => `<pattern id="dk-c-${id}" width="12" height="12" patternUnits="userSpaceOnUse" viewBox="0 0 100 100"><rect width="100" height="100" fill="${c.bg}"/>${c.p.map(([f, d]) => `<path d="${d}" fill="${f}"/>`).join("")}</pattern>`).join("");
+// funnel smoke; rainbow cycles through these colours
+const SMOKE = { white: ["#F2F2F2"], pink: ["#F7A8C4"], lavender: ["#C9B6F2"], sky: ["#A8D8F7"], mint: ["#A8E6CF"], rainbow: ["#F0564A", "#F59B3A", "#F4D03F", "#5DBB63", "#3D8BD9", "#8E5CC7"] };
 // shared gradients and patterns, defined once so every boat can point at them
 const decoDefs = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 decoDefs.setAttribute("width", "0"); decoDefs.setAttribute("height", "0"); decoDefs.setAttribute("aria-hidden", "true"); decoDefs.style.position = "absolute";
@@ -37,7 +51,7 @@ decoDefs.innerHTML = `<defs>
   <pattern id="dk-check" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="#fff" opacity=".45"/><rect x="2" y="2" width="2" height="2" fill="#fff" opacity=".45"/></pattern>
   <pattern id="dk-hearts" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M2.5 4 C.6 2.8 .9 1 2 1 C2.3 1 2.5 1.4 2.5 1.4 C2.5 1.4 2.7 1 3 1 C4.1 1 4.4 2.8 2.5 4 Z" fill="#fff" opacity=".8"/></pattern>
   <pattern id="dk-flowers" width="5" height="5" patternUnits="userSpaceOnUse"><g fill="#fff" opacity=".85"><circle cx="2.5" cy="1.6" r=".7"/><circle cx="3.4" cy="2.5" r=".7"/><circle cx="2.5" cy="3.4" r=".7"/><circle cx="1.6" cy="2.5" r=".7"/></g><circle cx="2.5" cy="2.5" r=".45" fill="#F4D03F"/></pattern>
-  <pattern id="dk-starry" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M1.5 .6 L1.8 1.3 L2.5 1.5 L1.8 1.7 L1.5 2.4 L1.2 1.7 L.5 1.5 L1.2 1.3 Z M4.5 3.6 L4.7 4.2 L5.3 4.4 L4.7 4.6 L4.5 5.2 L4.3 4.6 L3.7 4.4 L4.3 4.2 Z" fill="#FFF6C8"/></pattern></defs>`;
+  <pattern id="dk-starry" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M1.5 .6 L1.8 1.3 L2.5 1.5 L1.8 1.7 L1.5 2.4 L1.2 1.7 L.5 1.5 L1.2 1.3 Z M4.5 3.6 L4.7 4.2 L5.3 4.4 L4.7 4.6 L4.5 5.2 L4.3 4.6 L3.7 4.4 L4.3 4.2 Z" fill="#FFF6C8"/></pattern>${camoDefs}</defs>`;
 document.body.appendChild(decoDefs);
 const starPath = (cx, cy, R, r) => "M" + Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? r : R; return `${(cx + k * Math.cos(a)).toFixed(2)} ${(cy + k * Math.sin(a)).toFixed(2)}`; }).join(" L") + " Z";
 const circ = (cx, cy, r) => `M${cx - r} ${cy} a${r} ${r} 0 1 0 ${2 * r} 0 a${r} ${r} 0 1 0 ${-2 * r} 0 Z`;
@@ -102,6 +116,10 @@ const ATT = {
   cat: `<ellipse cx="45.4" cy="29.4" rx="1.5" ry="1.1" fill="#F2A65A"/><circle cx="46.6" cy="28.1" r=".85" fill="#F2A65A"/><path d="M46 27.6 L46.2 26.7 L46.6 27.4 Z M46.8 27.4 L47.3 26.7 L47.4 27.7 Z" fill="#F2A65A"/><path d="M44 29.4 Q43 28.2 43.6 27.4" stroke="#F2A65A" stroke-width=".45" fill="none"/>`,
   fairylights: `<path d="M31 2 Q46 12 58.4 21.9" stroke="#6B5A4A" stroke-width=".25" fill="none"/>` + [[34, 4.6], [37.5, 7], [41, 9.6], [44.5, 12.2], [48, 14.6], [51.5, 17], [55, 19.4]].map(([x, y], i) => `<circle cx="${x}" cy="${y}" r=".6" fill="${["#FFE27A", "#F7A8C4", "#A8D8F7", "#A8E6CF"][i % 4]}"/>`).join("")
 };
+// the same paint and attachments for the smaller sailing ships in app.js
+const sailPaint = (look, sailHex) => { const [fill] = SAIL_FILL[look.pattern] || [sailHex]; return [fill, SAIL_OVERLAY[look.pattern]]; };
+const attAbove = att => `${att.has("bunting") ? ATT.bunting : ""}${att.has("fairylights") ? ATT.fairylights : ""}${att.has("nest") ? ATT.nest : ""}${att.has("parrot") ? ATT.parrot : ""}${att.has("treasure") ? ATT.treasure : ""}${att.has("cat") ? ATT.cat : ""}${att.has("flowers") ? ATT.flowers : ""}${att.has("balloons") ? ATT.balloons : ""}`;
+const attOver = (att, look) => `${att.has("cannon") ? ATT.cannon : ""}${HEAD[look.head] || ""}${att.has("lantern") ? ATT.lantern : ""}${att.has("anchor") ? ATT.anchor : ""}${att.has("bowribbon") ? ATT.bowribbon : ""}`;
 // look.photo is an approved photo; look.photoSrc is the kid's own preview before asking
 const photoSrc = look => look && (look.photoSrc || (look.photo ? `/api/photo/${look.photo}` : ""));
 let clipSeq = 0;
@@ -119,11 +137,11 @@ function boatSVG(look = {}, sailIdx = 0) {
   <path d="M25 15.5 H37 M26 6 H36 M36 17.5 H46 M36.7 9.5 H45.3 M16.7 19 H25.3 M17.2 12 H24.8" stroke="#4E321E" stroke-width=".7"/>
   ${photo ? photoSVG(photo, 25, 15.5, 13.4, 10, SAIL_SHAPES[0]) : embSVG(look.se, 31.6, 20.6, 8.6, inkFor(clothBg), clothBg)}
   <path d="M31 .4 H38.6 V5.4 H31 Z" fill="${flagHex}"/>${embSVG(look.fe, 34.8, 2.9, 4.4, inkFor(flagHex), flagHex)}
-  ${att.has("bunting") ? ATT.bunting : ""}${att.has("fairylights") ? ATT.fairylights : ""}${att.has("nest") ? ATT.nest : ""}${att.has("parrot") ? ATT.parrot : ""}${att.has("treasure") ? ATT.treasure : ""}${att.has("cat") ? ATT.cat : ""}${att.has("flowers") ? ATT.flowers : ""}${att.has("balloons") ? ATT.balloons : ""}
+  ${attAbove(att)}
   <path d="M3 25.5 L15.5 26.5 L17.5 31.5 L49 30.6 L57 26.2 L53 38.6 Q33 44.6 12 41.6 L5 34.6 Z" fill="${hull}" ${["white", "lemon"].includes(look.hull) ? `stroke="#B9A47A" stroke-width=".6"` : ""}/>
   <path d="M4.4 28 L15.6 28.8 M6.2 34.6 L50.4 33.6 L55.2 30.4 M8 38 L51.4 37" stroke="${trim}" stroke-width="1.05" fill="none"/>
   <path d="M6 29.6 H8 M9.3 29.8 H11.3 M12.6 30 H14.4" stroke="#FFD27A" stroke-width="1.6"/>
-  ${att.has("cannon") ? ATT.cannon : ""}${HEAD[look.head] || ""}${att.has("lantern") ? ATT.lantern : ""}${att.has("anchor") ? ATT.anchor : ""}${att.has("bowribbon") ? ATT.bowribbon : ""}</g></svg>`;
+  ${attOver(att, look)}</g></svg>`;
 }
 const BOAT = boatSVG();
 // extra classes on the .ship wrapper for the wake effect and on the name tag
@@ -409,5 +427,5 @@ async function stageChests(list, who, opener) {
   return opened;
 }
 
-window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, boatSVG, wakeClass, tagClass, EMBLEMS, inkFor, embSVG, photoSrc, photoSVG, get running() { return !!FX.running; } };
+window.Voyage = { SAILS, sail, esc, dpos, voyageOf, isChest, stopPts, pct, mapHTML, placeShips, runVoyage, stageChests, skip, BOAT, boatSVG, wakeClass, tagClass, EMBLEMS, inkFor, embSVG, photoSrc, photoSVG, CAMO, SMOKE, TRIMS, sailPaint, attAbove, attOver, get running() { return !!FX.running; } };
 })();

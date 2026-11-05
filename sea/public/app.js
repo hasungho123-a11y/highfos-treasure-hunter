@@ -74,19 +74,38 @@ function shipPhoto(id, look) {
   const h = PHOTO_HULL[id]; if (!h) return "";
   return V.photoSVG(src, h[0], h[1], h[2], h[3], `M${h[0]} ${h[1]} h${h[2]} v${h[3]} h${-h[2]} Z`) + `<rect x="${h[0]}" y="${h[1]}" width="${h[2]}" height="${h[3]}" fill="none" stroke="#F4EFE6" stroke-width=".4"/>`;
 }
+// the small sailing ships reuse the galleon's attachments, moved and scaled onto their own hull: [x, y, scale, trim line]
+const SMALL_SHIP = { dinghy: [12.2, 13.6, .593, "M16 34.5 H44.4"], sloop: [5.6, 5.2, .815, "M10 33.5 L50.6 32.5"], brig: [1.1, -.4, .98, "M7 33.5 L54 32.5"] };
+const STACKS_2D = { ironclad: [[26.5, 12], [35.5, 14]], destroyer: [[34, 20]], cruiser: [[35, 14], [40, 15]], carrier: [[38, 15]] };
+const heli2D = (x, y) => `<g transform="translate(${x} ${y})"><ellipse rx="2.6" ry="1.3" fill="#2F4A5F"/><path d="M-2 0 L-6 -.6" stroke="#2F4A5F" stroke-width=".7"/><path d="M0 -1.3 V-1.8 M-4.4 -1.9 H4.4" stroke="#23262B" stroke-width=".4"/></g>`;
+const drone2D = (x, y) => `<g transform="translate(${x} ${y})"><path d="M-2.6 0 H2.4 L3 .3 L2 .7 H-2 Z" fill="#6B7884"/><path d="M-.6 .1 L-1.6 -.6 H.4 Z M-2.5 0 L-3.1 -1.1 H-2.2 L-1.8 0 Z" fill="#3E4A55"/></g>`;
+const jet2D = (x, y) => `<path transform="translate(${x} ${y})" d="M-3 0 L3 0 L4.2 -.4 L1 -.9 L-1.6 -.9 L-3 -2.4 L-3.6 -2.4 Z" fill="#7F90A0"/>`;
+const AIR_2D = {
+  cruiser: { heli: () => heli2D(7, 18), drone: () => drone2D(52, 12) },
+  carrier: { heli: () => heli2D(24, 19), drone: () => drone2D(52, 9), vtol: () => jet2D(54, 20), fighter: () => jet2D(6, 12) + jet2D(14, 9) + jet2D(14, 15), awacs: () => `<g transform="translate(24 7)"><path d="M-5 .8 H5 L6 0 L1 -.4 L-3.6 -.4 L-5 -2 H-5.6 Z" fill="#AEB8C2"/><ellipse cy="-1.5" rx="2.4" ry=".6" fill="#3E4A55"/></g>` }
+};
+// what the sailing and steel ships each add to the plain drawing
+function shipExtras2D(id, look) {
+  const small = SMALL_SHIP[id];
+  if (small) { const att = new Set(look.att || []), [x, y, k, line] = small; return `${look.trim ? `<path d="${line}" stroke="${V.TRIMS[look.trim]}" stroke-width=".9" fill="none"/>` : ""}<g transform="translate(${x} ${y}) scale(${k})">${V.attAbove(att)}${V.attOver(att, look)}</g>`; }
+  const smoke = V.SMOKE[look.smoke], puffs = smoke ? (STACKS_2D[id] || []).map(([x, y]) => [[0, 0, 1.7], [-1.6, -2.4, 2.1], [-3.8, -4.4, 2.5]].map(([dx, dy, r], i) => `<circle cx="${x + dx}" cy="${y - 1 + dy}" r="${r}" fill="${smoke[(Math.floor(x) + i) % smoke.length]}" opacity="${.9 - i * .2}"/>`).join("")).join("") : "";
+  const air = AIR_2D[id] ? (look.att || []).map(k => AIR_2D[id][k]?.() || "").join("") : "";
+  return puffs + air;
+}
 function shipSVG(id, look = {}, sailIdx = 0) {
   if (id === "galleon") return V.boatSVG(look, sailIdx).replace(/<\/g><\/svg>\s*$/, weaponOnShip(id, look) + "</g></svg>");
-  const s = sail(sailIdx), wood = HULLS[look.hull] || "#7A4A28", grey = HULLS[look.hull] || "#5F6973", m = "#4E321E", st = "#8A949E", ir = "#23262B";
+  const s = sail(sailIdx), camo = V.CAMO[look.camo] ? `url(#dk-c-${look.camo})` : "", wood = HULLS[look.hull] || "#7A4A28", grey = camo || HULLS[look.hull] || "#5F6973", m = "#4E321E", st = "#8A949E", ir = "#23262B";
+  const [cloth, overlay] = V.sailPaint(look, s), sl = (d, attrs = "") => `<path d="${d}" fill="${cloth}" ${attrs}/>${overlay ? `<path d="${d}" fill="${overlay}" ${attrs}/>` : ""}`;
   const parts = {
-    dinghy: `<path d="M30 33 V11" stroke="${m}" stroke-width="1.3"/><path d="M31 12 L31 31 L45 31 Z" fill="${s}"/><path d="M29 16 L29 31 L18 31 Z" fill="#FFF8EA"/>${flagSVG(30, 7, look, sailIdx)}<path d="M14 32 L46 32 L42 40 Q30 43 18 40 Z" fill="${wood}"/>`,
-    sloop: `<path d="M27 32 V6" stroke="${m}" stroke-width="1.4"/><path d="M21 9 H33 Q35 13 33 17 H21 Z M20 18 H34 Q36 24 34 30 H20 Z" fill="${s}"/><path d="M52 25 L28 8 L30 30 Z" fill="${s}" opacity=".85"/>${flagSVG(27, 2, look, sailIdx)}<path d="M8 31 L52 30 L47 40 Q30 44 12 41 Z" fill="${wood}"/>`,
-    brig: `<path d="M21 32 V7 M38 32 V5" stroke="${m}" stroke-width="1.4"/><path d="M15 10 H27 Q29 13 27 17 H15 Z M14 18 H28 Q30 24 28 30 H14 Z M32 8 H44 Q46 12 44 16 H32 Z M31 17 H45 Q47 23 45 30 H31 Z" fill="${s}"/><path d="M57 24 L40 7 L42 28 Z" fill="${s}" opacity=".85"/>${flagSVG(38, 1, look, sailIdx)}<path d="M4 27 L14 28 L16 31 L50 30 L57 27 L52 39 Q32 44 11 41 Z" fill="${wood}"/>`,
-    ironclad: `<path d="M16 31 V10" stroke="${m}" stroke-width="1"/>${flagSVG(16, 6, look, sailIdx)}<rect x="24" y="12" width="5" height="12" fill="${ir}"/><rect x="33" y="14" width="5" height="10" fill="${ir}"/><rect x="19" y="23" width="25" height="8" rx="1" fill="${st}"/><path d="M3 31 L57 30 L53 40 Q30 43 7 40 Z" fill="${HULLS[look.hull] || "#3C3F44"}"/>`,
+    dinghy: `<path d="M30 33 V11" stroke="${m}" stroke-width="1.3"/>${sl("M31 12 L31 31 L45 31 Z")}<path d="M29 16 L29 31 L18 31 Z" fill="#FFF8EA"/>${flagSVG(30, 7, look, sailIdx)}<path d="M14 32 L46 32 L42 40 Q30 43 18 40 Z" fill="${wood}"/>`,
+    sloop: `<path d="M27 32 V6" stroke="${m}" stroke-width="1.4"/>${sl("M21 9 H33 Q35 13 33 17 H21 Z M20 18 H34 Q36 24 34 30 H20 Z")}${sl("M52 25 L28 8 L30 30 Z", `opacity=".85"`)}${flagSVG(27, 2, look, sailIdx)}<path d="M8 31 L52 30 L47 40 Q30 44 12 41 Z" fill="${wood}"/>`,
+    brig: `<path d="M21 32 V7 M38 32 V5" stroke="${m}" stroke-width="1.4"/>${sl("M15 10 H27 Q29 13 27 17 H15 Z M14 18 H28 Q30 24 28 30 H14 Z M32 8 H44 Q46 12 44 16 H32 Z M31 17 H45 Q47 23 45 30 H31 Z")}${sl("M57 24 L40 7 L42 28 Z", `opacity=".85"`)}${flagSVG(38, 1, look, sailIdx)}<path d="M4 27 L14 28 L16 31 L50 30 L57 27 L52 39 Q32 44 11 41 Z" fill="${wood}"/>`,
+    ironclad: `<path d="M16 31 V10" stroke="${m}" stroke-width="1"/>${flagSVG(16, 6, look, sailIdx)}<rect x="24" y="12" width="5" height="12" fill="${ir}"/><rect x="33" y="14" width="5" height="10" fill="${ir}"/><rect x="19" y="23" width="25" height="8" rx="1" fill="${st}"/><path d="M3 31 L57 30 L53 40 Q30 43 7 40 Z" fill="${camo || HULLS[look.hull] || "#3C3F44"}"/>`,
     destroyer: `<path d="M27 19 V6" stroke="${ir}" stroke-width=".9"/>${flagSVG(27, 3, look, sailIdx)}<rect x="22" y="18" width="9" height="7" fill="${st}"/><rect x="18" y="24" width="18" height="8" fill="${st}"/><rect x="38" y="20" width="4" height="10" fill="${ir}" transform="translate(-6 0)"/><path d="M45 28 h3 v2 h-3 Z M48 28.6 H54 M9 29 h3 v2 h-3 Z M9 29.6 H4" stroke="${ir}" fill="${ir}" stroke-width=".8"/><path d="M2 31 L59 28 L52 40 L7 40 Z" fill="${grey}"/>`,
     cruiser: `<path d="M26 16 V2 M38 18 V7" stroke="${ir}" stroke-width=".9"/>${flagSVG(26, 0, look, sailIdx)}<rect x="20" y="10" width="10" height="7" fill="${st}"/><rect x="16" y="16" width="20" height="8" fill="${st}"/><rect x="11" y="23" width="30" height="7" fill="${st}"/><rect x="33" y="14" width="4" height="9" fill="${ir}"/><rect x="38" y="15" width="4" height="8" fill="${ir}"/><path d="M47 26 h4 v3 h-4 Z M51 27 H57 M6 26 h4 v3 h-4 Z M6 27 H1" stroke="${ir}" fill="${ir}" stroke-width=".9"/><path d="M1 30 L59 27 L53 41 L6 41 Z" fill="${grey}"/>`,
-    carrier: `<path d="M37 16 V4" stroke="${ir}" stroke-width=".9"/>${flagSVG(37, 1, look, sailIdx)}<rect x="32" y="15" width="11" height="6" fill="${st}"/><rect x="30" y="20" width="15" height="6" fill="${st}"/><rect x="0" y="26" width="60" height="2.2" fill="#3A4046"/><path d="M6 25.4 l4 -1 l1 1 Z M15 25.4 l4 -1 l1 1 Z M50 25.4 l4 -1 l1 1 Z" fill="${st}"/><path d="M3 28 L58 28 L53 41 L8 41 Z" fill="${HULLS[look.hull] || "#555E67"}"/>`
+    carrier: `<path d="M37 16 V4" stroke="${ir}" stroke-width=".9"/>${flagSVG(37, 1, look, sailIdx)}<rect x="32" y="15" width="11" height="6" fill="${st}"/><rect x="30" y="20" width="15" height="6" fill="${st}"/><rect x="0" y="26" width="60" height="2.2" fill="#3A4046"/><path d="M6 25.4 l4 -1 l1 1 Z M15 25.4 l4 -1 l1 1 Z M50 25.4 l4 -1 l1 1 Z" fill="${st}"/><path d="M3 28 L58 28 L53 41 L8 41 Z" fill="${camo || HULLS[look.hull] || "#555E67"}"/>`
   };
-  return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">${parts[id] || parts.dinghy}${shipPhoto(id, look)}${weaponOnShip(id, look)}</g></svg>`;
+  return `<svg viewBox="0 0 60 48" aria-hidden="true"><g class="hull">${parts[id] || parts.dinghy}${shipExtras2D(id, look)}${shipPhoto(id, look)}${weaponOnShip(id, look)}</g></svg>`;
 }
 const shipBox = (ship, look, sailIdx, name, cls = "") => `<div class="deco-sea ${cls}"><div class="ship mine ${V.wakeClass(look)}" style="--sail:${sail(sailIdx)}">${shipSVG(ship, look, sailIdx)}${name ? `<span class="nmtag ${V.tagClass(look)}">${esc(name)}</span>` : ""}</div></div>`;
 
@@ -144,7 +163,8 @@ const ISLES = {
   memory: { x: 180, y: 150, px: 150, py: 170, r: 72, game: "memory" },
   battle: { x: 660, y: 490, px: 320, py: 790, r: 74 }
 };
-const DECO_TABS = [["ship", "배 종류"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["photo", "내 사진"], ["pattern", "돛 무늬"], ["hull", "배 색"], ["att", "부착물"], ["head", "선수상"], ["trim", "테두리"], ["wake", "물결"], ["tag", "이름표"]];
+// the third value keeps a tab to the ships it can show on
+const DECO_TABS = [["ship", "배 종류"], ["upgrade", "배 강화"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["photo", "내 사진"], ["camo", "위장 도색", "steel"], ["air", "함재기", "steel"], ["smoke", "연기", "steel"], ["pattern", "돛 무늬", "sail"], ["hull", "배 색"], ["att", "부착물", "sail"], ["head", "선수상", "sail"], ["trim", "테두리", "sail"], ["wake", "물결"], ["tag", "이름표"]];
 const withItem = (look, x) => x.slot === "att" ? { ...look, att: [...new Set([...(look.att || []), x.id])] } : x.slot === "emblem" ? { ...look, se: x.id } : { ...look, [x.slot]: x.id };
 const isWorn = (look, x) => x.slot === "att" ? (look.att || []).includes(x.id) : x.slot === "emblem" ? look.se === x.id || look.fe === x.id : look[x.slot] === x.id;
 const coin = n => `<span class="gold num">${n}</span>`;
@@ -281,14 +301,21 @@ document.addEventListener("pointerdown", e => { if (e.target.id === "cropCv" && 
 document.addEventListener("pointermove", e => { if (!cropDrag || !K.crop) return; K.crop.x += (e.clientX - cropDrag.x) * cropDrag.k; K.crop.y += (e.clientY - cropDrag.y) * cropDrag.k; cropDrag.x = e.clientX; cropDrag.y = e.clientY; drawCrop(); });
 document.addEventListener("pointerup", () => { cropDrag = null; });
 document.addEventListener("pointercancel", () => { cropDrag = null; });
+function kUpgrade() {
+  const d = K.d, gold = d.bal.gold;
+  return `<p class="small muted">금화로 배를 강화하면 단계마다 전투력이 올라요. 값은 단계가 오를수록 비싸져요. 배를 바꿔도 강화는 그대로 남아요.</p><div class="up-list">${d.upgrades.map(u => `<div class="up-row"><div class="stack" style="gap:4px"><b>${esc(u.name)} <span class="num">${u.level}</span>/${u.max}단계</b><span class="small muted">${esc(u.desc)}</span><div class="up-pips" aria-hidden="true">${Array.from({ length: u.max }, (_, i) => `<i class="${i < u.level ? "on" : ""}"></i>`).join("")}</div></div>${u.level >= u.max ? `<span class="pill ok">최고 단계</span>` : `<div class="stack" style="gap:4px;align-items:flex-end"><span class="small">전투력 +${u.power} · <span class="gold num">${u.price}</span></span><button class="btn sm ${gold >= u.price ? "primary" : ""}" data-act="kupAsk" data-v="${u.id}" ${gold >= u.price ? "" : "disabled"}>${gold >= u.price ? "강화" : `${u.price - gold}개 모자라요`}</button></div>`}</div>`).join("")}</div>`;
+}
 function kDeco() {
-  const d = K.d, me = d.me, L = draftLook(me.look), gold = d.bal.gold, owned = new Set(d.owned), slot = K.slot, curShip = d.ships.find(s => s.id === me.ship);
-  const conf = K.confirm && K.confirm.key && d.deco.find(x => x.key === K.confirm.key), shipConf = K.confirm && K.confirm.ship && d.ships.find(s => s.id === K.confirm.ship);
+  const d = K.d, me = d.me, L = draftLook(me.look), gold = d.bal.gold, owned = new Set(d.owned), curShip = d.ships.find(s => s.id === me.ship), viewShip = d.ships.find(s => s.id === (K.tryShip || me.ship));
+  const rank = id => d.ships.findIndex(s => s.id === id), reaches = x => !x.from || rank(me.ship) >= rank(x.from);
+  const tabs = DECO_TABS.filter(([, , only]) => !only || (only === "sail") === viewShip.sails); if (!tabs.some(([k]) => k === K.slot)) K.slot = "ship";
+  const slot = K.slot;
+  const conf = K.confirm && K.confirm.key && d.deco.find(x => x.key === K.confirm.key), shipConf = K.confirm && K.confirm.ship && d.ships.find(s => s.id === K.confirm.ship), upConf = K.confirm && K.confirm.up && d.upgrades.find(u => u.id === K.confirm.up);
   const tryItem = K.tryKey && d.deco.find(x => x.key === K.tryKey);
   const buy = x => { const can = gold >= x.price; return `<button class="btn sm ${can ? "primary" : ""}" data-act="kdecoAsk" data-v="${x.key}" ${can ? "" : "disabled"}>${can ? "사기" : `${x.price - gold}개 모자라요`}</button>`; };
   const card = x => { const has = owned.has(x.key), on = isWorn(L, x);
-    const pic = x.slot === "emblem" ? embTile(x.id, sail(me.sail)) : x.slot === "weapon" ? `<div class="wtile r-${x.rarity}">${weaponImg(x.id)}<b class="num">+${x.power}</b></div>` : shipBox(me.ship, withItem(L, x), me.sail, "", "tiny");
-    const ctl = x.dropOnly && !has ? `<span class="small muted">${esc(d.maps[x.era].name)}에서 발견해요</span>` : !has ? buy(x)
+    const pic = x.slot === "emblem" ? embTile(x.id, sail(me.sail)) : x.slot === "weapon" ? `<div class="wtile r-${x.rarity}">${weaponImg(x.id)}<b class="num">+${x.power}</b></div>` : shipBox(reaches(x) ? me.ship : x.from, withItem(L, x), me.sail, "", "tiny");
+    const ctl = !reaches(x) && !isWorn(L, x) ? `<span class="small muted">${esc(d.ships.find(s => s.id === x.from).name)}부터 쓸 수 있어요</span>` : x.dropOnly && !has ? `<span class="small muted">${esc(d.maps[x.era].name)}에서 발견해요</span>` : !has ? buy(x)
       : x.slot === "weapon" && x.era > curShip.era ? `<span class="small muted">${esc(d.ships.find(s => s.era === x.era).name)}부터 장착해요</span>`
       : x.slot === "emblem" ? `<div class="row" style="gap:6px"><button class="btn sm" data-act="kwear" data-v="${x.key}|sail" aria-pressed="${L.se === x.id}">돛</button><button class="btn sm" data-act="kwear" data-v="${x.key}|flag" aria-pressed="${L.fe === x.id}">깃발</button></div>`
       : x.slot === "att" ? `<button class="btn sm ${on ? "" : "primary"}" data-act="kwear" data-v="${x.key}">${on ? "떼기" : "달기"}</button>`
@@ -297,18 +324,19 @@ function kDeco() {
   const shipCard = s => { const has = !s.price || owned.has(`ship.${s.id}`), on = me.ship === s.id, can = gold >= s.price;
     return `<div class="deco-item ${K.tryShip === s.id ? "sel" : ""}" data-act="ktryShip" data-v="${s.id}">${shipBox(s.id, L, me.sail, "", "tiny")}<b>${esc(s.name)}</b><span class="small muted">전투력 +${s.power}${s.sails ? "" : " · 돛 없음"}</span>${has ? "" : `<span class="gold num">${s.price}</span>`}
       ${on ? `<span class="pill ok">타는 중</span>` : has ? `<button class="btn sm" data-act="kshipUse" data-v="${s.id}">타기</button>` : `<button class="btn sm ${can ? "primary" : ""}" data-act="kshipAsk" data-v="${s.id}" ${can ? "" : "disabled"}>${can ? "사기" : `${s.price - gold}개 모자라요`}</button>`}</div>`; };
-  const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
+  const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon", "camo", "smoke"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
   const sw = (i, act, on, label) => `<button style="--sail:${V.SAILS[i]}" data-act="${act}" data-v="${i}" aria-pressed="${on}" aria-label="${label} ${i + 1}"></button>`;
   const noSail = !curShip.sails && ["pattern", "emblem", "color"].includes(slot) ? `<p class="small muted">지금 배에는 돛이 없어서 돛 꾸미기는 안 보여요. 깃발 색과 깃발 문양은 보여요.</p>` : "";
-  const body = slot === "photo" ? kPhoto() : slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
+  const body = slot === "photo" ? kPhoto() : slot === "upgrade" ? kUpgrade() : slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
     : slot === "color" ? `<p class="small muted">돛 색과 깃발 색은 무료예요.</p><h3>돛 색</h3><div class="sails">${V.SAILS.map((c, i) => sw(i, "ksail", me.sail === i, "돛 색")).join("")}</div>
       <h3>깃발 색</h3><div class="sails"><button class="same" data-act="kflag" data-v="-1" aria-pressed="${L.fc == null}" style="--sail:${sail(me.sail)}">돛과 같게</button>${V.SAILS.map((c, i) => sw(i, "kflag", L.fc === i, "깃발 색")).join("")}</div>`
-    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => x.slot === slot).map(card).join("")}</div>`}`;
+    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요. 돛이 있는 배에서 보여요.</p>` : slot === "air" ? `<p class="small muted">여러 대를 같이 띄울 수 있어요. 헬기와 정찰기는 순양함부터, 나머지는 항공모함에서 쓸 수 있어요.</p>` : slot === "camo" ? `<p class="small muted">돛이 없는 배의 선체에 칠해요. 칠한 동안에는 배 색 대신 위장이 보여요.</p>` : slot === "smoke" ? `<p class="small muted">굴뚝에서 나오는 연기 색을 바꿔요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => slot === "air" ? x.group === "air" : x.slot === slot && !x.group).map(card).join("")}</div>`}`;
   return `<section class="panel deco-hero"><div class="row between"><h2>${esc(me.nickname)}의 ${esc((d.ships.find(s => s.id === (K.tryShip || me.ship)) || curShip).name)}</h2><span class="small">전투력 <b class="num">${me.power}</b> · ${coin(gold)}</span></div>
       <div class="deco3d" id="deco3d">${shipBox(K.tryShip || me.ship, tryItem ? withItem(L, tryItem) : L, me.sail, me.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
       ${conf ? `<div class="confirm"><span><b>${esc(conf.name)}</b>을(를) 금화 ${conf.price}개로 살까요? 남는 금화 ${gold - conf.price}</span><button class="btn sm primary" data-act="kdecoBuy" data-v="${conf.key}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
-      ${shipConf ? `<div class="confirm"><span><b>${esc(shipConf.name)}</b>을(를) 금화 ${shipConf.price}개로 살까요? 남는 금화 ${gold - shipConf.price}</span><button class="btn sm primary" data-act="kshipBuy" data-v="${shipConf.id}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}</section>
-    <section class="panel"><div class="chips" role="group" aria-label="꾸미기 종류">${DECO_TABS.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>${noSail}${body}</section>`;
+      ${shipConf ? `<div class="confirm"><span><b>${esc(shipConf.name)}</b>을(를) 금화 ${shipConf.price}개로 살까요? 남는 금화 ${gold - shipConf.price}</span><button class="btn sm primary" data-act="kshipBuy" data-v="${shipConf.id}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
+      ${upConf ? `<div class="confirm"><span><b>${esc(upConf.name)}</b> ${upConf.level + 1}단계를 금화 ${upConf.price}개로 올릴까요? 남는 금화 ${gold - upConf.price}</span><button class="btn sm primary" data-act="kupBuy" data-v="${upConf.id}">강화</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}</section>
+    <section class="panel"><div class="chips" role="group" aria-label="꾸미기 종류">${tabs.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>${noSail}${body}</section>`;
 }
 function kLog() {
   const d = K.d;
@@ -374,6 +402,8 @@ const KID_ACTS = {
   krequest: v => kDo(() => api("/api/kid/request", { questId: Number(v) }), "선생님께 확인을 요청했어요"),
   kcancel: v => kDo(() => api(`/api/kid/cancel/${v}`, {})),
   kslot: v => { K.slot = v; K.tryKey = null; K.tryShip = null; K.confirm = null; K.crop = null; K.photoDraft = null; kidRender(); },
+  kupAsk: v => { K.confirm = { up: v }; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
+  kupBuy: v => { K.confirm = null; return kDo(() => api("/api/kid/upgrade", { id: v }), "배를 강화했어요! 전투력이 올랐어요"); },
   kcropNo: () => { K.crop = null; K.photoDraft = null; kidRender(); },
   // the canvas re-encodes the picture, which also drops the location and other data a phone stores inside photos
   kcropOk: () => { const cv = $("#cropCv"); if (!cv) return; let data = ""; for (const q of [.8, .65, .5, .35]) { data = cv.toDataURL("image/jpeg", q); if (data.length < 190000) break; } K.photoDraft = data; K.crop = null; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },

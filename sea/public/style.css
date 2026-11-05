@@ -393,3 +393,10 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .photo-card { display: flex; flex-direction: column; gap: 6px; }
 .photo-card img { width: 100%; aspect-ratio: 6 / 5; object-fit: cover; border-radius: 10px; background: #0C2440; }
+
+/* ship upgrades */
+.up-list { display: flex; flex-direction: column; gap: 14px; }
+.up-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.up-pips { display: flex; gap: 3px; }
+.up-pips i { width: 14px; height: 7px; border-radius: 2px; background: rgb(20 70 111 / .16); }
+.up-pips i.on { background: #14466F; }

@@ -30,7 +30,7 @@ const MAPS = [
 const shipOf = id => SHIPS.find(s => s.id === id) || SHIPS[0];
 
 // Decorations cost gold. Slots hold one item, except att (several) and emblem (on the sail, the flag or both: look.se / look.fe).
-const DECO_SLOTS = ["hull", "trim", "pattern", "emblem", "head", "att", "wake", "tag", "weapon"];
+const DECO_SLOTS = ["hull", "trim", "pattern", "emblem", "head", "att", "wake", "tag", "weapon", "camo", "smoke"];
 const DECO = [
   ["hull", "red", "진홍 배", 30], ["hull", "navy", "남색 배", 30], ["hull", "mint", "민트 배", 30], ["hull", "pink", "분홍 배", 30], ["hull", "lavender", "라벤더 배", 30], ["hull", "sky", "하늘 배", 30], ["hull", "lemon", "레몬 배", 30],
   ["hull", "ebony", "흑단 배", 60], ["hull", "white", "상아 배", 80], ["hull", "gold", "황금 배", 250],
@@ -44,8 +44,17 @@ const DECO = [
   ["att", "cannon", "대포", 80], ["att", "nest", "망루", 80], ["att", "balloons", "하트 풍선", 80], ["att", "fairylights", "요정 전구", 80],
   ["att", "parrot", "앵무새", 100], ["att", "cat", "고양이 선원", 100], ["att", "treasure", "보물 더미", 150],
   ["wake", "splash", "물보라", 50], ["wake", "sparkle", "반짝이 물결", 100], ["wake", "bubble", "비눗방울", 100], ["wake", "hearts", "하트 물결", 100], ["wake", "petals", "꽃잎 물결", 100], ["wake", "rainbow", "무지개 물결", 200],
-  ["tag", "pink", "분홍 이름표", 60], ["tag", "lavender", "라벤더 이름표", 60], ["tag", "gold", "금빛 이름표", 60], ["tag", "rainbow", "무지개 이름표", 150]
-].map(([slot, id, name, price]) => ({ key: `${slot}.${id}`, slot, id, name, price, rarity: price <= 40 ? "보통" : price <= 100 ? "희귀" : "전설" }));
+  ["tag", "pink", "분홍 이름표", 60], ["tag", "lavender", "라벤더 이름표", 60], ["tag", "gold", "금빛 이름표", 60], ["tag", "rainbow", "무지개 이름표", 150],
+  // for ships without sails; the fifth value is the smallest ship that can use the item, the sixth groups aircraft inside the att slot
+  ["camo", "ocean", "바다 위장", 100, "ironclad"], ["camo", "splinter", "분할 위장", 120, "ironclad"], ["camo", "dazzle", "다즐 위장", 200, "ironclad"], ["camo", "digital", "디지털 위장", 200, "ironclad"], ["camo", "pink", "분홍 위장", 200, "ironclad"], ["camo", "pastel", "파스텔 위장", 200, "ironclad"], ["camo", "stealth", "스텔스 회색", 250, "ironclad"],
+  ["smoke", "white", "흰 연기", 60, "ironclad"], ["smoke", "pink", "분홍 연기", 100, "ironclad"], ["smoke", "lavender", "보라 연기", 100, "ironclad"], ["smoke", "sky", "하늘 연기", 100, "ironclad"], ["smoke", "mint", "민트 연기", 100, "ironclad"], ["smoke", "rainbow", "무지개 연기", 250, "ironclad"],
+  ["att", "drone", "무인 정찰기", 250, "cruiser", "air"], ["att", "heli", "해상작전 헬기", 300, "cruiser", "air"], ["att", "vtol", "수직이착륙기", 450, "carrier", "air"], ["att", "fighter", "전투기 편대", 500, "carrier", "air"], ["att", "awacs", "조기경보기", 600, "carrier", "air"]
+].map(([slot, id, name, price, from, group]) => ({ key: `${slot}.${id}`, slot, id, name, price, rarity: price <= 40 ? "보통" : price <= 100 ? "희귀" : "전설", ...(from ? { from } : {}), ...(group ? { group } : {}) }));
+const shipReaches = (shipId, d) => !d.from || SHIPS.findIndex(s => s.id === shipId) >= SHIPS.findIndex(s => s.id === d.from);
+const fromName = d => SHIPS.find(s => s.id === d.from).name;
+// upgrades are the gold sink with no end in sight: dearer each level, the same small power gain, kept when changing ships
+const UPGRADES = [["engine", "기관 강화", "엔진을 손봐서 힘을 키워요"], ["armor", "장갑 강화", "선체를 더 튼튼하게 덧대요"], ["gunnery", "포술 훈련", "선원들의 사격 솜씨를 키워요"]].map(([id, name, desc]) => ({ id, name, desc }));
+const UP_MAX = 10, UP_POWER = 10, upPrice = level => level * 100;
 // Weapons only come from mini-games. One is mounted at a time and adds to battle power; kind picks the shot seen in battle.
 const WEAPONS = [
   ["ballista", "대형 쇠뇌", "보통", 5, "bolt", 0], ["catapult", "투석기", "보통", 7, "stone", 0], ["swivel", "선회포", "희귀", 12, "cannon", 0], ["pdr32", "32파운드 함포", "전설", 18, "cannon", 0],
@@ -132,11 +141,11 @@ async function balances(db, ids) {
 }
 // battle power: base + ship class + a fifth of the gold value of decorations owned + mounted weapon
 async function powers(db, rows) {
-  const out = {}, sum = {}; if (!rows.length) return out;
+  const out = {}, sum = {}, ups = {}; if (!rows.length) return out;
   for (let i = 0; i < rows.length; i += 80) { const part = rows.slice(i, i + 80).map(r => r.id);
     const r = await db.prepare(`SELECT student_id AS id, item FROM owned WHERE student_id IN (${part.map(() => "?").join(",")})`).bind(...part).all();
-    for (const x of r.results) { const d = itemOf(x.item); if (d) sum[x.id] = (sum[x.id] || 0) + d.price; } }
-  for (const r of rows) { const w = itemOf(`weapon.${parseLook(r.look).weapon}`); out[r.id] = 20 + shipOf(r.ship).power + Math.floor((sum[r.id] || 0) / 5) + (w ? w.power : 0); }
+    for (const x of r.results) { const d = itemOf(x.item); if (d) sum[x.id] = (sum[x.id] || 0) + d.price; else if (x.item.startsWith("up.")) ups[x.id] = (ups[x.id] || 0) + UP_POWER; } }
+  for (const r of rows) { const w = itemOf(`weapon.${parseLook(r.look).weapon}`); out[r.id] = 20 + shipOf(r.ship).power + Math.floor((sum[r.id] || 0) / 5) + (ups[r.id] || 0) + (w ? w.power : 0); }
   return out;
 }
 async function questBlocked(db, sid, q) {
@@ -251,6 +260,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const orders = (await db.prepare("SELECT id, name, status, created_at FROM orders WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
   const h = kstHour(), open = !!st.class_battle && (game.hourFrom === game.hourTo || (h >= game.hourFrom && h < game.hourTo));
   return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id] },
+    upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
     bal, game, quests, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
     battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders };
@@ -289,6 +299,7 @@ on("POST", "/api/kid/play/finish/:id", "student", async ({ db, me, params, body 
 // gold shop
 on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
   const d = itemOf(String(body.key || "")); if (!d || d.dropOnly) throw bad("살 수 없는 꾸미기예요");
+  if (!shipReaches(me.student.ship, d)) throw bad(`${fromName(d)}부터 쓸 수 있어요`);
   const sid = me.student.id, bal = (await balances(db, [sid]))[sid]; if (bal.gold < d.price) throw bad(`금화가 ${d.price - bal.gold}개 모자라요`);
   const r = await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, d.key, Date.now()).run(); if (!r.meta.changes) throw bad("이미 가지고 있어요");
   const lg = await logStmt(db, { student_id: sid, kind: "deco", title: `꾸미기: ${d.name}`, gold: -d.price }).run(), old = parseLook(me.student.look);
@@ -303,9 +314,22 @@ on("POST", "/api/kid/deco/wear", "student", async ({ db, me, body }) => {
     if (!(await db.prepare("SELECT 1 FROM owned WHERE student_id=? AND item=?").bind(me.student.id, d.key).first())) throw bad("아직 없는 꾸미기예요");
     if (slot === "weapon" && d.era > shipOf(me.student.ship).era) throw bad(`${SHIPS.find(s => s.era === d.era).name}부터 장착할 수 있어요`);
     const worn = slot === "att" ? (look.att || []).includes(d.id) : slot === "emblem" ? look[where === "flag" ? "fe" : "se"] === d.id : false;
+    if (!worn && !shipReaches(me.student.ship, d)) throw bad(`${fromName(d)}부터 쓸 수 있어요`);
     wearItem(look, d, slot === "att" || slot === "emblem" ? !worn : true, where);
   } else if (slot === "emblem") delete look[where === "flag" ? "fe" : "se"]; else delete look[slot];
   await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run(); return { ok: true };
+});
+on("POST", "/api/kid/upgrade", "student", async ({ db, me, body }) => {
+  const u = UPGRADES.find(x => x.id === body.id); if (!u) throw bad("없는 강화예요");
+  const sid = me.student.id, have = new Set((await db.prepare("SELECT item FROM owned WHERE student_id=? AND item LIKE ?").bind(sid, `up.${u.id}.%`).all()).results.map(r => r.item));
+  if (have.size >= UP_MAX) throw bad("이미 최고 단계예요");
+  // the first free level, so a level the teacher cancelled can be bought again
+  let level = 1; while (have.has(`up.${u.id}.${level}`)) level++;
+  const key = `up.${u.id}.${level}`, price = upPrice(have.size + 1), bal = (await balances(db, [sid]))[sid]; if (bal.gold < price) throw bad(`금화가 ${price - bal.gold}개 모자라요`);
+  const r = await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, key, Date.now()).run(); if (!r.meta.changes) throw bad("이미 강화했어요");
+  const lg = await logStmt(db, { student_id: sid, kind: "upgrade", title: `${u.name} ${have.size + 1}단계`, gold: -price }).run();
+  await db.prepare("UPDATE owned SET log_id=? WHERE student_id=? AND item=?").bind(lg.meta.last_row_id, sid, key).run();
+  return { ok: true };
 });
 // a ship from an earlier era cannot carry a later weapon, so it comes off when changing ships
 function lookForShip(lookText, ship) { const look = parseLook(lookText), w = itemOf(`weapon.${look.weapon}`), removed = !!w && w.era > ship.era; if (removed) delete look.weapon; return { look: JSON.stringify(look), removed }; }
@@ -438,7 +462,7 @@ on("POST", "/api/t/logs/:id/undo", "teacher", async ({ db, params }) => {
   if (l.kind === "exempt") throw bad("면제권은 '건네줄 것'에서 취소해 주세요");
   if (l.kind === "photo") throw bad("사진 돛은 '사진 승인'에서 처리해 주세요");
   const ops = [db.prepare("DELETE FROM logs WHERE id=?").bind(l.id)];
-  if (l.kind === "deco" || l.kind === "ship") { const o = await db.prepare("SELECT item FROM owned WHERE log_id=?").bind(l.id).first(), st = await db.prepare("SELECT look, ship FROM students WHERE id=?").bind(l.student_id).first();
+  if (l.kind === "deco" || l.kind === "ship" || l.kind === "upgrade") { const o = await db.prepare("SELECT item FROM owned WHERE log_id=?").bind(l.id).first(), st = await db.prepare("SELECT look, ship FROM students WHERE id=?").bind(l.student_id).first();
     if (o && st) { ops.push(db.prepare("DELETE FROM owned WHERE log_id=?").bind(l.id));
       if (l.kind === "deco") { const d = itemOf(o.item); if (d) ops.push(db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(wearItem(parseLook(st.look), d, false, "both")), l.student_id)); }
       else if (`ship.${st.ship}` === o.item) ops.push(db.prepare("UPDATE students SET ship='dinghy' WHERE id=?").bind(l.student_id)); } }
