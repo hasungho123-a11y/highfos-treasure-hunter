@@ -541,7 +541,7 @@ async function playFight() {
     try { fx = await v3d.fight(m.querySelector(".f-view"), side3(r.me), side3(r.opp)); } catch (e) { fx = null; } }
   if (fx) { let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
     const dmgEl = m.querySelector(".f-dmg"), hurt = m.querySelector(".f-hurt"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i");
-    fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); };
+    fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); }; fx.onSortie = () => Sfx.jet(); fx.onStrafe = () => Sfx.shot("gun");
     if (!fast) await fx.intro();
     for (const s of r.rounds) { const fromA = s.by === "a";
       if (!fast) { Sfx.shot(kindOf(fromA ? r.me : r.opp)); await fx.fire(s.by, s.dmg, kindOf(fromA ? r.me : r.opp));

@@ -36,6 +36,7 @@ window.Sfx = (() => {
     shot: kind => (SHOTS[kind] || SHOTS.cannon)(),
     boom: size => boomAt(0, size || 1),
     splash() { noise(.4, { f: 1800, to: 4200, kind: "highpass", vol: .3, attack: .02 }); tone(420, .12, { to: 160, vol: .1 }); },
+    jet() { noise(1.8, { f: 400, to: 2400, kind: "bandpass", vol: .32, attack: .6 }); noise(1.2, { f: 2400, to: 300, kind: "bandpass", vol: .26, at: 1.9, attack: .05 }); },
     hurt() { boomAt(0, .8); noise(.3, { f: 3000, to: 700, kind: "bandpass", vol: .3, q: 4 }); },
     tap: () => tone(620, .05, { type: "triangle", vol: .16 }),
     flip: () => noise(.07, { f: 3200, to: 1500, kind: "bandpass", vol: .25 }),

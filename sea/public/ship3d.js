@@ -24,7 +24,7 @@ function weaponModel(T, M, id) {
   const cyl = (x, y, z, r1, r2, h, m) => put(new T.Mesh(new T.CylinderGeometry(r1, r2, h, 14), m), x, y, z);
   const barrel = (x, y, z, r1, r2, len, m = M.iron, up = 0) => { const b = cyl(x, y, z, r1, r2, len, m); b.rotation.z = -Math.PI / 2 + up; return b; };
   const wheel = (x, z, r) => { const w = cyl(x, r, z, r, r, .1, M.iron); w.rotation.x = Math.PI / 2; };
-  const missile = (x, y, z, len, r, up) => { const f = new T.Group(); f.position.set(x, y, z); f.rotation.z = up; g.add(f);
+  const missile = (x, y, z, len, r, up) => { const f = new T.Group(); f.name = "round"; f.position.set(x, y, z); f.rotation.z = up; g.add(f);
     const add = (m, px, py = 0, pz = 0) => { m.position.set(px, py, pz); m.castShadow = true; f.add(m); return m; };
     add(new T.Mesh(new T.CylinderGeometry(r, r, len, 12), M.paint), 0).rotation.z = -Math.PI / 2;
     add(new T.Mesh(new T.ConeGeometry(r, len * .22, 12), M.warhead), len * .61).rotation.z = -Math.PI / 2;
@@ -342,7 +342,7 @@ function build() {
       fighter(g) { jet(g, 0, 0, 0); jet(g, -1.8, -.1, 1.5); jet(g, -1.8, -.1, -1.5); },
       awacs(g) { part(g, bx(2.2, .28, .32), light); part(g, bx(.5, .06, 3), light, 0, .02); part(g, bx(.28, .42, .05), light, -1.05, .28); part(g, new T.CylinderGeometry(.62, .62, .1, 18), dark, -.2, .46); part(g, bx(.08, .22, .08), dark, -.2, .3); }
     };
-    for (const [id, [u, up, z, size]] of Object.entries(spec.air || {})) { grp(id); const g = new T.Group(); g.position.set(xAt(u), deckY(u) + up, z); g.scale.setScalar(size); A[id].add(g); models[id](g); } }
+    for (const [id, [u, up, z, size]] of Object.entries(spec.air || {})) { grp(id); const g = new T.Group(); g.name = `air:${id}`; g.position.set(xAt(u), deckY(u) + up, z); g.scale.setScalar(size); A[id].add(g); models[id](g); } }
   if (spec.build) spec.build({ T, M, add, xAt, deckY, sheer, halfW, L });
   const mount = new T.Group(), wm = spec.wm; mount.position.set(xAt(wm.u), deckY(wm.u) + (wm.y || 0), wm.z || 0); mount.scale.setScalar(wm.s); ship.add(mount); mount.userData.models = {};
   // ships without sails carry the kid's photo as a painting that follows the curve of each hull side
@@ -547,7 +547,7 @@ function build() {
   const R = (a = 1) => (Math.random() * 2 - 1) * a;
   const ORANGE = [1, .62, .18], YELLOW = [1, .88, .45], SMOKE_C = [.2, .19, .19], WATER = [.9, .97, 1], DEBRIS = [.13, .1, .08];
   // what each kind of weapon sends across: [seconds in the air, arc as a share of the distance, shots, size, colour, trail]
-  const SHOT = { cannon: [.72, .1, 1, .3, 0x26282C, "smoke"], stone: [.95, .2, 1, .5, 0x8A8478, ""], bolt: [.55, .05, 1, .14, 0x7A4A28, ""], gun: [.34, .01, 5, .1, 0xFFD45C, "glow"], turret: [.6, .08, 1, .24, 0xE8C25A, "glow"], torpedo: [1.15, 0, 1, .3, 0x2B2F36, "wake"], missile: [.95, .26, 1, .26, 0xEDEDE6, "flame"] };
+  const SHOT = { cannon: [.72, .1, 1, .3, 0x26282C, "smoke"], stone: [.95, .2, 1, .5, 0x8A8478, ""], bolt: [.55, .05, 1, .14, 0x7A4A28, ""], gun: [.34, .01, 5, .1, 0xFFD45C, "glow"], turret: [.6, .08, 1, .24, 0xE8C25A, "glow"], torpedo: [1.6, 0, 1, .3, 0x2B2F36, "wake"], missile: [1.3, .26, 1, .26, 0xEDEDE6, "flame"] };
 
   function fight(host, meP, oppP) {
     const take = (p, gunSailed, gunSteel) => { setLook(p.look, p.sailHex, p.flagHex, p.ship); return lookReady.then(() => {
@@ -582,7 +582,12 @@ function build() {
 
       // the deck spot behind the gun; anything tall in front of it (masts, sails, rigging) is hidden from this view only
       const wm0 = a.userData.wm, s = wm0.scale.x, spec = a.userData.spec;
-      const eyeX = wm0.position.x - (1.9 * s + 1.8), eyeY = wm0.position.y + 1.4 * s + 1.05, eyeZ = wm0.position.z * .55, shoulder = 1.05 * s + .35; // over the gun's shoulder, so even a big missile never hides the other ship
+      const roundsOf = c => { const out = []; c.userData.wm.children.forEach(m => { if (m.visible) m.traverse(o => { if (o.name === "round") out.push(o); }); }); return out; };
+      const airOf = c => { const out = []; c.traverse(o => { if (!o.name.startsWith("air:")) return; let w = o, on = true; while (w && w !== c) { if (!w.visible) on = false; w = w.parent; } if (on) out.push(o); }); return out; };
+      a.userData.air = airOf(a); b.userData.air = airOf(b);
+      // a missile rack is tall and wide, so a ship carrying one is seen from up on the bridge, with the rack low in the picture and the other ship clear above it
+      const rack = new T.Box3(), racked = roundsOf(a).length > 0; if (racked) wm0.children.forEach(m => { if (m.visible) rack.expandByObject(m); });
+      const eyeX = wm0.position.x - (racked ? 2 * s + 4 : 1.9 * s + 1.8), eyeY = racked ? rack.max.y + 2.5 + La * .12 : wm0.position.y + 1.4 * s + 1.05, eyeZ = wm0.position.z * .55, shoulder = 1.05 * s + .35; // over the gun's shoulder
       const fpHide = []; { const bb = new T.Box3(); a.traverse(o => { if (!o.isMesh || !o.visible) return; let w = o; while (w && w !== wm0) w = w.parent; if (w === wm0) return; o.geometry.boundingBox || o.geometry.computeBoundingBox(); bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); if (bb.max.y > eyeY - .1 && bb.max.x > eyeX - .2 && bb.min.y > .3 && bb.max.x - bb.min.x < spec.L * .6) fpHide.push(o); }); }
 
       const v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), poseA = { p: new T.Vector3(), l: new T.Vector3() }, poseB = { p: new T.Vector3(), l: new T.Vector3() };
@@ -609,7 +614,37 @@ function build() {
         for (let i = 0; i < 12; i++) glow.add(p.x, p.y, p.z, out * Math.random() * 11 * k + R(1.5), R(1.5), R(1.8), .12 + Math.random() * .12, Math.random() < .5 ? ORANGE : YELLOW, 1, 1.25 * k, .3);
         for (let i = 0; i < 7; i++) soft.add(p.x, p.y, p.z, out * Math.random() * 3 + R(.5), .5 + Math.random(), R(.7), .9 + Math.random() * .5, [.72, .72, .72], .55, .7 * k, 2.8 * k, -.2, .9);
         flash.position.copy(p).setY(p.y + 1.5); flashV = Math.max(flashV, 2.2 * k); }
-      function launch(c, kind, hit, big, onDone) { const sh = SHOT[kind] || SHOT.cannon, from = muzzle(c), target = c === a ? b : a, to = hit ? hullSpot(target) : missSpot(target), size = sh[3] * Math.max(.8, c.userData.wm.scale.x);
+      /* ----- missiles and torpedoes are real objects: a missile leaves its own rail, a torpedo drops from its tube and runs along the surface ----- */
+      const rBody = new T.CylinderGeometry(1, 1, 1, 10).rotateZ(-Math.PI / 2), rNose = new T.ConeGeometry(1, 1, 10).rotateZ(-Math.PI / 2), reloads = [], flights = [];
+      const plainRound = (len, r) => { const g = new T.Group(), body = new T.Mesh(rBody, M.iron), nose = new T.Mesh(rNose, M.warhead); body.scale.set(len, r, r); nose.scale.set(r * 2.6, r, r); nose.position.x = len / 2 + r * 1.3; g.add(body, nose); return g; };
+      const fX = new T.Vector3(), fY = new T.Vector3(), fZ = new T.Vector3(), fM = new T.Matrix4(), fP = new T.Vector3();
+      const faceAlong = (o, f, bank = 0) => { fX.copy(f).normalize(); fY.set(0, 1, 0); if (Math.abs(fX.y) > .98) fY.set(1, 0, 0); fZ.crossVectors(fX, fY).normalize(); fY.crossVectors(fZ, fX); fM.makeBasis(fX, fY, fZ); o.quaternion.setFromRotationMatrix(fM); if (bank) o.rotateX(bank); };
+      function launchRound(c, kind, hit, big, onDone) { const u = c.userData, target = c === a ? b : a, to = hit ? hullSpot(target) : missSpot(target), k0 = Math.max(.8, u.wm.scale.x); let mesh, round = null, from, fly, tail;
+        if (kind === "missile") { const rs = roundsOf(c); round = rs.find(r => r.visible) || rs[0] || null;
+          if (round) { round.updateWorldMatrix(true, true); mesh = round.clone(true); mesh.visible = true; mesh.scale.set(1, 1, 1); round.matrixWorld.decompose(mesh.position, mesh.quaternion, mesh.scale); round.visible = false; for (let i = reloads.length - 1; i >= 0; i--) if (reloads[i].round === round) reloads.splice(i, 1); }
+          else { mesh = plainRound(1.6 * k0, .12 * k0); u.wm.updateWorldMatrix(true, false); u.wm.getWorldQuaternion(mesh.quaternion); mesh.position.copy(muzzle(c)); }
+          from = mesh.position.clone(); const head = new T.Vector3(1, 0, 0).applyQuaternion(mesh.quaternion), d = from.distanceTo(to); tail = 1.2 * k0;
+          // up along its own rail, over the top, then down on the target
+          const curve = new T.CubicBezierCurve3(from, from.clone().addScaledVector(head, d * .3), to.clone().add(new T.Vector3(0, d * .28, 0)), to);
+          fly = (k, pos, tan) => { const t = k * k * .55 + k * .45, t1 = Math.min(t, .99); curve.getPoint(t, pos); curve.getPoint(t1, tan); curve.getPoint(t1 + .01, fP); tan.subVectors(fP, tan); };
+          for (let i = 0; i < 14; i++) glow.add(from.x - head.x * tail, from.y - head.y * tail, from.z - head.z * tail, -head.x * 9 + R(2), -head.y * 9 + R(1) + 1, -head.z * 9 + R(2), .2 + Math.random() * .15, Math.random() < .5 ? ORANGE : YELLOW, 1, 1.1 * k0, .3);
+          flash.position.copy(from).setY(from.y + 1.5); flashV = Math.max(flashV, 2.2); }
+        else { from = muzzle(c); muzzleFx(c, from, false); mesh = plainRound(1.7 * k0, .13 * k0); mesh.position.copy(from); tail = .85 * k0; to.y = hit ? .4 : .1;
+          const entry = from.clone().lerp(to, .2).setY(.1); let wet = false;
+          fly = (k, pos, tan) => { if (k < .18) { const q = k / .18; pos.lerpVectors(from, entry, q); pos.y += Math.sin(q * Math.PI) * .5; tan.subVectors(entry, from); tan.y -= (1 - q) * 1.5 - .6; return; } if (!wet) { wet = true; splash(entry, .35); } pos.lerpVectors(entry, to, (k - .18) / .82); pos.y = Math.max(pos.y, .12); tan.subVectors(to, entry).setY(0); }; }
+        root.add(mesh); shots.push({ mesh, fly, tail, round, from, to, age: 0, dur: SHOT[kind][0], trail: SHOT[kind][5], hit, big, target, onDone, size: SHOT[kind][3] }); }
+      /* ----- aircraft take off once per battle, on their side's first shot, fly past the other ship and come home. This is only for show: the battle is already decided, and nothing waits for them. ----- */
+      function airPath(id, S, fx, dir, lz, Lt) { const H = Lt * .12, mid = (S.x + fx) / 2, V3 = (x, y, z) => new T.Vector3(x, y, z), near = fx - dir * (Lt * .5 + 6), past = fx + dir * (Lt * .5 + 6), off = S.z + (lz - S.z) * .6; // the first leg swings aside, so nothing flies through the camera on my own deck
+        return { fighter: { dur: 6.5, guns: true, flat: 1, pts: [S, V3(S.x + dir * 8, S.y + 1.5, off), V3(near, 5 + H, lz), V3(past, 6 + H, lz), V3(past + dir * 12, 11 + H, lz + 12), V3(mid, 15 + H, lz + 20), V3(S.x - dir * 12, S.y + 4, S.z + 7), S] },
+          vtol: { dur: 7.5, guns: true, flat: .3, pts: [S, V3(S.x, S.y + 3.5, off * .5), V3(S.x + dir * 4, S.y + 5, off), V3(near, 5 + H, lz), V3(past, 6 + H, lz), V3(mid, 12 + H, lz - 14), V3(S.x - dir * 6, S.y + 5, S.z - 4), S] },
+          heli: { dur: 9, guns: true, flat: .25, pts: [S, V3(S.x, S.y + 2.5, off), V3(near - dir * 3, 6 + H, lz + 4), V3(near, 6 + H, lz - 5), V3(mid, 10, lz - 9), V3(S.x + dir * 2, S.y + 3, S.z - 3), S] },
+          drone: { dur: 8, flat: .3, pts: [S, V3(S.x + dir * 5, S.y + 2, off), V3(fx - dir * 3, 9 + H, lz + 5), V3(past, 9 + H, lz), V3(fx - dir * 3, 9 + H, lz - 6), V3(mid, 10, lz - 6), S] },
+          awacs: { dur: 10, flat: .3, pts: [S, V3(S.x + dir * 6, S.y + 2, off), V3(mid, 14, lz + 10), V3(fx, 16 + H, lz + 4), V3(mid, 16, lz - 10), V3(S.x - dir * 8, S.y + 3, S.z - 6), S] } }[id]; }
+      function sortie(c) { const u = c.userData; if (u.flown || !u.air.length) return; u.flown = true; const foe = c === a ? b : a, dir = c === a ? 1 : -1, fx = foe.position.x, Lt = foe.userData.spec.L; ctrl.onSortie?.();
+        u.air.forEach((o, i) => setTimeout(() => { if (fightOn !== step) return; const home = { parent: o.parent, p: o.position.clone(), q: o.quaternion.clone(), s: o.scale.clone() }; o.updateWorldMatrix(true, false); const S = new T.Vector3(); o.matrixWorld.decompose(S, o.quaternion, o.scale); o.position.copy(S); home.parent.remove(o); root.add(o);
+          o.traverse(m => m.userData.away = true); o.visible = true; const plan = airPath(o.name.slice(4), S.clone(), fx, dir, (i % 2 ? 1 : -1) * (c === a ? 7 + i * 2 : 1 + i), Lt), last = plan.pts.length - 1; plan.pts[last] = S.clone();
+          flights.push({ o, home, plan, curve: new T.CatmullRomCurve3(plan.pts, false, "centripetal"), age: 0, fired: !plan.guns, foe, fx, dir, Lt }); }, i * 450)); }
+      function launch(c, kind, hit, big, onDone) { if (kind === "missile" || kind === "torpedo") return launchRound(c, kind, hit, big, onDone); const sh = SHOT[kind] || SHOT.cannon, from = muzzle(c), target = c === a ? b : a, to = hit ? hullSpot(target) : missSpot(target), size = sh[3] * Math.max(.8, c.userData.wm.scale.x);
         muzzleFx(c, from, big);
         if (kind === "torpedo") { from.y = .15; if (hit) to.y = .4; }
         const mesh = new T.Mesh(shotGeo, new T.MeshBasicMaterial({ color: sh[4] })); mesh.scale.setScalar(size); if (kind === "bolt" || kind === "missile" || kind === "torpedo" || kind === "gun") mesh.scale.x = size * (kind === "gun" ? 7 : 4);
@@ -631,7 +666,16 @@ function build() {
           for (const f of u.fires) { if (Math.random() < dt * 22 && u.sink < 1) { v1.copy(f); c.localToWorld(v1); if (v1.y > .1) { const near = c === a && view === "fp", z = near ? .3 : 1; // my own fires blow away from the camera and stay small, so they never block the view
               soft.add(v1.x, v1.y + .3, v1.z, near ? 1.5 : -.6 + R(.4), (near ? .9 : 1.7) + Math.random(), R(.4), (near ? .8 : 1.5) + Math.random() * z, SMOKE_C, near ? .36 : .52, 1.05 * z, 4.3 * z, -.15, .2); if (Math.random() < .55) glow.add(v1.x, v1.y + .1, v1.z, R(.4), 1 + Math.random() * 1.3, R(.4), .35 + Math.random() * .3, Math.random() < .5 ? ORANGE : YELLOW, .9, near ? .5 : 1, .25); } } }
           if (u.sink > 0 && u.sink < 1 && Math.random() < dt * 30) soft.add(x + R(u.spec.L * .45), .15, R(u.spec.W + 1), R(.6), 1 + Math.random() * 2, R(.6), .8, WATER, .75, .6, 1.5, 3); }
+        for (let i = reloads.length - 1; i >= 0; i--) { const r = reloads[i]; r.age += dt; if (r.age < .9) continue; r.round.visible = true; const q = Math.min(1, (r.age - .9) / .4); r.round.scale.setScalar(.25 + .75 * q); if (q >= 1) reloads.splice(i, 1); } // the next one comes up from below the deck
+        for (let i = flights.length - 1; i >= 0; i--) { const f = flights[i]; f.age += dt; const k = Math.min(1, f.age / f.plan.dur), e = k * k * (3 - 2 * k) * .35 + k * .65, e1 = Math.min(e, .98); f.curve.getPointAt(e, v1); f.o.position.copy(v1); f.curve.getTangentAt(e1, v2); f.curve.getTangentAt(e1 + .02, v3);
+          const turn = v2.x * v3.z - v2.z * v3.x, bank = f.plan.flat === 1 ? Math.max(-.9, Math.min(.9, turn * 14)) : Math.max(-.3, Math.min(.3, turn * 8)); v2.y *= f.plan.flat; faceAlong(f.o, v2, bank);
+          if (!f.fired && (v1.x - f.fx) * f.dir > -(f.Lt * .5 + 3)) { f.fired = true; ctrl.onStrafe?.(); const side = f.foe.userData.spec.W + 1.5; for (let j = 0; j < 4; j++) setTimeout(() => { if (fightOn === step) splash(new T.Vector3(f.fx + R(f.Lt * .35), .1, (j % 2 ? 1 : -1) * side + R(1)), .28); }, j * 110); }
+          if (k >= 1) { root.remove(f.o); f.home.parent.add(f.o); f.o.position.copy(f.home.p); f.o.quaternion.copy(f.home.q); f.o.scale.copy(f.home.s); f.o.traverse(m => m.userData.away = false); flights.splice(i, 1); } }
         for (let i = shots.length - 1; i >= 0; i--) { const o = shots[i]; o.age += dt; const k = Math.min(1, o.age / o.dur);
+          if (o.fly) { o.fly(k, v1, v2); o.mesh.position.copy(v1); if (v2.lengthSq() > 1e-7) faceAlong(o.mesh, v2); v3.copy(v2).normalize().multiplyScalar(-o.tail).add(v1);
+            if (o.trail === "flame") { glow.add(v3.x, v3.y, v3.z, 0, 0, 0, .18, ORANGE, 1, 1.1, .2); glow.add(v3.x, v3.y, v3.z, 0, 0, 0, .09, YELLOW, 1, .6, .15); if (camera.position.distanceTo(v3) > 9 && Math.random() < dt * 70) soft.add(v3.x, v3.y, v3.z, R(.2), .25, R(.2), 1.3, [.85, .85, .85], .5, .5, 2); } // smoke right in front of the camera would hide the missile
+            else if (v1.y < .7 && Math.random() < dt * 110) soft.add(v3.x + R(.2), .2, v3.z + R(.2), R(.3), .4 + Math.random() * .6, R(.3), .9, WATER, .85, .5, 1.2);
+            if (k >= 1) { root.remove(o.mesh); shots.splice(i, 1); if (o.round) reloads.push({ round: o.round, age: 0 }); land(o); } continue; }
           v1.lerpVectors(o.from, o.to, k); v1.y += Math.sin(k * Math.PI) * o.arc; v2.copy(v1).sub(o.mesh.position); o.mesh.position.copy(v1); if (v2.lengthSq() > 1e-5) o.mesh.rotation.set(0, Math.atan2(-v2.z, v2.x), Math.atan2(v2.y, Math.hypot(v2.x, v2.z)));
           if (o.trail === "smoke" && Math.random() < dt * 40) soft.add(v1.x, v1.y, v1.z, 0, .2, 0, .55, [.8, .8, .8], .4, .4, 1.1);
           else if (o.trail === "glow") glow.add(v1.x, v1.y, v1.z, 0, 0, 0, .14, YELLOW, .9, o.size * 5, .1);
@@ -644,7 +688,7 @@ function build() {
         glow.step(dt); soft.step(dt); flashV = Math.max(0, flashV - dt * 16); flash.intensity = flashV;
         blend = Math.min(1, blend + dt / (view === "fp" ? 1.25 : 1.5)); const e = blend < .5 ? 2 * blend * blend : 1 - Math.pow(-2 * blend + 2, 2) / 2;
         pose(blendFrom, poseA, clock0); pose(view, poseB, clock0); v1.lerpVectors(poseA.p, poseB.p, e); v2.lerpVectors(poseA.l, poseB.l, e);
-        const inside = view === "fp" && blend > .86; fpHide.forEach(o => o.visible = !inside);
+        const inside = view === "fp" && blend > .86; fpHide.forEach(o => o.visible = !inside || !!o.userData.away);
         shake = Math.max(0, shake - dt * 2.2); const amp = reduced ? 0 : shake * shake * .4; camera.position.set(v1.x + R(amp), v1.y + R(amp), v1.z + R(amp)); camera.up.set(R(amp * .08), 1, R(amp * .08)); camera.lookAt(v2);
         scene.fog.near = Math.max(34, camera.position.length() * 1.25); scene.fog.far = scene.fog.near + 70; // the far views are further out: keep the ship clear and only hide the sea's edge
         glow.mat.uniforms.uScale.value = soft.mat.uniforms.uScale.value = renderer.domElement.height / 2 / Math.tan(camera.fov * Math.PI / 360) * .55; };
@@ -653,11 +697,11 @@ function build() {
       const ctrl = { onHurt: null,
         // walk out onto the deck
         intro: () => wait(1500).then(() => { goView("fp"); return wait(1250); }),
-        fire(by, dmg, kind) { const c = by === "a" ? a : b, sh = SHOT[kind] ? kind : "cannon", n = SHOT[sh][2];
+        fire(by, dmg, kind) { const c = by === "a" ? a : b, sh = SHOT[kind] ? kind : "cannon", n = SHOT[sh][2]; sortie(c);
           return new Promise(res => { launch(c, sh, dmg > 0, n === 1, n === 1 ? res : null);
             for (let i = 1; i < n; i++) { const last = i === n - 1; setTimeout(() => { if (fightOn) launch(c, sh, dmg > 0, last, last ? res : null); else res(); }, i * 75); } }); },
         finish(didWin, fast) { won = didWin; const loser = didWin ? b : a; loser.userData.sink = .001; for (let i = 0; i < 3; i++) setTimeout(() => { if (!fightOn) return; const sp = loser.userData.spec; v3.set(R(sp.L * .35), sp.H0, R(sp.W * .5)); loser.localToWorld(v3); burst(v3.clone(), 1.2); }, fast ? 0 : i * 420); shake = didWin ? .4 : 1.2; goView("end"); return wait(fast ? 300 : 1500); },
-        close() { fightOn = null; shots.forEach(o => { root.remove(o.mesh); o.mesh.material.dispose(); }); scene.remove(root, flash); a.userData.mats.concat(b.userData.mats).forEach(m => m.dispose()); shotGeo.dispose(); glow.remove(); soft.remove();
+        close() { fightOn = null; shots.forEach(o => { root.remove(o.mesh); o.mesh.material?.dispose(); }); rBody.dispose(); rNose.dispose(); scene.remove(root, flash); a.userData.mats.concat(b.userData.mats).forEach(m => m.dispose()); shotGeo.dispose(); glow.remove(); soft.remove();
           homeShip.visible = true; foamPts.visible = true; hidden.forEach(e => e.style.display = ""); cv.style.cursor = ""; camera.fov = oldFov; camera.up.set(0, 1, 0); camera.updateProjectionMatrix(); sun.target.position.set(0, 0, 0); sun.target.updateMatrixWorld(); ocean.scale.set(1, 1, 1); oceanMat.roughness = oldSea[1]; [scene.fog.near, scene.fog.far] = [oldSea[2], oldSea[3]]; time = oldTime; applyTime(); useShip(homeId); lookKey = ""; if (stage.parentNode) stage.parentNode.removeChild(stage); } };
       fightOn = step;
       if (stage.parentNode !== host) host.appendChild(stage); start();
