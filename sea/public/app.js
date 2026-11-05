@@ -193,9 +193,22 @@ function kidRender() {
   if (K.tab === "deco") { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey), base = draftLook(me.look); show3D($("#deco3d"), x ? withItem(base, x) : base, me.sail, K.tryShip || me.ship); if (K.crop) drawCrop(); }
 }
 const tallMap = () => innerWidth < 640;
-const mapSize = () => tallMap() ? { w: 640, h: 920 } : { w: 1000, h: 620 };
-const islePos = k => { const s = ISLES[k], m = mapSize(), x = tallMap() ? s.px : s.x, y = tallMap() ? s.py : s.y; return { x: K.map === 1 ? m.w - x : x, y }; }; // the middle sea is laid out mirrored
-const shipAt = k => { const p = islePos(k), m = mapSize(); return `left:${(p.x + 66) / m.w * 100}%;top:${(p.y + 24) / m.h * 100}%`; };
+const mapSize = () => tallMap() ? { w: 640, h: mapArt() ? 800 : 920 } : { w: 1000, h: 620 };
+// painted maps, in the image's own pixels: wide/tall = crop [x, y, width]; each island = tap area and the spot in the water where the ship waits
+const ART_LAYOUT = { size: 1254, wide: [78, 240, 1097], tall: [245, 110, 760], isles: {
+    port: { x: 455, y: 715, rx: 190, ry: 150, dock: [650, 812] },
+    cannon: { x: 700, y: 370, rx: 160, ry: 95, dock: [565, 482] },
+    reef: { x: 835, y: 565, rx: 135, ry: 65, dock: [690, 600] },
+    memory: { x: 395, y: 430, rx: 130, ry: 80, dock: [515, 520] },
+    battle: { x: 840, y: 765, rx: 150, ry: 90, dock: [770, 880] }
+  }, routes: [["memory", "cannon", 12], ["cannon", "port", 34], ["cannon", "reef", 14], ["reef", "port", 10], ["port", "battle", -16]] };
+const MAP_ART = [1, 2, 3].map(n => ({ ...ART_LAYOUT, src: `/maps/sea${n}.webp` })); // the three pictures share one layout
+const mapArt = () => MAP_ART[K.map];
+const artCrop = a => tallMap() ? a.tall : a.wide;
+const artPt = (a, sx, sy) => { const [cx, cy, cw] = artCrop(a), s = mapSize().w / cw; return { x: (sx - cx) * s, y: (sy - cy) * s }; };
+const islePos = k => { const a = mapArt(); if (a) return artPt(a, a.isles[k].x, a.isles[k].y); const s = ISLES[k], m = mapSize(), x = tallMap() ? s.px : s.x, y = tallMap() ? s.py : s.y; return { x: K.map === 1 ? m.w - x : x, y }; }; // the middle sea is laid out mirrored
+const dockPos = k => { const a = mapArt(); if (a) return artPt(a, ...a.isles[k].dock); const p = islePos(k); return { x: p.x + 66, y: p.y + 24 }; };
+const shipAt = k => { const p = dockPos(k), m = mapSize(); return `left:${p.x / m.w * 100}%;top:${p.y / m.h * 100}%`; };
 const SEAS = [
   { top: "#3A86BD", bot: "#123E66", land: { port: "#7FAE62", cannon: "#B98A5A", reef: "#8A9AA6", memory: "#C9A25E", battle: "#A8574A" } },
   { top: "#5E8AA3", bot: "#1B3A50", land: { port: "#8C9178", cannon: "#8C7A66", reef: "#D5E5EE", memory: "#A39A82", battle: "#7E5148" } },
@@ -204,16 +217,21 @@ const SEAS = [
 const seaOpen = m => K.d.me.power >= m.power;
 function kMap() {
   const d = K.d, me = d.me, { w, h } = mapSize(), tall = tallMap(), fs = tall ? 36 : 27, sea = SEAS[K.map], names = d.maps[K.map].isles;
-  const isle = (k, s) => { const { x, y } = islePos(k); return `<g class="isle ${K.isle === k ? "on" : ""}" data-act="kisle" data-v="${k}" tabindex="0" role="button" aria-label="${names[k]}: ${isleSub(k)}">
+  const art = mapArt();
+  const isle = (k, s) => { const { x, y } = islePos(k), head = `<g class="isle ${K.isle === k ? "on" : ""}" data-act="kisle" data-v="${k}" tabindex="0" role="button" aria-label="${names[k]}: ${isleSub(k)}">`;
+    if (art) { const i = art.isles[k], z = w / artCrop(art)[2], rx = i.rx * z, ry = i.ry * z;
+      return `${head}<ellipse class="hit" cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="transparent"/><text x="${x}" y="${y + ry + fs * .75}" text-anchor="middle" class="lbl" font-size="${fs}">${names[k]}</text></g>`; }
+    return `${head}
     <ellipse cx="${x}" cy="${y + 10}" rx="${s.r + 8}" ry="${s.r * .46 + 5}" fill="#E9D5A4"/><ellipse cx="${x}" cy="${y}" rx="${s.r}" ry="${s.r * .44}" fill="${sea.land[k]}"/>${(ERA_ART[K.map]?.[k] || ART[k])(x, y)}
     <text x="${x}" y="${y + s.r * .44 + fs + 12}" text-anchor="middle" class="lbl" font-size="${fs}">${names[k]}</text></g>`; };
-  const route = (a, b, bend) => { const p = islePos(a), q = islePos(b); return `M${p.x} ${p.y} Q${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2 - bend} ${q.x} ${q.y}`; };
+  const artImg = () => { const [cx, cy, cw] = artCrop(art), ch = cw * h / w; return `<img class="wart" src="${art.src}" alt="" style="width:${art.size / cw * 100}%;left:${-cx / cw * 100}%;top:${-cy / ch * 100}%"><div class="wfx" aria-hidden="true"><i class="wglint"></i><i class="wcloud"></i><i class="wcloud c2"></i><i class="wcloud c3"></i></div>`; };
+  const route = (a, b, bend) => { const p = (art ? dockPos : islePos)(a), q = (art ? dockPos : islePos)(b); return `M${p.x} ${p.y} Q${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2 - bend} ${q.x} ${q.y}`; };
   const tabs = d.maps.map(m => { const open = seaOpen(m); return `<button class="seatab ${open ? "" : "locked"}" data-act="ksea" data-v="${m.id}" aria-pressed="${K.map === m.id}"><b>${esc(m.name)}</b><small>${open ? esc(m.era) : `전투력 ${m.power}부터`}</small>${open ? "" : `<i class="seabar"><i style="width:${Math.min(100, me.power / m.power * 100)}%"></i></i>`}</button>`; }).join("");
   return `${installCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
-    <div class="world"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(d.maps[K.map].name)} 지도">
-      <defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sea.top}"/><stop offset="1" stop-color="${sea.bot}"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
-      <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>
-      <path d="${route("port", "memory", 30)} ${route("port", "cannon", 20)} ${route("cannon", "reef", 40)} ${route("reef", "battle", 30)} ${route("port", "battle", -30)}" fill="none" stroke="#fff" stroke-width="3.5" stroke-dasharray="2 13" stroke-linecap="round" opacity=".55"/>
+    <div class="world ${art ? "art" : ""}">${art ? artImg() : ""}<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(d.maps[K.map].name)} 지도">
+      ${art ? "" : `<defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sea.top}"/><stop offset="1" stop-color="${sea.bot}"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
+      <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>`}
+      <path d="${art ? art.routes.map(r => route(...r)).join(" ") : `${route("port", "memory", 30)} ${route("port", "cannon", 20)} ${route("cannon", "reef", 40)} ${route("reef", "battle", 30)} ${route("port", "battle", -30)}`}" fill="none" stroke="#fff" stroke-width="3.5" stroke-dasharray="2 13" stroke-linecap="round" opacity=".55"/>
       ${Object.entries(ISLES).map(([k, s]) => isle(k, s)).join("")}
     </svg><div class="ship mine worldship ${V.wakeClass(me.look)}" id="wship" style="--sail:${sail(me.sail)};${shipAt(K.at)}">${shipSVG(me.ship, me.look, me.sail)}</div></div>
     ${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}`;

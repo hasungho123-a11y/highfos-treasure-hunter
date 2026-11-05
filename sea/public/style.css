@@ -332,6 +332,25 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .world .lbl { font-family: var(--display); fill: #fff; paint-order: stroke; stroke: rgb(10 30 55 / .6); stroke-width: 5px }
 .isle { cursor: pointer; transition: filter .15s } .isle:hover, .isle:focus-visible, .isle.on { filter: brightness(1.15) drop-shadow(0 0 8px rgb(255 230 150 / .9)); outline: none }
 .worldship { width: 11% !important; transition: left .6s ease-in-out, top .6s ease-in-out; pointer-events: none }
+/* painted maps: the picture sits under the svg; light and clouds move on their own layer so the phone never repaints the picture */
+.world.art { background: #123E66 }
+.world.art > svg { position: relative; z-index: 1 }
+.wart { position: absolute; max-width: none; height: auto; pointer-events: none; -webkit-user-drag: none }
+.wfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none }
+.wglint { position: absolute; inset: -10% -20%; opacity: .5; mix-blend-mode: soft-light; background-size: 210px 150px; background-image: radial-gradient(ellipse 14px 2px at 30px 40px, #fff, transparent), radial-gradient(ellipse 10px 2px at 120px 20px, #fff, transparent), radial-gradient(ellipse 18px 2px at 170px 90px, #fff, transparent), radial-gradient(ellipse 12px 2px at 70px 125px, #fff, transparent) }
+.wcloud { position: absolute; left: 0; top: 4%; width: 52%; aspect-ratio: 2.4; opacity: .42; background: radial-gradient(ellipse 22% 34% at 30% 58%, rgb(255 248 235 / .75), transparent), radial-gradient(ellipse 26% 42% at 48% 44%, rgb(255 248 235 / .8), transparent), radial-gradient(ellipse 20% 30% at 66% 56%, rgb(255 248 235 / .7), transparent), radial-gradient(ellipse 14% 20% at 16% 66%, rgb(255 248 235 / .5), transparent), radial-gradient(ellipse 14% 18% at 82% 64%, rgb(255 248 235 / .45), transparent); transform: translateX(-20cqw) }
+.wcloud.c2 { top: 52%; width: 40%; transform: translateX(50cqw) }
+.wcloud.c3 { top: 74%; width: 60%; transform: translateX(10cqw) }
+@media (prefers-reduced-motion: no-preference) {
+  .wglint { animation: glint 9s ease-in-out infinite alternate }
+  .wcloud { animation: cloudGo 110s linear infinite -30s }
+  .wcloud.c2 { animation-duration: 150s; animation-delay: -100s }
+  .wcloud.c3 { animation-duration: 90s; animation-delay: -70s }
+}
+@keyframes glint { to { transform: translate(-45px, 12px) } }
+@keyframes cloudGo { from { transform: translateX(-65cqw) } to { transform: translateX(105cqw) } }
+.isle .hit { stroke: transparent; stroke-width: 3; stroke-dasharray: 9 8; transition: stroke .15s }
+.isle:hover .hit, .isle:focus-visible .hit, .isle.on .hit { stroke: #FFE59A }
 .portrow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 14px; padding: 10px 0; border-top: 1px solid var(--line) }
 .portrow:first-of-type { border-top: 0 } .portrow p { margin: 2px 0 0 } .portrow > div:first-child { flex: 1 1 180px; min-width: 0 }
 .notice { padding: 12px 14px; border-radius: 10px; background: var(--gold-soft); display: grid; gap: 8px }
