@@ -307,8 +307,8 @@ function kUpgrade() {
 }
 function boxRow(m) {
   const d = K.d, b = d.boxes[m.id], can = d.bal.points >= b.price;
-  const note = b.pityIn ? `이 시대 무기가 하나 나와요. 앞으로 상자 ${b.pityIn}개 안에 전설 무기가 꼭 나와요.` : "이 시대 무기가 하나 나와요. 없는 무기가 먼저 나와요.";
-  const ctl = !seaOpen(m) ? `<span class="small muted">전투력 ${m.power}부터</span>` : b.all ? `<span class="pill ok">다 모았어요</span>` : `<button class="btn sm ${can ? "primary" : ""}" data-act="kboxAsk" data-v="${m.id}" ${can ? "" : "disabled"}>${can ? `포인트 ${b.price}으로 열기` : `포인트 ${b.price - d.bal.points} 모자라요`}</button>`;
+  const note = "한 달에 한 번, 아직 없는 이 시대 무기가 하나 나와요. 어느 시대 상자를 열지는 내가 골라요.";
+  const ctl = !seaOpen(m) ? `<span class="small muted">전투력 ${m.power}부터</span>` : b.all ? `<span class="pill ok">다 모았어요</span>` : d.boxUsed ? `<span class="small muted">다음 달에 다시 열 수 있어요</span>` : `<button class="btn sm ${can ? "primary" : ""}" data-act="kboxAsk" data-v="${m.id}" ${can ? "" : "disabled"}>${can ? `포인트 ${b.price}으로 열기` : `포인트 ${b.price - d.bal.points} 모자라요`}</button>`;
   return `<div class="box-row"><div class="stack" style="gap:2px"><b>보급 상자</b><span class="small muted">${b.all ? "이 시대 무기를 모두 모았어요." : note}</span></div>${ctl}</div>`;
 }
 function kDeco() {

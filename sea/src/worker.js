@@ -15,8 +15,8 @@ const GAMES = {
 };
 const STAR_POINTS = [10, 20, 40, 60], STAR_DROP = [0, 3, 6, 10]; // by stars: points, and % chance of an item
 const DROP_GOLD = { 보통: 40, 희귀: 100, 전설: 240 }; // paid instead when the item is already owned
-// supply boxes turn points into a weapon of one sea's era, for kids the mini-game drops have passed by; the price follows that sea's point rate
-const BOX_PRICE = 300, BOX_PITY = 10, boxPrice = map => Math.round(BOX_PRICE * map.mult), boxTitle = map => `보급 상자(${map.name})`;
+// once a month a kid may turn points into a weapon they lack, for those the mini-game drops have passed by; the price follows that sea's point rate
+const BOX_PRICE = 300, boxPrice = map => Math.round(BOX_PRICE * map.mult);
 
 // ship classes, smallest to largest; bought with gold. The look of each is in public/ship3d.js and app.js
 const SHIPS = [
@@ -259,7 +259,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
     q.status = q.kind !== "challenge" && d ? "done" : p ? "pending" : "open"; q.requestId = p ? p.id : null; }
   const owned = (await db.prepare("SELECT item FROM owned WHERE student_id=?").bind(st.id).all()).results.map(r => r.item);
   const log = (await db.prepare("SELECT title, energy, points, gold, at FROM logs WHERE student_id=? ORDER BY id DESC LIMIT 30").bind(st.id).all()).results;
-  const boxLogs = (await db.prepare("SELECT title FROM logs WHERE student_id=? AND kind='box'").bind(st.id).all()).results;
+  const boxUsed = !!(await db.prepare("SELECT 1 FROM logs WHERE student_id=? AND kind='box' AND date LIKE ? LIMIT 1").bind(st.id, `${month}%`).first());
   const used = (await db.prepare("SELECT COUNT(*) AS n FROM battles WHERE attacker=? AND date=?").bind(st.id, today).first()).n;
   const fights = (await db.prepare(`SELECT b.*, a.nickname AS a_name, d.nickname AS d_name FROM battles b JOIN students a ON a.id=b.attacker JOIN students d ON d.id=b.defender WHERE b.attacker=? OR b.defender=? ORDER BY b.id DESC LIMIT 12`).bind(st.id, st.id).all()).results
     .map(b => ({ id: b.id, attacked: b.attacker === st.id, opp: b.attacker === st.id ? b.d_name : b.a_name, won: b.winner === st.id, gold: b.attacker === st.id ? b.delta : (b.winner === st.id ? game.defend : 0), at: b.at }));
@@ -267,8 +267,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const orders = (await db.prepare("SELECT id, name, status, created_at FROM orders WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
   const h = kstHour(), open = !!st.class_battle && (game.hourFrom === game.hourTo || (h >= game.hourFrom && h < game.hourTo));
   return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id] },
-    boxes: MAPS.map(m => { const era = WEAPONS.filter(w => w.era === m.id), legend = era.find(w => w.rarity === "전설"), opened = boxLogs.filter(l => l.title.startsWith(boxTitle(m))).length;
-      return { map: m.id, price: boxPrice(m), all: era.every(w => owned.includes(w.key)), pityIn: owned.includes(legend.key) ? null : Math.max(1, BOX_PITY - opened) }; }),
+    boxUsed, boxes: MAPS.map(m => ({ map: m.id, price: boxPrice(m), all: WEAPONS.filter(w => w.era === m.id).every(w => owned.includes(w.key)) })),
     upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
     bal, game, quests, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
@@ -330,17 +329,16 @@ on("POST", "/api/kid/deco/wear", "student", async ({ db, me, body }) => {
 });
 on("POST", "/api/kid/box", "student", async ({ db, me, body }) => {
   const st = me.student, sid = st.id, map = MAPS[int(body.map, 0, MAPS.length - 1)];
+  if (await db.prepare("SELECT 1 FROM logs WHERE student_id=? AND kind='box' AND date LIKE ? LIMIT 1").bind(sid, `${kstDate().slice(0, 7)}%`).first()) throw bad("이번 달 상자는 이미 열었어요. 다음 달에 다시 도전해요");
   if ((await powers(db, [st]))[sid] < map.power) throw bad(`${map.name}는 전투력 ${map.power}부터 열려요`);
   const price = boxPrice(map), bal = (await balances(db, [sid]))[sid]; if (bal.points < price) throw bad(`포인트가 ${price - bal.points} 모자라요`);
   const era = WEAPONS.filter(w => w.era === map.id), owned = new Set((await db.prepare("SELECT item FROM owned WHERE student_id=?").bind(sid).all()).results.map(r => r.item));
   const missing = era.filter(w => !owned.has(w.key)); if (!missing.length) throw bad("이 시대 무기를 모두 모았어요");
-  const opened = (await db.prepare("SELECT COUNT(*) AS n FROM logs WHERE student_id=? AND kind='box' AND title LIKE ?").bind(sid, `${boxTitle(map)}%`).first()).n;
-  const legend = era.find(w => w.rarity === "전설"), rarity = rollRarity(), pool = era.filter(w => w.rarity === rarity), fresh = pool.filter(w => !owned.has(w.key));
-  // the tenth box brings the legendary weapon; before that a weapon the kid lacks comes first, and only a fully owned rarity pays gold instead
-  const d = !owned.has(legend.key) && opened + 1 >= BOX_PITY ? legend : fresh.length ? fresh[randInt(fresh.length)] : pool[randInt(pool.length)], dup = owned.has(d.key), gold = dup ? DROP_GOLD[d.rarity] : 0;
-  const lg = await logStmt(db, { student_id: sid, kind: "box", title: `${boxTitle(map)}: ${d.name}`, points: -price, gold }).run();
-  if (!dup) await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, log_id, created_at) VALUES (?,?,?,?)").bind(sid, d.key, lg.meta.last_row_id, Date.now()).run();
-  return { ok: true, item: { key: d.key, name: d.name, rarity: d.rarity, slot: "weapon", dup, gold } };
+  // never a duplicate: if the rarity that came up is complete, any weapon still missing takes its place
+  const rarity = rollRarity(), fresh = missing.filter(w => w.rarity === rarity), from = fresh.length ? fresh : missing, d = from[randInt(from.length)];
+  const lg = await logStmt(db, { student_id: sid, kind: "box", title: `보급 상자(${map.name}): ${d.name}`, points: -price }).run();
+  await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, log_id, created_at) VALUES (?,?,?,?)").bind(sid, d.key, lg.meta.last_row_id, Date.now()).run();
+  return { ok: true, item: { key: d.key, name: d.name, rarity: d.rarity, slot: "weapon", dup: false, gold: 0 } };
 });
 on("POST", "/api/kid/upgrade", "student", async ({ db, me, body }) => {
   const u = UPGRADES.find(x => x.id === body.id); if (!u) throw bad("없는 강화예요");
