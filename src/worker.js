@@ -8,10 +8,11 @@ const SUBJECTS = ["영어", "수학", "공통"];
 const KINDS = ["daily", "weekly", "challenge"];
 const RARITIES = ["보통", "희귀", "전설"];
 const DEFAULT_SEASON = { id: "v1", name: "겨울 방학 항해", routeLen: 20, treasureEvery: 4, arrivalPoints: 100, weeklyClassGoal: 60 };
+// name, rarity, weight, points, gift (1 = a real gift, left out for classes without gifts)
 const DEFAULT_POOL = [
-  ["칭찬 스티커 3장", "보통", 28, 0], ["젤리 한 봉지", "보통", 24, 0], ["보너스 10포인트", "보통", 16, 10],
-  ["간식 쿠폰", "희귀", 12, 0], ["자리 우선 선택권", "희귀", 9, 0], ["보너스 50포인트", "희귀", 5, 50],
-  ["숙제 1회 면제권", "희귀", 5, 0], ["치킨 한 마리", "전설", 1, 0]
+  ["칭찬 스티커 3장", "보통", 28, 0, 1], ["젤리 한 봉지", "보통", 24, 0, 1], ["보너스 10포인트", "보통", 16, 10, 0],
+  ["간식 쿠폰", "희귀", 12, 0, 1], ["자리 우선 선택권", "희귀", 9, 0, 0], ["보너스 50포인트", "희귀", 5, 50, 0],
+  ["숙제 1회 면제권", "희귀", 5, 0, 0], ["치킨 한 마리", "전설", 1, 0, 1]
 ];
 const DEFAULT_SHOP = [
   ["젤리 한 봉지", "선물", 30], ["아이스크림", "선물", 50], ["예쁜 문구 세트", "선물", 80], ["작은 장난감 뽑기", "선물", 120],
@@ -111,7 +112,7 @@ async function auth(req, db) {
   const s = await db.prepare("SELECT * FROM sessions WHERE token=? AND expires_at>?").bind(t, Date.now()).first();
   if (!s) return null;
   if (s.role === "student") {
-    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.code AS class_code FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
+    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.code AS class_code, c.gifts AS class_gifts FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
     return st ? { role: "student", token: t, student: st } : null;
   }
   const te = await db.prepare("SELECT id, username FROM teachers WHERE id=?").bind(s.user_id).first();
@@ -184,9 +185,11 @@ async function openChest(db, chest) {
   if (chest.status !== "closed") throw bad("이미 연 상자예요");
   // stock: NULL = unlimited. A stocked prize is reserved before the chest is written; if someone else
   // took the last one in the meantime, draw again from what is left.
+  // a class without gifts only draws points and class privileges
+  const cls = await db.prepare("SELECT c.gifts FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=?").bind(chest.student_id).first();
   let pick = null;
   for (let tries = 0; tries < 5 && !pick; tries++) {
-    const pool = (await db.prepare("SELECT * FROM pool WHERE active=1 AND weight>0 AND (stock IS NULL OR stock>0)").all()).results;
+    const pool = (await db.prepare(`SELECT * FROM pool WHERE active=1 AND weight>0 AND (stock IS NULL OR stock>0) ${cls && !cls.gifts ? "AND gift=0" : ""}`).all()).results;
     if (!pool.length) throw bad("선생님이 보물을 준비하고 있어요. 조금 뒤에 다시 열어 봐요");
     let roll = randInt(pool.reduce((a, r) => a + r.weight, 0)), cand = pool[0];
     for (const r of pool) { if (roll < r.weight) { cand = r; break; } roll -= r.weight; }
@@ -209,8 +212,8 @@ async function shipsOf(db, season, where, binds) {
   return rows.map(r => ({ id: r.id, nickname: r.nickname, sail: r.sail, look: parseLook(r.look), classId: r.class_id, moves: st[r.id].moves, weekMoves: st[r.id].weekMoves }));
 }
 // Students only see prizes that can still come out; teachers also see sold-out ones (stock 0).
-async function poolList(db, all = false) { return (await db.prepare(`SELECT id, name, rarity, weight, points, stock FROM pool WHERE active=1 ${all ? "" : "AND (stock IS NULL OR stock>0)"} ORDER BY weight DESC, id`).all()).results; }
-async function shopList(db) { return (await db.prepare("SELECT id, name, kind, cost, stock FROM shop WHERE active=1 ORDER BY cost, id").all()).results; }
+async function poolList(db, all = false, gifts = true) { return (await db.prepare(`SELECT id, name, rarity, weight, points, stock, gift FROM pool WHERE active=1 ${all ? "" : "AND (stock IS NULL OR stock>0)"} ${gifts ? "" : "AND gift=0"} ORDER BY weight DESC, id`).all()).results; }
+async function shopList(db, gifts = true) { return (await db.prepare(`SELECT id, name, kind, cost, stock FROM shop WHERE active=1 ${gifts ? "" : "AND kind<>'선물'"} ORDER BY cost, id`).all()).results; }
 
 async function newStudent(db, classId, nickname, pin, mustChange = 1) {
   const h = await hashSecret(pin);
@@ -239,7 +242,7 @@ on("POST", "/api/setup", null, async ({ db, body, env }) => {
   const h = await hashSecret(pw);
   const r = await db.prepare("INSERT INTO teachers (username, pass_hash, salt, created_at) VALUES (?,?,?,?)").bind(username, h.hash, h.salt, Date.now()).run();
   const ops = [db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('season', ?)").bind(JSON.stringify(DEFAULT_SEASON))];
-  if (!(await db.prepare("SELECT 1 FROM pool LIMIT 1").first())) for (const p of DEFAULT_POOL) ops.push(db.prepare("INSERT INTO pool (name, rarity, weight, points) VALUES (?,?,?,?)").bind(...p));
+  if (!(await db.prepare("SELECT 1 FROM pool LIMIT 1").first())) for (const p of DEFAULT_POOL) ops.push(db.prepare("INSERT INTO pool (name, rarity, weight, points, gift) VALUES (?,?,?,?,?)").bind(...p));
   if (!(await db.prepare("SELECT 1 FROM shop LIMIT 1").first())) for (const s of DEFAULT_SHOP) ops.push(db.prepare("INSERT INTO shop (name, kind, cost) VALUES (?,?,?)").bind(...s));
   await db.batch(ops);
   return { ok: true, _cookie: await createSession(db, "teacher", r.meta.last_row_id) };
@@ -312,8 +315,8 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const log = (await db.prepare("SELECT title, moves, points, kind, at FROM logs WHERE student_id=? ORDER BY id DESC LIMIT 30").bind(st.id).all()).results;
   const ships = await shipsOf(db, season, "AND s.class_id=?", [st.class_id]);
   const owned = (await db.prepare("SELECT item FROM deco_owned WHERE student_id=?").bind(st.id).all()).results.map(r => r.item);
-  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: parseLook(st.look), className: st.class_name, mustChange: !!st.must_change }, season, stats, quests, chests, orders, log, ships,
-    pool: await poolList(db), shop: await shopList(db), badges: BADGES, deco: DECO, owned };
+  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: parseLook(st.look), className: st.class_name, gifts: !!st.class_gifts, mustChange: !!st.must_change }, season, stats, quests, chests, orders, log, ships,
+    pool: await poolList(db, false, !!st.class_gifts), shop: await shopList(db, !!st.class_gifts), badges: BADGES, deco: DECO, owned };
 });
 // buy a decoration with points; it is put on right away
 on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
@@ -365,7 +368,7 @@ on("POST", "/api/kid/open/:id", "student", async ({ db, me, params }) => {
 });
 on("POST", "/api/kid/buy/:id", "student", async ({ db, me, params }) => {
   const item = await db.prepare("SELECT * FROM shop WHERE id=? AND active=1").bind(params.id).first();
-  if (!item) throw bad("없는 상품이에요");
+  if (!item || (item.kind === "선물" && !me.student.class_gifts)) throw bad("없는 상품이에요");
   if (item.stock !== null && item.stock <= 0) throw bad("다 팔렸어요");
   const season = await getSeason(db), s = (await statsFor(db, season, [me.student.id]))[me.student.id];
   if (s.points < item.cost) throw bad(`포인트가 ${item.cost - s.points} 모자라요`);
@@ -378,7 +381,7 @@ on("POST", "/api/kid/buy/:id", "student", async ({ db, me, params }) => {
 /* ----- teacher ----- */
 on("GET", "/api/t/state", "teacher", async ({ db }) => {
   const season = await getSeason(db);
-  const classes = (await db.prepare("SELECT id, name, code FROM classes WHERE active=1 ORDER BY name").all()).results;
+  const classes = (await db.prepare("SELECT id, name, code, gifts FROM classes WHERE active=1 ORDER BY name").all()).results;
   const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const stats = await statsFor(db, season, students.map(s => s.id));
   for (const s of students) { s.stats = stats[s.id]; s.look = parseLook(s.look); s.locked = s.locked_until > Date.now(); delete s.locked_until; }
@@ -470,8 +473,12 @@ on("POST", "/api/t/adjust", "teacher", async ({ db, body }) => {
 on("POST", "/api/t/classes", "teacher", async ({ db, body }) => {
   if (body.id) { await db.prepare("UPDATE classes SET name=? WHERE id=?").bind(str(body.name, 20), int(body.id, 1)).run(); return { ok: true }; }
   let code; for (let i = 0; i < 6; i++) { code = classCode(); if (!(await db.prepare("SELECT 1 FROM classes WHERE code=?").bind(code).first())) break; }
-  await db.prepare("INSERT INTO classes (name, code, created_at) VALUES (?,?,?)").bind(str(body.name, 20), code, Date.now()).run();
+  await db.prepare("INSERT INTO classes (name, code, gifts, created_at) VALUES (?,?,?,?)").bind(str(body.name, 20), code, body.gifts === false ? 0 : 1, Date.now()).run();
   return { ok: true, code };
+});
+// gifts on or off for one class; gifts already drawn or chosen stay on the hand-over list
+on("POST", "/api/t/classes/:id/gifts", "teacher", async ({ db, params, body }) => {
+  await db.prepare("UPDATE classes SET gifts=? WHERE id=?").bind(body.gifts ? 1 : 0, params.id).run(); return { ok: true };
 });
 on("POST", "/api/t/classes/:id/delete", "teacher", async ({ db, params }) => {
   await db.batch([db.prepare("UPDATE classes SET active=0 WHERE id=?").bind(params.id), db.prepare("UPDATE students SET active=0 WHERE class_id=?").bind(params.id),
@@ -515,8 +522,9 @@ on("POST", "/api/t/quests/:id/delete", "teacher", async ({ db, params }) => {
 on("POST", "/api/t/pool", "teacher", async ({ db, body }) => {
   const stock = body.stock === "" || body.stock == null ? null : int(body.stock, 0, 10000);
   const d = [str(body.name, 30), RARITIES.includes(body.rarity) ? body.rarity : "보통", int(body.weight, 1, 1000), int(body.points || 0, 0, 10000), stock];
-  if (body.id) await db.prepare("UPDATE pool SET name=?, rarity=?, weight=?, points=?, stock=? WHERE id=?").bind(...d, int(body.id, 1)).run();
-  else await db.prepare("INSERT INTO pool (name, rarity, weight, points, stock) VALUES (?,?,?,?,?)").bind(...d).run();
+  d.push(body.gift && !d[3] ? 1 : 0); // a prize that pays points is never a gift
+  if (body.id) await db.prepare("UPDATE pool SET name=?, rarity=?, weight=?, points=?, stock=?, gift=? WHERE id=?").bind(...d, int(body.id, 1)).run();
+  else await db.prepare("INSERT INTO pool (name, rarity, weight, points, stock, gift) VALUES (?,?,?,?,?,?)").bind(...d).run();
   return { ok: true };
 });
 on("POST", "/api/t/pool/:id/delete", "teacher", async ({ db, params }) => { await db.prepare("UPDATE pool SET active=0 WHERE id=?").bind(params.id).run(); return { ok: true }; });

@@ -252,10 +252,10 @@ function kShop() {
       <button class="btn sm ${can ? "primary" : ""}" data-act="kbuyAsk" data-v="${x.id}" ${can ? "" : "disabled"}>${out ? "다 팔렸어요" : can ? "고를래요" : `${x.cost - pts}P 모자라요`}</button></div>`; };
   const orders = d.orders.filter(o => o.status === "pending");
   return `<section class="panel"><div class="row between"><h2>포인트 상점</h2><span class="pt num">${pts}</span></div>
-    <p class="small muted">도착 항구에서 받은 포인트로 원하는 걸 골라요. 고르면 선생님이 챙겨 줘요.</p>
+    <p class="small muted">도착 항구에서 받은 포인트로 ${d.me.gifts ? "원하는 걸" : "수업 혜택을"} 골라요. 고르면 선생님이 챙겨 줘요.</p>
     ${c ? `<div class="confirm"><span><b>${esc(c.name)}</b>을(를) <span class="pt">${c.cost}</span>로 고를까요? 남는 포인트 ${pts - c.cost}</span><button class="btn sm primary" data-act="kbuy" data-v="${c.id}">고르기</button><button class="btn sm" data-act="kcancelConfirm">취소</button></div>` : ""}
-    <h3>선물</h3><div class="shop">${d.shop.filter(x => x.kind === "선물").map(card).join("") || `<p class="muted small">없어요</p>`}</div>
-    <h3>학원 특권</h3><div class="shop">${d.shop.filter(x => x.kind === "특권").map(card).join("") || `<p class="muted small">없어요</p>`}</div></section>
+    ${d.me.gifts ? `<h3>선물</h3><div class="shop">${d.shop.filter(x => x.kind === "선물").map(card).join("") || `<p class="muted small">없어요</p>`}</div>` : ""}
+    <h3>수업 혜택</h3><div class="shop">${d.shop.filter(x => x.kind === "특권").map(card).join("") || `<p class="muted small">없어요</p>`}</div></section>
     ${orders.length ? `<section class="panel"><h3>선생님이 챙겨 줄 것</h3><div class="plist">${orders.map(o => `<div class="prow"><span>${esc(o.name)}</span><span class="small muted">${fmtTime(o.created_at)}</span><span class="pill wait">준비 중</span></div>`).join("")}</div></section>` : ""}`;
 }
 function kMe() {
@@ -423,13 +423,15 @@ function tCrew() {
   const d = T.d, s = d.season, list = tStudents(), base = location.origin;
   const det = T.detail && d.students.find(x => x.id === T.detail);
   return `<section class="panel"><h2>반</h2>
-    ${d.classes.length ? `<div class="tablewrap"><table><thead><tr><th>반</th><th>반 코드</th><th>학생 접속 주소</th><th>학생</th><th></th></tr></thead><tbody>
+    ${d.classes.length ? `<div class="tablewrap"><table><thead><tr><th>반</th><th>반 코드</th><th>학생 접속 주소</th><th>학생</th><th>선물</th><th></th></tr></thead><tbody>
       ${d.classes.map(c => { const cf = T.confirm?.type === "delClass" && T.confirm.id === c.id;
         return `<tr><td><b>${esc(c.name)}</b></td><td><span class="code">${esc(c.code)}</span></td><td class="small"><span class="muted">${esc(base)}/?c=${esc(c.code)}</span> <button class="btn sm ghost" data-act="copy" data-v="${esc(base)}/?c=${esc(c.code)}">복사</button></td>
         <td class="num">${d.students.filter(x => x.class_id === c.id).length}명</td>
+        <td><button class="btn sm ${c.gifts ? "primary" : ""}" data-act="classGifts" data-v="${c.id}" aria-pressed="${!!c.gifts}">${c.gifts ? "선물 포함" : "선물 미포함"}</button></td>
         <td>${cf ? `<span class="row"><button class="btn sm danger" data-act="delClass" data-v="${c.id}">반과 학생 모두 삭제</button><button class="btn sm" data-act="tcancel">취소</button></span>` : `<button class="btn sm ghost" data-act="askDelClass" data-v="${c.id}">삭제</button>`}</td></tr>`; }).join("")}
     </tbody></table></div>` : ""}
-    <form class="row" data-form="addClass"><label class="f">새 반 이름<input type="text" id="nc-name" maxlength="20" placeholder="예: 초4 수학 A" required></label><button class="btn primary" style="align-self:end">반 만들기</button>
+    <p class="small muted">선물 미포함 반은 상점과 보물 상자에서 선물이 빠지고, 포인트와 수업 혜택만 나와요. 이미 뽑거나 고른 선물은 건네줄 목록에 그대로 남아요.</p>
+    <form class="row" data-form="addClass"><label class="f">새 반 이름<input type="text" id="nc-name" maxlength="20" placeholder="예: 초4 수학 A" required></label><label class="f">선물<select id="nc-gifts"><option value="1">선물 포함</option><option value="0">선물 미포함</option></select></label><button class="btn primary" style="align-self:end">반 만들기</button>
       ${d.classes.length ? "" : `<button type="button" class="btn" style="align-self:end" data-act="demo">시연용 예시 반 만들기</button>`}</form>
     <p class="small muted">학생은 접속 주소를 열거나 반 코드를 넣고, 자기 이름을 누른 뒤 비밀번호 4자리로 들어와요. 처음 들어오면 자기만의 비밀번호로 바꾸게 돼요.</p></section>
     ${d.classes.length ? `<section class="panel"><h2>선원 등록</h2>
@@ -476,25 +478,27 @@ function tTreasure() {
       : `<p class="muted small">지금 건네줄 것이 없어요.</p>`}
     ${closedN ? `<p class="small muted">아이들이 아직 열지 않은 상자가 ${closedN}개 있어요. 아이 휴대폰이나 지도 화면에서 열 수 있어요.</p>` : ""}</section>
     <section class="panel"><div class="row between"><h2>보물 상자 목록</h2><span class="small muted">비중이 클수록 잘 나와요</span></div>
-      <div class="tablewrap"><table><thead><tr><th>보물</th><th>등급</th><th>비중</th><th>확률</th><th>남은 개수</th><th>바로 들어가는 포인트</th><th></th></tr></thead><tbody>
-      ${d.pool.map(x => `<tr><td><b>${esc(x.name)}</b></td><td><span class="rar r-${esc(x.rarity)}">${esc(x.rarity)}</span></td><td class="num">${x.weight}</td><td class="num">${out(x) ? `<span class="muted">안 나옴</span>` : fmtPct(x.weight / tot)}</td>
+      <div class="tablewrap"><table><thead><tr><th>보물</th><th>종류</th><th>등급</th><th>비중</th><th>확률</th><th>남은 개수</th><th>바로 들어가는 포인트</th><th></th></tr></thead><tbody>
+      ${d.pool.map(x => `<tr><td><b>${esc(x.name)}</b></td><td class="small">${x.points ? "포인트" : x.gift ? "선물" : "수업 혜택"}</td><td><span class="rar r-${esc(x.rarity)}">${esc(x.rarity)}</span></td><td class="num">${x.weight}</td><td class="num">${out(x) ? `<span class="muted">안 나옴</span>` : fmtPct(x.weight / tot)}</td>
         <td class="num">${x.stock == null ? `<span class="muted">무제한</span>` : out(x) ? `<b style="color:var(--coral)">다 나갔어요</b>` : `${x.stock}개`}</td><td>${x.points ? `<span class="pt num">${x.points}</span>` : `<span class="muted">-</span>`}</td>
         <td class="row"><button class="btn sm ghost" data-act="editPool" data-v="${x.id}">수정</button><button class="btn sm ghost" data-act="delPool" data-v="${x.id}">삭제</button></td></tr>`).join("")}</tbody></table></div>
       <form class="row" data-form="savePool"><label class="f" style="flex:1 1 180px">${ep ? "보물 수정" : "보물 이름"}<input type="text" id="np-name" maxlength="30" required placeholder="예: 피자 한 판" value="${esc(ep?.name || "")}" data-keep="no"></label>
+        <label class="f">종류<select id="np-gift" data-keep="no"><option value="1" ${!ep || ep.gift ? "selected" : ""}>선물</option><option value="0" ${ep && !ep.gift ? "selected" : ""}>수업 혜택</option></select></label>
         <label class="f">등급<select id="np-rar" data-keep="no">${RARITIES.map(r => `<option ${ep?.rarity === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
         <label class="f">비중<input type="number" id="np-w" min="1" value="${ep?.weight ?? 5}" required data-keep="no"></label>
         <label class="f">남은 개수<input type="number" id="np-stock" min="0" value="${ep?.stock ?? ""}" placeholder="무제한" data-keep="no"></label>
         <label class="f">바로 포인트<input type="number" id="np-pts" min="0" value="${ep?.points || ""}" placeholder="없음" data-keep="no"></label>
         <button class="btn primary" style="align-self:end">${ep ? "저장" : "추가"}</button>${ep ? `<button type="button" class="btn ghost" style="align-self:end" data-act="cancelEdit">취소</button>` : ""}</form>
+      <p class="small muted">종류가 '선물'인 보물은 선물 미포함 반의 상자에서 나오지 않아요. '바로 포인트'를 넣으면 포인트 보물로 처리돼요. 확률은 선물 포함 반 기준이에요.</p>
       <p class="small muted">'남은 개수'를 정하면 그만큼만 나오고, 다 나가면 상자에서 더 이상 안 나와요. 비워 두면 무제한이에요. 준비한 실물(치킨, 쿠폰 등)은 개수를 꼭 정해 두세요.</p>
       <p class="small muted">'바로 포인트'를 넣은 보물은 상자를 여는 순간 포인트가 들어가요. 전설 등급은 상자가 오래, 세게 흔들리다 열려요.</p>
       <p class="small muted">상자를 여는 데 필요한 탭 수는 등급마다 랜덤이에요: 보통 1~3번, 희귀 3~5번, 전설 5~7번. 아이 화면에는 몇 번 남았는지 보이지 않아요.</p></section>
     <section class="panel"><h2>포인트 상점</h2>
       <div class="tablewrap"><table><thead><tr><th>상품</th><th>종류</th><th>포인트</th><th>수량</th><th></th></tr></thead><tbody>
-      ${d.shop.map(x => `<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.kind)}</td><td><span class="pt num">${x.cost}</span></td><td class="num">${x.stock === null ? "무제한" : x.stock}</td>
+      ${d.shop.map(x => `<tr><td><b>${esc(x.name)}</b></td><td>${x.kind === "특권" ? "수업 혜택" : esc(x.kind)}</td><td><span class="pt num">${x.cost}</span></td><td class="num">${x.stock === null ? "무제한" : x.stock}</td>
         <td class="row"><button class="btn sm ghost" data-act="editShop" data-v="${x.id}">수정</button><button class="btn sm ghost" data-act="delShop" data-v="${x.id}">삭제</button></td></tr>`).join("")}</tbody></table></div>
       <form class="row" data-form="saveShop"><label class="f" style="flex:1 1 180px">${es ? "상품 수정" : "상품 이름"}<input type="text" id="nr-name" maxlength="30" required placeholder="예: 아이스크림" value="${esc(es?.name || "")}" data-keep="no"></label>
-        <label class="f">종류<select id="nr-kind" data-keep="no"><option ${es?.kind === "선물" ? "selected" : ""}>선물</option><option ${es?.kind === "특권" ? "selected" : ""}>특권</option></select></label>
+        <label class="f">종류<select id="nr-kind" data-keep="no"><option ${es?.kind === "선물" ? "selected" : ""}>선물</option><option value="특권" ${es?.kind === "특권" ? "selected" : ""}>수업 혜택</option></select></label>
         <label class="f">포인트<input type="number" id="nr-cost" min="1" value="${es?.cost ?? 30}" required data-keep="no"></label>
         <label class="f">수량 (비우면 무제한)<input type="number" id="nr-stock" min="0" value="${es && es.stock !== null ? es.stock : ""}" data-keep="no"></label>
         <button class="btn primary" style="align-self:end">${es ? "저장" : "추가"}</button>${es ? `<button type="button" class="btn ghost" style="align-self:end" data-act="cancelEdit">취소</button>` : ""}</form></section>`;
@@ -568,6 +572,7 @@ const T_ACTS = {
   deliverChest: v => tDo(() => api(`/api/t/chests/${v}/deliver`, {}), "건넸다고 표시했어요").then(() => T.detail && loadDetail()),
   deliverOrder: v => tDo(() => api(`/api/t/orders/${v}/deliver`, {}), "건넸다고 표시했어요"),
   cancelOrder: v => tDo(() => api(`/api/t/orders/${v}/cancel`, {}), "주문을 취소하고 포인트를 돌려줬어요"),
+  classGifts: v => { const c = T.d.classes.find(x => x.id === Number(v)), on = !c.gifts; tDo(() => api(`/api/t/classes/${v}/gifts`, { gifts: on }), `${c.name}: 선물 ${on ? "포함" : "미포함"}으로 바꿨어요`); },
   askDelClass: v => { T.confirm = { type: "delClass", id: Number(v) }; tRender(); },
   delClass: v => { T.confirm = null; tDo(() => api(`/api/t/classes/${v}/delete`, {}), "반을 삭제했어요"); },
   askDelStudent: v => { T.confirm = { type: "delStudent", id: Number(v) }; tRender(); },
@@ -589,12 +594,12 @@ const T_ACTS = {
 };
 async function loadDetail() { const id = T.detail; try { const dd = await api(`/api/t/student/${id}`); if (T.detail === id) { T.detailData = dd; tRender(); } } catch (e) { toast(e.message); } }
 const T_FORMS = {
-  addClass: () => tDo(() => api("/api/t/classes", { name: val("nc-name") }), "반을 만들었어요").then(() => { const el = document.getElementById("nc-name"); if (el) el.value = ""; }),
+  addClass: () => tDo(() => api("/api/t/classes", { name: val("nc-name"), gifts: val("nc-gifts") !== "0" }), "반을 만들었어요").then(() => { const el = document.getElementById("nc-name"); if (el) el.value = ""; }),
   addStudents: async () => { try { const r = await api("/api/t/students", { classId: Number(val("ns-class")), names: document.getElementById("ns-names").value }); T.created = r.created; await tLoad(); tRender(); } catch (e) { toast(e.message); } },
   adjust: () => tDo(() => api("/api/t/adjust", { studentId: T.detail, type: val("adj-type"), amount: Number(val("adj-amt")), title: val("adj-why") || "선생님 조정" }), "반영했어요").then(() => { loadDetail(); }),
   rename: () => tDo(() => api(`/api/t/students/${T.detail}/rename`, { nickname: val("rn-name") }), "이름을 바꿨어요"),
   saveQuest: () => { const id = T.editQuest; T.editQuest = null; return tDo(() => api("/api/t/quests", { id, title: val("nq-title"), subject: val("nq-subj"), kind: val("nq-kind"), moves: Number(val("nq-mv")) }), id ? "미션을 저장했어요" : "미션을 추가했어요"); },
-  savePool: () => { const id = T.editPool; T.editPool = null; return tDo(() => api("/api/t/pool", { id, name: val("np-name"), rarity: val("np-rar"), weight: Number(val("np-w")), points: Number(val("np-pts") || 0), stock: val("np-stock") }), "보물 목록을 저장했어요"); },
+  savePool: () => { const id = T.editPool; T.editPool = null; return tDo(() => api("/api/t/pool", { id, name: val("np-name"), rarity: val("np-rar"), weight: Number(val("np-w")), points: Number(val("np-pts") || 0), stock: val("np-stock"), gift: val("np-gift") === "1" }), "보물 목록을 저장했어요"); },
   saveShop: () => { const id = T.editShop; T.editShop = null; return tDo(() => api("/api/t/shop", { id, name: val("nr-name"), kind: val("nr-kind"), cost: Number(val("nr-cost")), stock: val("nr-stock") }), "상점을 저장했어요"); },
   saveSeason: () => tDo(() => api("/api/t/season", { name: val("se-name"), routeLen: Number(val("se-len")), treasureEvery: Number(val("se-every")), arrivalPoints: Number(val("se-pts")), weeklyClassGoal: Number(val("se-goal")) }), "항로를 저장했어요"),
   newVoyage: () => { T.confirm = null; return tDo(() => api("/api/t/season", { name: val("nv-name"), newVoyage: true }), "새 항해를 시작했어요"); },

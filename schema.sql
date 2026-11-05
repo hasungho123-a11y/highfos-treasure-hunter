@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS classes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   code TEXT NOT NULL UNIQUE,
+  gifts INTEGER NOT NULL DEFAULT 1,  -- 0 = no real gifts for this class, only points and class privileges
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
@@ -85,6 +86,7 @@ CREATE TABLE IF NOT EXISTS pool (
   weight INTEGER NOT NULL,
   points INTEGER NOT NULL DEFAULT 0,
   stock INTEGER,                 -- NULL = unlimited; 0 = no longer drawn
+  gift INTEGER NOT NULL DEFAULT 1,  -- 1 = a real gift, left out for classes without gifts
   active INTEGER NOT NULL DEFAULT 1
 );
 -- one chest per (student, season, voyage, stop); prize is drawn when it is opened
