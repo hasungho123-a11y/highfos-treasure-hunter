@@ -385,12 +385,25 @@ function kLog() {
     <section class="panel"><h3>내 계정</h3><div class="row"><button class="btn ghost" data-act="logout">로그아웃</button></div></section>`;
 }
 async function kDo(fn, msg) { try { const r = await fn(); if (msg) toast(msg); await kidLoad(); kidRender(); return r; } catch (e) { toast(e.message); } }
+// pictures for a mini-game: the water from this sea's map, plus 3D stills of my ship seen from behind (reef) or the target seen from the side (cannon)
+const TARGETS = ["galleon", "ironclad", "destroyer"];
+const loadImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
+async function gameArt(kind) {
+  const me = K.d.me, art = { sea: await loadImg(`/maps/sea${K.map + 1}.webp`) };
+  if (kind === "memory" || !window.Ship3D?.available()) return art;
+  try { const v = await Ship3D.get(), s = sail(me.sail);
+    if (kind === "reef") art.me = await loadImg((await v.snapshot(me.look, s, me.look.fc != null ? sail(me.look.fc) : s, me.ship, 384, { th: Math.PI, ph: .62 })).url);
+    if (kind === "cannon") art.target = await loadImg((await v.snapshot({ hull: "ebony" }, "#8E2A22", "#23262B", TARGETS[K.map], 384, { th: Math.PI / 2, ph: 1.12 })).url);
+  } catch (e) {}
+  return art;
+}
 // a mini-game from the first tap to the reward card
 async function playGame(kind) {
   if (K.busy) return; K.busy = true;
   try {
     const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
-    const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind] });
+    const art = await Promise.race([gameArt(kind), sleep(1800).then(() => null)]); // never make a child wait long for pictures: the plain drawings are the fallback
+    const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], art });
     if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0 }).catch(() => {}); toast("다음에 다시 도전해요"); }
     else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r); }
     await kidLoad(); kidRender();
@@ -422,14 +435,35 @@ async function playFight() {
   if (K.busy) return; K.busy = true; let r;
   try { r = await api("/api/kid/battle", {}); } catch (e) { toast(e.message); K.busy = false; return; }
   const m = document.createElement("div"); m.className = "fight"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
-  const side = (p, cls) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
+  m.innerHTML = `<p class="f-load">출항 준비 중…</p>`; document.body.appendChild(m);
   const kindOf = p => K.d.deco.find(x => x.key === `weapon.${p.look.weapon}`)?.kind || "cannon";
+  // 3D first; a device that can't run it (or takes too long to load it) gets the flat battle below
+  let fx = null, v3d = null;
+  if (window.Ship3D?.available()) try { v3d = await Promise.race([Ship3D.get(), sleep(6000)]); } catch (e) {}
+  if (v3d) { const side3 = p => ({ look: p.look, sailHex: sail(p.sail), flagHex: p.look.fc != null ? sail(p.look.fc) : sail(p.sail), ship: p.ship });
+    const side = (p, cls, tag) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">${tag} · 전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
+    m.className = "fight f3"; m.innerHTML = `<div class="f-view"></div><i class="f-hurt"></i><div class="f-top">${side(r.me, "a", "내 배")}<span class="f-vs">VS</span>${side(r.opp, "d", "상대")}</div><span class="f-dmg" hidden></span><div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button></div>`;
+    try { fx = await v3d.fight(m.querySelector(".f-view"), side3(r.me), side3(r.opp)); } catch (e) { fx = null; } }
+  if (fx) { let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
+    const dmgEl = m.querySelector(".f-dmg"), hurt = m.querySelector(".f-hurt"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i");
+    fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); };
+    if (!fast) await fx.intro();
+    for (const s of r.rounds) { const fromA = s.by === "a";
+      if (!fast) { await fx.fire(s.by, s.dmg, kindOf(fromA ? r.me : r.opp));
+        dmgEl.className = `f-dmg pop ${fromA ? "to-d" : "to-a"} ${s.dmg ? "" : "miss"}`; dmgEl.hidden = false; dmgEl.textContent = s.dmg ? `-${s.dmg}` : "빗나감"; }
+      hpA.style.width = s.hp.a + "%"; hpD.style.width = s.hp.d + "%";
+      if (!fast) { await sleep(s.dmg ? 720 : 560); dmgEl.hidden = true; } }
+    dmgEl.hidden = true; m.querySelector("[data-skip]").hidden = true; await fx.finish(r.won, fast);
+    m.querySelector(".f-bottom").innerHTML = `<div class="f-result ${r.won ? "win" : "lose"}"><h2>${r.won ? "승리!" : "패배"}</h2><p>${r.delta ? `금화 ${r.delta > 0 ? "+" : ""}${r.delta}개` : "잃은 금화는 없어요"}</p><p class="small">오늘 남은 전투 ${r.left}번</p><button class="btn primary lg" data-close>확인</button></div>`;
+    await new Promise(res => { const b = m.querySelector("[data-close]"); b.focus(); b.onclick = res; });
+    fx.close(); m.remove(); await kidLoad(); kidRender(); K.busy = false; return; }
+  m.className = "fight";
+  const side = (p, cls) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
   m.innerHTML = `<div class="f-top">${side(r.me, "a")}<span class="f-vs">VS</span>${side(r.opp, "d")}</div>
     <div class="f-sea"><div class="f-ship a" style="--sail:${sail(r.me.sail)}">${shipSVG(r.me.ship, r.me.look, r.me.sail)}</div><div class="f-ship d" style="--sail:${sail(r.opp.sail)}">${shipSVG(r.opp.ship, r.opp.look, r.opp.sail)}</div><i class="f-ball" hidden></i><span class="f-dmg" hidden></span></div>
     <div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button></div>`;
-  document.body.appendChild(m);
   let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
-  const ball = m.querySelector(".f-ball"), dmgEl = m.querySelector(".f-dmg"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i"), shipA = m.querySelector(".f-ship.a"), shipD = m.querySelector(".f-ship.d");
+  const ball =m.querySelector(".f-ball"), dmgEl = m.querySelector(".f-dmg"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i"), shipA = m.querySelector(".f-ship.a"), shipD = m.querySelector(".f-ship.d");
   await sleep(350);
   for (const s of r.rounds) {
     if (!fast) { const fromA = s.by === "a"; ball.className = `f-ball k-${kindOf(fromA ? r.me : r.opp)}${fromA ? "" : " rev"}`; ball.hidden = false; ball.style.transition = "none"; ball.style.left = fromA ? "26%" : "74%"; ball.offsetWidth; ball.style.transition = "left .42s linear"; ball.style.left = fromA ? "74%" : "26%"; await sleep(430); ball.hidden = true;
