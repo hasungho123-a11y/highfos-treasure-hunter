@@ -400,3 +400,6 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .up-pips { display: flex; gap: 3px; }
 .up-pips i { width: 14px; height: 7px; border-radius: 2px; background: rgb(20 70 111 / .16); }
 .up-pips i.on { background: #14466F; }
+
+/* supply box */
+.box-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px; border: 1px solid rgb(20 70 111 / .18); border-radius: 10px; background: rgb(241 192 75 / .12); }

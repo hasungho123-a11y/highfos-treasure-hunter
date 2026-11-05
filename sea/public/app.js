@@ -305,6 +305,12 @@ function kUpgrade() {
   const d = K.d, gold = d.bal.gold;
   return `<p class="small muted">금화로 배를 강화하면 단계마다 전투력이 올라요. 값은 단계가 오를수록 비싸져요. 배를 바꿔도 강화는 그대로 남아요.</p><div class="up-list">${d.upgrades.map(u => `<div class="up-row"><div class="stack" style="gap:4px"><b>${esc(u.name)} <span class="num">${u.level}</span>/${u.max}단계</b><span class="small muted">${esc(u.desc)}</span><div class="up-pips" aria-hidden="true">${Array.from({ length: u.max }, (_, i) => `<i class="${i < u.level ? "on" : ""}"></i>`).join("")}</div></div>${u.level >= u.max ? `<span class="pill ok">최고 단계</span>` : `<div class="stack" style="gap:4px;align-items:flex-end"><span class="small">전투력 +${u.power} · <span class="gold num">${u.price}</span></span><button class="btn sm ${gold >= u.price ? "primary" : ""}" data-act="kupAsk" data-v="${u.id}" ${gold >= u.price ? "" : "disabled"}>${gold >= u.price ? "강화" : `${u.price - gold}개 모자라요`}</button></div>`}</div>`).join("")}</div>`;
 }
+function boxRow(m) {
+  const d = K.d, b = d.boxes[m.id], can = d.bal.points >= b.price;
+  const note = b.pityIn ? `이 시대 무기가 하나 나와요. 앞으로 상자 ${b.pityIn}개 안에 전설 무기가 꼭 나와요.` : "이 시대 무기가 하나 나와요. 없는 무기가 먼저 나와요.";
+  const ctl = !seaOpen(m) ? `<span class="small muted">전투력 ${m.power}부터</span>` : b.all ? `<span class="pill ok">다 모았어요</span>` : `<button class="btn sm ${can ? "primary" : ""}" data-act="kboxAsk" data-v="${m.id}" ${can ? "" : "disabled"}>${can ? `포인트 ${b.price}으로 열기` : `포인트 ${b.price - d.bal.points} 모자라요`}</button>`;
+  return `<div class="box-row"><div class="stack" style="gap:2px"><b>보급 상자</b><span class="small muted">${b.all ? "이 시대 무기를 모두 모았어요." : note}</span></div>${ctl}</div>`;
+}
 function kDeco() {
   const d = K.d, me = d.me, L = draftLook(me.look), gold = d.bal.gold, owned = new Set(d.owned), curShip = d.ships.find(s => s.id === me.ship), viewShip = d.ships.find(s => s.id === (K.tryShip || me.ship));
   const rank = id => d.ships.findIndex(s => s.id === id), reaches = x => !x.from || rank(me.ship) >= rank(x.from);
@@ -330,11 +336,12 @@ function kDeco() {
   const body = slot === "photo" ? kPhoto() : slot === "upgrade" ? kUpgrade() : slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
     : slot === "color" ? `<p class="small muted">돛 색과 깃발 색은 무료예요.</p><h3>돛 색</h3><div class="sails">${V.SAILS.map((c, i) => sw(i, "ksail", me.sail === i, "돛 색")).join("")}</div>
       <h3>깃발 색</h3><div class="sails"><button class="same" data-act="kflag" data-v="-1" aria-pressed="${L.fc == null}" style="--sail:${sail(me.sail)}">돛과 같게</button>${V.SAILS.map((c, i) => sw(i, "kflag", L.fc === i, "깃발 색")).join("")}</div>`
-    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요. 돛이 있는 배에서 보여요.</p>` : slot === "air" ? `<p class="small muted">여러 대를 같이 띄울 수 있어요. 헬기와 정찰기는 순양함부터, 나머지는 항공모함에서 쓸 수 있어요.</p>` : slot === "camo" ? `<p class="small muted">돛이 없는 배의 선체에 칠해요. 칠한 동안에는 배 색 대신 위장이 보여요.</p>` : slot === "smoke" ? `<p class="small muted">굴뚝에서 나오는 연기 색을 바꿔요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => slot === "air" ? x.group === "air" : x.slot === slot && !x.group).map(card).join("")}</div>`}`;
+    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요. 돛이 있는 배에서 보여요.</p>` : slot === "air" ? `<p class="small muted">여러 대를 같이 띄울 수 있어요. 헬기와 정찰기는 순양함부터, 나머지는 항공모함에서 쓸 수 있어요.</p>` : slot === "camo" ? `<p class="small muted">돛이 없는 배의 선체에 칠해요. 칠한 동안에는 배 색 대신 위장이 보여요.</p>` : slot === "smoke" ? `<p class="small muted">굴뚝에서 나오는 연기 색을 바꿔요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3>${boxRow(m)}<div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => slot === "air" ? x.group === "air" : x.slot === slot && !x.group).map(card).join("")}</div>`}`;
   return `<section class="panel deco-hero"><div class="row between"><h2>${esc(me.nickname)}의 ${esc((d.ships.find(s => s.id === (K.tryShip || me.ship)) || curShip).name)}</h2><span class="small">전투력 <b class="num">${me.power}</b> · ${coin(gold)}</span></div>
       <div class="deco3d" id="deco3d">${shipBox(K.tryShip || me.ship, tryItem ? withItem(L, tryItem) : L, me.sail, me.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
       ${conf ? `<div class="confirm"><span><b>${esc(conf.name)}</b>을(를) 금화 ${conf.price}개로 살까요? 남는 금화 ${gold - conf.price}</span><button class="btn sm primary" data-act="kdecoBuy" data-v="${conf.key}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
       ${shipConf ? `<div class="confirm"><span><b>${esc(shipConf.name)}</b>을(를) 금화 ${shipConf.price}개로 살까요? 남는 금화 ${gold - shipConf.price}</span><button class="btn sm primary" data-act="kshipBuy" data-v="${shipConf.id}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
+      ${K.confirm && K.confirm.box != null ? `<div class="confirm"><span><b>보급 상자</b>를 포인트 ${d.boxes[K.confirm.box].price}으로 열까요? 남는 포인트 ${d.bal.points - d.boxes[K.confirm.box].price}</span><button class="btn sm primary" data-act="kboxOpen" data-v="${K.confirm.box}">열기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
       ${upConf ? `<div class="confirm"><span><b>${esc(upConf.name)}</b> ${upConf.level + 1}단계를 금화 ${upConf.price}개로 올릴까요? 남는 금화 ${gold - upConf.price}</span><button class="btn sm primary" data-act="kupBuy" data-v="${upConf.id}">강화</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}</section>
     <section class="panel"><div class="chips" role="group" aria-label="꾸미기 종류">${tabs.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>${noSail}${body}</section>`;
 }
@@ -357,11 +364,23 @@ async function playGame(kind) {
   } catch (e) { toast(e.message); }
   K.busy = false;
 }
+const foundHTML = it => `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? (K.d.deco.find(x => x.key === it.key).era > K.d.ships.find(s => s.id === K.d.me.ship).era ? `${K.d.ships.find(s => s.era === K.d.deco.find(x => x.key === it.key).era).name}부터 장착할 수 있어요` : "내 배 → 무기에서 장착할 수 있어요") : "내 배에서 쓸 수 있어요"}</small></div>`;
+async function openBox(mapId) {
+  if (K.busy) return; K.busy = true; K.confirm = null;
+  try {
+    const r = await api("/api/kid/box", { map: Number(mapId) });
+    await new Promise(done => { const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+      m.innerHTML = `<div class="panel reward"><h2>보급 상자를 열었어요!</h2>${foundHTML(r.item)}<button class="btn primary lg" data-close>확인</button></div>`;
+      document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); b.onclick = () => { m.remove(); done(); }; });
+    await kidLoad(); kidRender();
+  } catch (e) { toast(e.message); kidRender(); }
+  K.busy = false;
+}
 function rewardCard(r) {
   return new Promise(done => {
     const it = r.item, m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
     m.innerHTML = `<div class="panel reward"><div class="stars" aria-label="별 ${r.stars}개">${[0, 1, 2].map(i => `<i class="${i < r.stars ? "on" : ""}"></i>`).join("")}</div><h2>${r.stars ? "잘했어요!" : "아쉬워요!"}</h2><p class="num">점수 ${r.score} · ${pts(`+${r.points}`)}</p>
-      ${it ? `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? (K.d.deco.find(x => x.key === it.key).era > K.d.ships.find(s => s.id === K.d.me.ship).era ? `${K.d.ships.find(s => s.era === K.d.deco.find(x => x.key === it.key).era).name}부터 장착할 수 있어요` : "내 배 → 무기에서 장착할 수 있어요") : "내 배에서 쓸 수 있어요"}</small></div>` : ""}<button class="btn primary lg" data-close>확인</button></div>`;
+      ${it ? foundHTML(it) : ""}<button class="btn primary lg" data-close>확인</button></div>`;
     document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); b.onclick = () => { m.remove(); done(); };
   });
 }
@@ -402,6 +421,8 @@ const KID_ACTS = {
   krequest: v => kDo(() => api("/api/kid/request", { questId: Number(v) }), "선생님께 확인을 요청했어요"),
   kcancel: v => kDo(() => api(`/api/kid/cancel/${v}`, {})),
   kslot: v => { K.slot = v; K.tryKey = null; K.tryShip = null; K.confirm = null; K.crop = null; K.photoDraft = null; kidRender(); },
+  kboxAsk: v => { K.confirm = { box: Number(v) }; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
+  kboxOpen: openBox,
   kupAsk: v => { K.confirm = { up: v }; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
   kupBuy: v => { K.confirm = null; return kDo(() => api("/api/kid/upgrade", { id: v }), "배를 강화했어요! 전투력이 올랐어요"); },
   kcropNo: () => { K.crop = null; K.photoDraft = null; kidRender(); },
