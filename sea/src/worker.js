@@ -5,7 +5,7 @@ const SESSION_DAYS = { teacher: 14, student: 60 };
 const PBKDF2_ITER = 60000, MAX_FAILED = 5, LOCK_MS = 10 * 60 * 1000;
 const SAILS = 16; // free sail/flag colours, see SAILS in public/voyage.js
 const SUBJECTS = ["영어", "수학", "공통"], KINDS = ["daily", "weekly", "challenge"];
-const DEFAULT_GAME = { energyMax: 20, playCost: 1, passCost: 100, battlesPerDay: 3, win: 15, lose: 10, defend: 5, startGold: 50, hourFrom: 0, hourTo: 0 };
+const DEFAULT_GAME = { energyMax: 20, playCost: 1, passCost: 200, battlesPerDay: 3, win: 30, lose: 10, defend: 10, startGold: 100, hourFrom: 0, hourTo: 0 };
 
 // mini-games: the score needed for 1, 2 and 3 stars, the highest believable score, and the shortest believable play
 const GAMES = {
@@ -13,8 +13,8 @@ const GAMES = {
   reef: { name: "암초 해협", stars: [10, 25, 45], max: 400, minMs: 3000 },
   memory: { name: "보물 동굴", stars: [6, 14, 18], max: 24, minMs: 4000 }
 };
-const STAR_POINTS = [5, 10, 20, 30], STAR_DROP = [0, 3, 6, 10]; // by stars: points, and % chance of an item
-const DROP_GOLD = { 보통: 20, 희귀: 50, 전설: 120 }; // paid instead when the item is already owned
+const STAR_POINTS = [10, 20, 40, 60], STAR_DROP = [0, 3, 6, 10]; // by stars: points, and % chance of an item
+const DROP_GOLD = { 보통: 40, 희귀: 100, 전설: 240 }; // paid instead when the item is already owned
 
 // ship classes, smallest to largest; bought with gold. The look of each is in public/ship3d.js and app.js
 const SHIPS = [
