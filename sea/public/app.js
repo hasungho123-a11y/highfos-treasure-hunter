@@ -114,7 +114,7 @@ const trimPic = url => loadImg(url).then(im => { const c = document.createElemen
   const a = g.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
   for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (a[(y * c.width + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   if (x1 < 0) return url; const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1; o.getContext("2d").drawImage(c, -x0, -y0); return o.toDataURL("image/webp", .9); });
-function thumbCard(ship, look, sailIdx) { const key = JSON.stringify([ship, look, sailIdx, K.slot === "hull" || K.slot === "camo"]), pic = THUMBS.get(key), era = K.d.ships.find(s => s.id === ship)?.era ?? 0;
+function thumbCard(ship, look, sailIdx) { const key = JSON.stringify([ship, look, sailIdx, K.tab === "deco" && (K.slot === "hull" || K.slot === "camo")]), pic = THUMBS.get(key), era = K.d.ships.find(s => s.id === ship)?.era ?? 0;
   return `<div class="deco-sea tiny art" style="--pic:url(/maps/sea${Math.min(2, era) + 1}.webp)" ${pic ? "" : `data-thumb="${esc(key)}"`}><div class="ship mine ${pic ? "s3" : ""} ${V.wakeClass(look)}" style="--sail:${sail(sailIdx)}">${pic ? `<img class="hull" src="${pic}" alt="">` : shipSVG(ship, look, sailIdx)}</div></div>`; }
 function thumbScan() { thumbIO?.disconnect(); thumbQ = []; if (thumbFail || !window.Ship3D?.available()) return;
   thumbIO = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { thumbIO.unobserve(e.target); if (!thumbQ.includes(e.target.dataset.thumb)) thumbQ.push(e.target.dataset.thumb); } thumbPump(); }, { rootMargin: "200px" });
@@ -132,7 +132,7 @@ const shipBox = (ship, look, sailIdx, name, cls = "") => cls === "tiny" ? thumbC
 /* ---------- 3D ---------- */
 function show3D(host, look, sailIdx, shipId) {
   if (!host || !window.Ship3D) return;
-  Ship3D.get().then(v => { if (!host.isConnected) return; v.setLook(look, sail(sailIdx), look.fc != null ? sail(look.fc) : sail(sailIdx), shipId); v.focusWeapon(K.slot === "weapon"); v.mount(host); host.classList.add("ready"); })
+  Ship3D.get().then(v => { if (!host.isConnected) return; v.setLook(look, sail(sailIdx), look.fc != null ? sail(look.fc) : sail(sailIdx), shipId); v.focusWeapon(K.tab === "deco" && K.slot === "weapon"); v.mount(host); host.classList.add("ready"); })
     .catch(e => { host.classList.add("failed"); const m = host.querySelector(".s3d-msg"); if (m) m.textContent = e.message; });
 }
 
@@ -184,7 +184,7 @@ const ISLES = {
   battle: { x: 660, y: 490, px: 320, py: 790, r: 74 }
 };
 // the third value keeps a tab to the ships it can show on
-const DECO_TABS = [["ship", "배 종류"], ["upgrade", "배 강화"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["photo", "내 사진"], ["camo", "위장 도색", "steel"], ["air", "함재기", "steel"], ["smoke", "연기", "steel"], ["pattern", "돛 무늬", "sail"], ["hull", "배 색"], ["att", "부착물", "sail"], ["head", "선수상", "sail"], ["trim", "테두리", "sail"], ["wake", "물결"], ["tag", "이름표"]];
+const DECO_TABS = [["ship", "배 종류"], ["dex", "도감·칭호"], ["upgrade", "배 강화"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["photo", "내 사진"], ["camo", "위장 도색", "steel"], ["air", "함재기", "steel"], ["smoke", "연기", "steel"], ["pattern", "돛 무늬", "sail"], ["hull", "배 색"], ["att", "부착물", "sail"], ["head", "선수상", "sail"], ["trim", "테두리", "sail"], ["wake", "물결"], ["tag", "이름표"]];
 const withItem = (look, x) => x.slot === "att" ? { ...look, att: [...new Set([...(look.att || []), x.id])] } : x.slot === "emblem" ? { ...look, se: x.id } : { ...look, [x.slot]: x.id };
 // camo paints over the hull colour, so a hull colour is previewed without it (the shop says so in a note)
 const previewItem = (look, x) => x.slot === "hull" ? { ...withItem(look, x), camo: undefined } : withItem(look, x);
@@ -199,8 +199,8 @@ async function kidLoad() { K.d = await api("/api/kid/state");
   if (seen && open > seen) { K.map = open - 1; K.isle = null; K.at = "port"; toast(`새 바다가 열렸어요! ${K.d.maps[open - 1].name}`); }
   if (open > seen) ls.set(mem, open); }
 async function kidStart() {
-  document.body.classList.add("kid"); await kidLoad(); kidRender(); bossWin();
-  setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight") || $(".modal")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); bossWin(); } catch (e) {} }, 20000);
+  document.body.classList.add("kid"); await kidLoad(); kidRender(); kidNotices();
+  setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight") || $(".modal")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); kidNotices(); } catch (e) {} }, 20000);
 }
 /* ---------- the class boss ---------- */
 // a still of the 3D ship, kept between visits; until it is ready (or where 3D can't run) the flat drawing stands in
@@ -225,24 +225,36 @@ function bossCard() { const b = K.d.boss; if (!b || b.off) return "";
 function bossAnim() { const b = K.d.boss, bar = $("#bossBar"); if (!b || b.off || !bar) return; const mem = `hs_boss_left_${b.id}`, seen = Number(ls.get(mem) ?? b.hp); ls.set(mem, b.left);
   if (seen <= b.left) return; bar.style.transition = "none"; bar.style.width = seen / b.hp * 100 + "%"; bar.offsetWidth;
   setTimeout(() => { if (!bar.isConnected) return; bar.style.transition = ""; bar.style.width = b.left / b.hp * 100 + "%"; const card = $("#bossCard"), pop = card.querySelector(".boss-pop"); card.classList.add("hit"); pop.hidden = false; pop.textContent = `-${seen - b.left}`; Sfx.bossHit(); setTimeout(() => { card.classList.remove("hit"); pop.hidden = true; }, 1300); }, 450); }
-function bossWin() { const w = K.d.boss?.win, mem = `hs_boss_win_${K.d.me.id}`; if (!w || K.d.me.mustChange || $(".modal") || w.id <= Number(ls.get(mem) || 0)) return; ls.set(mem, w.id); const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+function bossWin() { const w = K.d.boss?.win, mem = `hs_boss_win_${K.d.me.id}`; if (!w || w.id <= Number(ls.get(mem) || 0)) return false; ls.set(mem, w.id); const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
   m.innerHTML = `<div class="panel reward boss-win"><div class="boss-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)"><div class="boss-ship sink" data-boss-ship="${bossMem(w.art)}">${bossShip(w.art)}</div></div><h2>보스 격파!</h2><p><b>${esc(w.name)}</b>을(를) 우리 반이 함께 쓰러뜨렸어요.</p>
     ${w.finisher ? `<p class="small">${w.last ? "마지막 일격은 바로 나! 금화를 더 받았어요." : `마지막 일격: <b>${esc(w.finisher)}</b>`}</p>` : `<p class="small">마지막 일격은 선생님의 포격이었어요.</p>`}<p class="found">${coin(`+${w.gold}`)}</p>${w.joined ? "" : `<p class="small muted">다음 보스 때 함께 공격하면 금화를 훨씬 많이 받아요.</p>`}<button class="btn primary lg" data-close>확인</button></div>`;
-  document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); Sfx.bossDown(); b.onclick = () => { m.remove(); kidRender(); }; }
+  document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); Sfx.bossDown(); b.onclick = () => { m.remove(); kidRender(); kidNotices(); }; return true; }
+const noticeModal = (html, sound) => { const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.innerHTML = `<div class="panel reward">${html}<button class="btn primary lg" data-close>확인</button></div>`; document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); sound?.(); b.onclick = () => { m.remove(); kidNotices(); }; };
+function bossMissed() { const w = K.d.boss?.missed, mem = `hs_boss_miss_${K.d.me.id}`; if (!w || w.id <= Number(ls.get(mem) || 0)) return false; ls.set(mem, w.id); const b = K.d.boss;
+  noticeModal(`<div class="boss-sea notice-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)"><div class="boss-ship" data-boss-ship="${bossMem(w.art)}">${bossShip(w.art)}</div></div><h2>${esc(w.name)}이(가) 도망갔어요</h2><p>체력 <b class="num">${w.left}</b>이 남아 있었어요.${w.left <= w.hp * .3 ? " 조금만 더 했으면 잡았어요!" : ""}</p>${b.off ? "" : `<p class="small muted">이번 주 보스는 <b>${esc(b.name)}</b>이에요. 다시 힘을 합쳐요.</p>`}`, Sfx.lose); return true; }
+// missions the teacher has accepted since this kid last looked; the first visit only sets the mark, so old missions don't pop up
+function missionNews() { const list = K.d.approved || [], mem = `hs_seen_quest_${K.d.me.id}`, top = list[0]?.id || 0, raw = ls.get(mem); if (raw === null) { ls.set(mem, top); return false; } const fresh = list.filter(l => l.id > Number(raw)); ls.set(mem, Math.max(top, Number(raw))); if (!fresh.length) return false;
+  const energy = fresh.reduce((n, l) => n + l.energy, 0), b = K.d.boss, hit = b && !b.off && !b.down ? fresh.length * b.questDmg : 0;
+  noticeModal(`<h2>선생님이 미션을 확인했어요!</h2><ul class="news">${fresh.slice(0, 4).map(l => `<li>${esc(l.title)}</li>`).join("")}${fresh.length > 4 ? `<li class="muted">그리고 ${fresh.length - 4}개 더</li>` : ""}</ul><p class="found">${energy ? `${nrg(`+${energy}`)}` : `<span class="small">행동력이 이미 가득 찼어요</span>`}</p>${hit ? `<p class="small"><b>${esc(b.name)}</b>에게 <b class="num">${hit}</b> 피해를 줬어요!</p>` : ""}`, Sfx.coin); return true; }
+function likeNews() { const mem = `hs_seen_likes_${K.d.me.id}`, n = K.d.likes?.counts[K.d.me.id] || 0, raw = ls.get(mem); ls.set(mem, n); if (raw !== null && n > Number(raw)) toast(`내 배에 좋아요가 ${n - Number(raw)}개 늘었어요!`); }
+// one message at a time, each opening the next when closed
+function kidNotices() { if (!K.d || K.d.me.mustChange || $(".modal") || $(".fight") || $(".game") || K.busy) return; likeNews(); bossWin() || bossMissed() || missionNews(); }
+const titleName = look => K.d.titles?.find(t => t.id === look?.ttl)?.name || "";
 const sndIcon = () => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9z"/>${Sfx.on ? `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>` : `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m16 10 5 5m0-5-5 5"/>`}</svg>`;
 const sndBtn = () => `<button type="button" class="snd" data-act="ksnd" aria-pressed="${Sfx.on}" aria-label="소리 ${Sfx.on ? "끄기" : "켜기"}" title="소리 ${Sfx.on ? "끄기" : "켜기"}">${sndIcon()}</button>`;
 function kidRender() {
   const d = K.d, me = d.me, keep = keepInputs(app);
-  const tabs = [["map", "제도 지도"], ["missions", "미션"], ["deco", "내 배"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
-  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 제도</h1><small>${esc(me.className)} · 전투력 ${me.power}</small></div></div>
+  const tabs = [["map", "제도 지도"], ["missions", "미션"], ["deco", "내 배"], ["crew", "친구 배"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
+  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 제도</h1><small>${esc(titleName(me.look) || me.className)} · 전투력 ${me.power}</small></div></div>
       <div class="hright wallet"><span title="행동력">${nrg(d.bal.energy)}</span><span title="포인트">${pts(d.bal.points)}</span><span title="금화">${coin(d.bal.gold)}</span></div></div>
       <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "missions" && openQ ? `<span class="cnt">${openQ}</span>` : ""}</button>`).join("")}${sndBtn()}</nav></header>
-    <main>${({ map: kMap, missions: kMissions, deco: kDeco, log: kLog })[K.tab]()}</main>
+    <main>${({ map: kMap, missions: kMissions, deco: kDeco, crew: kCrew, log: kLog })[K.tab]()}</main>
     ${me.mustChange ? `<div class="modal" role="dialog" aria-modal="true"><div class="panel"><h2>나만의 비밀번호 정하기</h2><p class="small muted">임시 비밀번호 대신 나만 아는 숫자 4개로 바꿔요.</p>
       <form data-form="kpin" class="stack" style="gap:10px"><input type="password" id="kp1" inputmode="numeric" maxlength="4" placeholder="숫자 4개" data-keep="no" required><input type="password" id="kp2" inputmode="numeric" maxlength="4" placeholder="한 번 더" data-keep="no" required><button class="btn primary">정하기</button></form></div></div>` : ""}`;
   restoreInputs(keep);
   if (K.tab === "deco") { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey), base = draftLook(me.look); show3D($("#deco3d"), x ? previewItem(base, x) : base, me.sail, K.tryShip || me.ship); if (K.crop) drawCrop(); thumbScan(); }
   if (K.tab === "map") bossAnim();
+  if (K.tab === "crew") { const m = d.mates.find(x => x.id === K.mate); if (m) show3D($("#mate3d"), m.look, m.sail, m.ship); thumbScan(); }
 }
 const tallMap = () => innerWidth < 640;
 const mapSize = () => tallMap() ? { w: 640, h: mapArt() ? 800 : 920 } : { w: 1000, h: 620 };
@@ -331,7 +343,7 @@ function kIsle() {
   if (g) { const can = d.bal.energy >= d.game.playCost;
     return `<section class="panel" id="islePanel">${head}<p class="small muted">${isleSub(k)}. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배예요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
       <div class="row small muted"><span>별 1개 ${g.stars[0]}점</span><span>· 별 2개 ${g.stars[1]}점</span><span>· 별 3개 ${g.stars[2]}점</span></div>
-      <button class="btn primary lg" data-act="kplay" data-v="${s.game}" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button></section>`; }
+      <div class="row"><button class="btn primary lg" data-act="kplay" data-v="${s.game}" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button><button class="btn" data-act="khow" data-v="${s.game}">게임 방법</button></div></section>`; }
   if (k === "port") { const p = d.pass, canPass = !p.bought && d.bal.points >= d.game.passCost;
     return `<section class="panel" id="islePanel">${head}
       <div class="portrow"><div><b>숙제 면제권</b><p class="small muted">포인트로 한 달에 한 번 살 수 있어요. 산 뒤 선생님이 챙겨 줘요.</p></div>
@@ -418,7 +430,7 @@ function kDeco() {
   const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon", "camo", "smoke"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined, ...(slot === "hull" ? { camo: undefined } : {}) }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
   const sw = (i, act, on, label) => `<button style="--sail:${V.SAILS[i]}" data-act="${act}" data-v="${i}" aria-pressed="${on}" aria-label="${label} ${i + 1}"></button>`;
   const noSail = !curShip.sails && ["pattern", "emblem", "color"].includes(slot) ? `<p class="small muted">지금 배에는 돛이 없어서 돛 꾸미기는 안 보여요. 깃발 색과 깃발 문양은 보여요.</p>` : "";
-  const body = slot === "photo" ? kPhoto() : slot === "upgrade" ? kUpgrade() : slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
+  const body = slot === "dex" ? kDex() : slot === "photo" ? kPhoto() : slot === "upgrade" ? kUpgrade() : slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
     : slot === "color" ? `<p class="small muted">돛 색과 깃발 색은 무료예요.</p><h3>돛 색</h3><div class="sails">${V.SAILS.map((c, i) => sw(i, "ksail", me.sail === i, "돛 색")).join("")}</div>
       <h3>깃발 색</h3><div class="sails"><button class="same" data-act="kflag" data-v="-1" aria-pressed="${L.fc == null}" style="--sail:${sail(me.sail)}">돛과 같게</button>${V.SAILS.map((c, i) => sw(i, "kflag", L.fc === i, "깃발 색")).join("")}</div>`
     : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요. 돛이 있는 배에서 보여요.</p>` : slot === "air" ? `<p class="small muted">여러 대를 같이 띄울 수 있어요. 헬기와 정찰기는 순양함부터, 나머지는 항공모함에서 쓸 수 있어요.</p>` : slot === "hull" && L.camo && !viewShip.sails ? `<p class="small muted">지금은 위장 도색이 칠해져 있어요. 배 색이 보이려면 위장 도색을 ‘기본으로’ 바꿔 주세요.</p>` : slot === "camo" ? `<p class="small muted">돛이 없는 배의 선체에 칠해요. 칠한 동안에는 배 색 대신 위장이 보여요.</p>` : slot === "smoke" ? `<p class="small muted">굴뚝에서 나오는 연기 색을 바꿔요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3>${boxRow(m)}<div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => slot === "air" ? x.group === "air" : x.slot === slot && !x.group).map(card).join("")}</div>`}`;
@@ -430,6 +442,24 @@ function kDeco() {
       ${upConf ? `<div class="confirm"><span><b>${esc(upConf.name)}</b> ${upConf.level + 1}단계를 금화 ${upConf.price}개로 올릴까요? 남는 금화 ${gold - upConf.price}</span><button class="btn sm primary" data-act="kupBuy" data-v="${upConf.id}">강화</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}</section>
     <section class="panel"><div class="chips" role="group" aria-label="꾸미기 종류">${tabs.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>${noSail}${body}</section>`;
 }
+/* ---------- the collection book and titles ---------- */
+function kDex() { const d = K.d, has = new Set(d.owned), now = d.me.look.ttl, bar = (a, b) => `<div class="dex-bar"><i style="width:${b ? a / b * 100 : 0}%"></i></div>`;
+  const titles = d.titles.map(t => `<div class="dex-title ${t.got ? "got" : ""}"><div><b>${esc(t.name)}</b><span class="small muted">${esc(t.desc)}</span>${t.got ? "" : `${bar(t.cur, t.goal)}<span class="small muted num">${t.cur} / ${t.goal}</span>`}</div>${t.got ? now === t.id ? `<button class="btn sm" data-act="ktitle" data-v="">떼기</button>` : `<button class="btn sm primary" data-act="ktitle" data-v="${t.id}">달기</button>` : ""}</div>`).join("");
+  const eras = d.maps.map(m => [`${m.era} 무기`, d.deco.filter(x => x.slot === "weapon" && x.era === m.id)]), slots = [["배 색", x => x.slot === "hull"], ["돛 무늬", x => x.slot === "pattern"], ["문양", x => x.slot === "emblem"], ["부착물", x => x.slot === "att" && !x.group], ["함재기", x => x.group === "air"], ["위장 도색", x => x.slot === "camo"], ["연기", x => x.slot === "smoke"], ["선수상·테두리", x => x.slot === "head" || x.slot === "trim"], ["물결", x => x.slot === "wake"], ["이름표", x => x.slot === "tag"]].map(([n, f]) => [n, d.deco.filter(f)]);
+  const tile = x => { const got = has.has(x.key); return x.slot === "weapon" ? `<div class="dex-w ${got ? "got" : ""} r-${x.rarity}">${weaponImg(x.id)}<span class="small">${got ? esc(x.name) : "???"}</span></div>` : `<span class="dex-c ${got ? "got" : ""}">${got ? esc(x.name) : "???"}</span>`; };
+  const group = ([n, list]) => { const c = list.filter(x => has.has(x.key)).length; return `<div class="dex-group"><div class="row between"><h3>${esc(n)}</h3><span class="small num ${c === list.length ? "ok" : "muted"}">${c} / ${list.length}</span></div>${bar(c, list.length)}<div class="dex-list">${list.map(tile).join("")}</div></div>`; };
+  const ships = d.ships, shipsGot = ships.filter(s => !s.price || has.has(`ship.${s.id}`)).length;
+  return `<h3>칭호</h3><p class="small muted">얻은 칭호를 하나 달면 이름 옆에 보여요.</p><div class="dex-titles">${titles}</div>
+    <div class="dex-group"><div class="row between"><h3>배</h3><span class="small num muted">${shipsGot} / ${ships.length}</span></div>${bar(shipsGot, ships.length)}<div class="dex-list">${ships.map(s => { const got = !s.price || has.has(`ship.${s.id}`); return `<span class="dex-c ${got ? "got" : ""}">${got ? esc(s.name) : "???"}</span>`; }).join("")}</div></div>${[...eras, ...slots].map(group).join("")}`; }
+/* ---------- classmates' ships ---------- */
+function kCrew() { const d = K.d, me = d.me, friends = d.mates.filter(m => m.id !== me.id), v = friends.find(m => m.id === K.mate), mine = new Set(d.likes.mine), count = id => d.likes.counts[id] || 0;
+  const heart = m => mine.has(m.id) ? `<span class="pill ok">좋아요 눌렀어요</span>` : `<button class="btn sm primary" data-act="klike" data-v="${m.id}">좋아요</button>`, shipName = id => d.ships.find(s => s.id === id)?.name || "";
+  const hearts = n => n ? `<span class="likes"><i></i><span class="num">${n}</span></span>` : "";
+  return `${v ? `<section class="panel"><div class="row between"><h2>${esc(v.nickname)}의 ${esc(shipName(v.ship))}</h2><button class="btn sm ghost" data-act="kmate" data-v="${v.id}">닫기</button></div>
+      <div class="deco3d" id="mate3d">${shipBox(v.ship, v.look, v.sail, v.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
+      <div class="row between"><span class="small">전투력 <b class="num">${v.power}</b>${titleName(v.look) ? ` · <b>${esc(titleName(v.look))}</b>` : ""}</span><span class="row">${hearts(count(v.id))}${heart(v)}</span></div></section>` : ""}
+    <section class="panel"><div class="row between"><h2>우리 반 친구 배</h2>${count(me.id) ? `<span class="small">내 배 좋아요 ${hearts(count(me.id))}</span>` : ""}</div><p class="small muted">배를 누르면 3D로 크게 볼 수 있어요. 마음에 드는 배에 좋아요를 눌러요. 친구마다 일주일에 한 번 누를 수 있어요.</p>
+      ${friends.length ? `<div class="deco-grid">${friends.map(m => `<div class="deco-item ${K.mate === m.id ? "sel" : ""}" data-act="kmate" data-v="${m.id}">${shipBox(m.ship, m.look, m.sail, "", "tiny")}<b>${esc(m.nickname)}</b><span class="small muted">${esc(shipName(m.ship))}${titleName(m.look) ? ` · ${esc(titleName(m.look))}` : ""}</span><span class="row">${hearts(count(m.id))}${heart(m)}</span></div>`).join("")}</div>` : `<p class="muted small">아직 같은 반 친구가 없어요.</p>`}</section>`; }
 function kLog() {
   const d = K.d;
   return `${d.orders.length ? `<section class="panel"><h3>선생님이 챙겨 줄 것</h3><div class="plist">${d.orders.map(o => `<div class="prow"><span>${esc(o.name)}</span><span class="small muted">${fmtTime(o.created_at)}</span><span class="pill wait">준비 중</span></div>`).join("")}</div></section>` : ""}
@@ -452,15 +482,16 @@ async function gameArt(kind) {
 // a mini-game from the first tap to the reward card
 async function playGame(kind) {
   if (K.busy) return; K.busy = true;
-  try {
+  try { // a game seen for the first time explains itself before any energy is spent
+    const seen = `hs_intro_${kind}_${K.map}`; if (!ls.get(seen)) { const go = await Games.intro(kind, K.map, K.d.maps[K.map].isles[kind], K.d.games[kind].stars, true); if (!go) { K.busy = false; return; } ls.set(seen, "1"); }
     const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
     const art = await Promise.race([gameArt(kind), sleep(1800).then(() => null)]); // never make a child wait long for pictures: the plain drawings are the fallback
     const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], art });
     if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0, quit: true }).catch(() => {}); toast("다음에 다시 도전해요"); }
     else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r); }
-    await kidLoad(); kidRender(); bossWin();
+    await kidLoad(); kidRender();
   } catch (e) { toast(e.message); }
-  K.busy = false;
+  K.busy = false; kidNotices();
 }
 const foundHTML = it => `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? (K.d.deco.find(x => x.key === it.key).era > K.d.ships.find(s => s.id === K.d.me.ship).era ? `${K.d.ships.find(s => s.era === K.d.deco.find(x => x.key === it.key).era).name}부터 장착할 수 있어요` : "내 배 → 무기에서 장착할 수 있어요") : "내 배에서 쓸 수 있어요"}</small></div>`;
 async function openBox(mapId) {
@@ -482,10 +513,22 @@ function rewardCard(r) {
     document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); Sfx.stars(r.stars); if (it) setTimeout(Sfx.coin, 560); b.onclick = () => { m.remove(); done(); };
   });
 }
+// three shots at a sliding gauge before the battle; good aim adds up to 12% to the win chance. Leaving here costs nothing.
+function aimPhase() { return new Promise(done => { const m = document.createElement("div"); m.className = "fight aim"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+    m.innerHTML = `<div class="aim-box"><h2>조준!</h2><p>바늘이 초록 칸에 올 때 눌러요. 잘 맞히면 승률이 올라가요.</p><div class="aim-bar"><i class="aim-zone"><b></b></i><i class="aim-needle"></i></div><div class="aim-dots"><i></i><i></i><i></i></div><p class="aim-say" aria-live="polite">&nbsp;</p><button type="button" class="btn primary lg" data-aim>발사!</button><button type="button" class="btn sm ghost" data-out>나가기</button></div>`; document.body.appendChild(m);
+    const zone = m.querySelector(".aim-zone"), needle = m.querySelector(".aim-needle"), say = m.querySelector(".aim-say"), dots = [...m.querySelectorAll(".aim-dots i")]; let shot = 0, bonus = 0, center = 50, t = 0, last = performance.now(), live = true, wait = false;
+    const place = () => { center = 18 + Math.random() * 64; zone.style.left = center + "%"; }; place();
+    const finish = v => { live = false; m.remove(); done(v); };
+    const fire = () => { if (wait || !live) return; const pos = 50 - Math.cos(t) * 50, off = Math.abs(pos - center), pt = off <= 5 ? 4 : off <= 12 ? 2 : 0; bonus += pt; dots[shot].className = pt === 4 ? "p" : pt ? "n" : "x"; say.textContent = pt === 4 ? "정확해요!" : pt ? "괜찮아요" : "빗나갔어요"; pt ? Sfx.boom(pt === 4 ? .7 : .45) : Sfx.splash(); shot++; wait = true;
+      if (shot === 3) { setTimeout(() => { say.textContent = bonus ? `승률 +${bonus}%` : "그래도 출항!"; setTimeout(() => finish(bonus), 700); }, 450); return; } setTimeout(() => { wait = false; place(); }, 500); };
+    m.querySelector("[data-aim]").onclick = fire; m.querySelector("[data-out]").onclick = () => finish(null);
+    (function tick(now) { if (!live) return; const dt = Math.min(.05, (now - last) / 1000); last = now; if (!wait) t += dt * (2.4 + shot * .9); needle.style.left = 50 - Math.cos(t) * 50 + "%"; requestAnimationFrame(tick); })(last); }); }
 // a battle already decided by the server, played out shot by shot
 async function playFight() {
   if (K.busy) return; K.busy = true; let r;
-  try { r = await api("/api/kid/battle", {}); } catch (e) { toast(e.message); K.busy = false; return; }
+  if (!K.d.battle.open || K.d.battle.left <= 0) { toast(K.d.battle.open ? "오늘 전투를 모두 썼어요. 내일 다시 해요" : "지금은 전투 시간이 아니에요"); K.busy = false; return; } // no aiming for a battle that cannot happen
+  const aim = await aimPhase(); if (aim === null) { K.busy = false; return; }
+  try { r = await api("/api/kid/battle", { aim }); } catch (e) { toast(e.message); K.busy = false; return; }
   const m = document.createElement("div"); m.className = "fight"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
   m.innerHTML = `<p class="f-load">출항 준비 중…</p>`; document.body.appendChild(m);
   const kindOf = p => K.d.deco.find(x => x.key === `weapon.${p.look.weapon}`)?.kind || "cannon";
@@ -493,7 +536,7 @@ async function playFight() {
   let fx = null, v3d = null;
   if (window.Ship3D?.available()) try { v3d = await Promise.race([Ship3D.get(), sleep(6000)]); } catch (e) {}
   if (v3d) { const side3 = p => ({ look: p.look, sailHex: sail(p.sail), flagHex: p.look.fc != null ? sail(p.look.fc) : sail(p.sail), ship: p.ship });
-    const side = (p, cls, tag) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">${tag} · 전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
+    const side = (p, cls, tag) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">${titleName(p.look) ? esc(titleName(p.look)) : tag} · 전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
     m.className = "fight f3"; m.innerHTML = `<div class="f-view"></div><i class="f-hurt"></i><div class="f-top">${side(r.me, "a", "내 배")}<span class="f-vs">VS</span>${side(r.opp, "d", "상대")}</div><span class="f-dmg" hidden></span><div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button>${sndBtn()}</div>`;
     try { fx = await v3d.fight(m.querySelector(".f-view"), side3(r.me), side3(r.opp)); } catch (e) { fx = null; } }
   if (fx) { let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
@@ -507,7 +550,7 @@ async function playFight() {
       hpA.style.width = s.hp.a + "%"; hpD.style.width = s.hp.d + "%";
       if (!fast) { await sleep(s.dmg ? 720 : 560); dmgEl.hidden = true; } }
     dmgEl.hidden = true; m.querySelector("[data-skip]").hidden = true; await fx.finish(r.won, fast); Sfx[r.won ? "win" : "lose"]();
-    m.querySelector(".f-bottom").innerHTML = `<div class="f-result ${r.won ? "win" : "lose"}"><h2>${r.won ? "승리!" : "패배"}</h2><p>${r.delta ? `금화 ${r.delta > 0 ? "+" : ""}${r.delta}개` : "잃은 금화는 없어요"}</p><p class="small">오늘 남은 전투 ${r.left}번</p><button class="btn primary lg" data-close>확인</button></div>`;
+    m.querySelector(".f-bottom").innerHTML = `<div class="f-result ${r.won ? "win" : "lose"}"><h2>${r.won ? "승리!" : "패배"}</h2><p>${r.delta ? `금화 ${r.delta > 0 ? "+" : ""}${r.delta}개` : "잃은 금화는 없어요"}</p><p class="small">${r.aim ? `조준 보너스 승률 +${r.aim}% · ` : ""}오늘 남은 전투 ${r.left}번</p><button class="btn primary lg" data-close>확인</button></div>`;
     await new Promise(res => { const b = m.querySelector("[data-close]"); b.focus(); b.onclick = res; });
     fx.close(); m.remove(); await kidLoad(); kidRender(); K.busy = false; return; }
   m.className = "fight";
@@ -526,13 +569,17 @@ async function playFight() {
   }
   (r.won ? shipD : shipA).classList.add("sunk");
   await sleep(fast ? 100 : 500); Sfx[r.won ? "win" : "lose"]();
-  m.querySelector(".f-bottom").innerHTML = `<div class="f-result ${r.won ? "win" : "lose"}"><h2>${r.won ? "승리!" : "패배"}</h2><p>${r.delta ? `금화 ${r.delta > 0 ? "+" : ""}${r.delta}개` : "잃은 금화는 없어요"}</p><p class="small">오늘 남은 전투 ${r.left}번</p><button class="btn primary lg" data-close>확인</button></div>`;
+  m.querySelector(".f-bottom").innerHTML = `<div class="f-result ${r.won ? "win" : "lose"}"><h2>${r.won ? "승리!" : "패배"}</h2><p>${r.delta ? `금화 ${r.delta > 0 ? "+" : ""}${r.delta}개` : "잃은 금화는 없어요"}</p><p class="small">${r.aim ? `조준 보너스 승률 +${r.aim}% · ` : ""}오늘 남은 전투 ${r.left}번</p><button class="btn primary lg" data-close>확인</button></div>`;
   await new Promise(res => { const b = m.querySelector("[data-close]"); b.focus(); b.onclick = res; });
   m.remove(); await kidLoad(); kidRender(); K.busy = false;
 }
 const KID_ACTS = {
   ksnd: () => { Sfx.toggle(); document.querySelectorAll(".snd").forEach(el => el.outerHTML = sndBtn()); },
-  ktab: v => { K.tab = v; K.confirm = null; K.tryKey = null; K.tryShip = null; K.crop = null; K.photoDraft = null; kidRender(); scrollTo(0, 0); },
+  kmate: v => { K.mate = K.mate === Number(v) ? null : Number(v); kidRender(); if (K.mate) scrollTo({ top: 0, behavior: "smooth" }); },
+  klike: v => { Sfx.coin(); return kDo(() => api(`/api/kid/like/${v}`, {})); },
+  ktitle: v => kDo(() => api("/api/kid/title", { id: v }), v ? "칭호를 달았어요!" : "칭호를 뗐어요"),
+  khow: v => Games.intro(v, K.map, K.d.maps[K.map].isles[v], K.d.games[v].stars, false),
+  ktab: v => { K.tab = v; K.mate = null; K.confirm = null; K.tryKey = null; K.tryShip = null; K.crop = null; K.photoDraft = null; kidRender(); scrollTo(0, 0); },
   kisle: v => { K.confirm = null; if (!v) { K.isle = null; return kidRender(); } K.isle = v; const el = $("#wship"); if (el) el.style.cssText += ";" + shipAt(v); K.at = v; setTimeout(() => { kidRender(); $("#islePanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, el ? 620 : 0); },
   kplay: playGame, kfight: playFight,
   ksea: v => { const m = K.d.maps[Number(v)]; if (!seaOpen(m)) return toast(`${m.name}는 전투력 ${m.power}부터 열려요. 지금은 ${K.d.me.power}이에요`); K.map = m.id; K.isle = null; K.at = "port"; K.confirm = null; kidRender(); },

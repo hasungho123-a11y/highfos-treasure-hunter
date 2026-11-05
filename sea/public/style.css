@@ -486,3 +486,33 @@ nav.tabs .snd { margin-left: auto; flex: none; width: 36px; padding: 0; border: 
 
 /* supply box */
 .box-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; margin-bottom: 10px; border: 1px solid rgb(20 70 111 / .18); border-radius: 10px; background: rgb(241 192 75 / .12); }
+
+/* first-play explanation and countdown */
+.how { text-align: left } .how h2 { margin: 0 } .how svg { width: 100%; height: auto; display: block; border-radius: 10px }
+.how ol { margin: 0; padding-left: 1.3em; display: grid; gap: 4px } .how p { margin: 0 } .how-go { justify-content: center }
+.game-count { position: fixed; inset: 0; z-index: 60; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 24px; text-align: center; background: #101a34; color: #fff }
+.game-count b { font-size: 1.15rem } .game-count p { margin: 0; max-width: 22em; color: #D5E0F2 }
+.count-n { font-size: 6rem; font-weight: 800; line-height: 1.1; animation: count-pop .7s ease-out } 
+@keyframes count-pop { from { transform: scale(1.5); opacity: .3 } to { transform: none; opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .count-n { animation: none } }
+/* notices */
+.notice-sea { width: 100%; min-height: 150px; border-radius: 14px } .news { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px }
+.reward h2, .reward > p { margin: 0 }
+/* aiming before a battle */
+.fight.aim { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: #101a34; color: #fff }
+.aim-box { width: min(100%, 420px); display: grid; gap: 12px; justify-items: center; text-align: center } .aim-box h2, .aim-box p { margin: 0 }
+.aim-bar { position: relative; width: 100%; height: 44px; border-radius: 10px; background: #26365C; overflow: hidden }
+.aim-zone { position: absolute; top: 0; bottom: 0; width: 24%; margin-left: -12%; background: rgba(120, 214, 150, .4) } .aim-zone b { position: absolute; inset: 0 29%; background: #63D98C }
+.aim-needle { position: absolute; top: 0; bottom: 0; width: 4px; margin-left: -2px; background: #FFE27A; box-shadow: 0 0 6px #FFE27A }
+.aim-dots { display: flex; gap: 10px } .aim-dots i { width: 16px; height: 16px; border-radius: 50%; background: #26365C } .aim-dots i.p { background: #63D98C } .aim-dots i.n { background: #FFE27A } .aim-dots i.x { background: #E2605A }
+.aim-say { min-height: 1.5em; font-weight: 700 } .aim-box [data-aim] { width: 100%; min-height: 64px; font-size: 1.2rem } .aim-box .ghost { color: #D5E0F2 }
+/* collection book */
+.dex-titles { display: grid; gap: 8px } .dex-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
+.dex-title > div { display: grid; gap: 3px; flex: 1; min-width: 0 } .dex-title:not(.got) b { color: var(--muted, #777) } .dex-title.got { border-color: var(--gold); background: var(--gold-soft) }
+.dex-bar { height: 7px; border-radius: 4px; background: var(--sunk); overflow: hidden } .dex-bar i { display: block; height: 100%; background: var(--accent) }
+.dex-group { display: grid; gap: 6px; margin-top: 8px } .dex-group h3 { margin: 0 } .dex-list { display: flex; flex-wrap: wrap; gap: 6px }
+.dex-c { padding: 3px 9px; border-radius: 999px; font-size: .8rem; background: var(--sunk); color: var(--muted, #777) } .dex-c.got { background: var(--accent-soft); color: var(--accent); font-weight: 700 }
+.dex-w { width: 92px; display: grid; gap: 2px; justify-items: center; padding: 6px; text-align: center; border-radius: 10px; background: var(--sunk) } .dex-w svg { width: 100%; height: auto; filter: grayscale(1) brightness(.45); opacity: .55 } .dex-w.got { background: var(--surface); border: 1px solid var(--line) } .dex-w.got svg { filter: none; opacity: 1 }
+/* classmates' ships */
+.likes { display: inline-flex; align-items: center; gap: 3px; color: #D84B6B; font-weight: 700 } .likes i { width: 13px; height: 12px; background: currentColor; clip-path: path("M6.5 12 .9 6.2a3.3 3.3 0 0 1 4.7-4.6l.9.9.9-.9a3.3 3.3 0 0 1 4.7 4.6z") }
+@media (max-width: 480px) { nav.tabs button { padding: 8px 8px } }

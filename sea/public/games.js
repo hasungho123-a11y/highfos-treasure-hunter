@@ -237,5 +237,37 @@ function codebreak({ map, title }) {
   });
 }
 // every sea plays its own game on each island; the score scale of each island stays the same, so the server's stars and rewards still fit
-window.Games = { run: (kind, opts) => ({ cannon: [cannon, torpedo, missile], reef: [reef, reef, reef], memory: [memory, lighthouse, codebreak] })[kind][opts.map || 0](opts) };
+/* ---------- how each game works: a small drawing, three steps, and the line repeated over the countdown ---------- */
+const WATER = `<rect width="240" height="110" rx="10" fill="#2F7FB0"/><path d="M0 34q20-6 40 0t40 0 40 0 40 0 40 0 40 0M0 74q20-6 40 0t40 0 40 0 40 0 40 0 40 0" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="2"/>`;
+const hull = (x, y, c = "#7A3B2E") => `<path d="M${x - 20} ${y}h40l-7 11h-26z" fill="${c}"/><path d="M${x} ${y}v-20l13 16z" fill="#F5EFE0"/>`;
+const mine = (x, y, o = 1) => `<g opacity="${o}"><circle cx="${x}" cy="${y}" r="8" fill="#23262B"/><path d="M${x} ${y - 12}v24M${x - 12} ${y}h24" stroke="#23262B" stroke-width="2"/></g>`;
+const rock = (x, y) => `<path d="M${x - 16} ${y + 9}l7-17 8 5 7-10 10 22z" fill="#5C5A58"/>`;
+const label = (x, y, t, c = "#fff") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="700" text-anchor="middle">${t}</text>`;
+const dash = 'fill="none" stroke="#FFE27A" stroke-width="2.5" stroke-dasharray="5 5"';
+const bracket = (x, y, s, c = "#FF5A4F") => `<path d="M${x - s} ${y - s + 6}v-6h6M${x + s - 6} ${y - s}h6v6M${x + s} ${y + s - 6}v6h-6M${x - s + 6} ${y + s}h-6v-6" fill="none" stroke="${c}" stroke-width="2.5"/>`;
+const HOW = {
+  cannon: [
+    { short: "바람에 포탄이 휘어요. 10발!", steps: ["바람 화살표를 봐요. 포탄은 바람 쪽으로 휘어요.", "점선이 닿는 곳에 표적이 올 때 눌러요.", "10발 중 많이 맞힐수록 별이 늘어요."], art: `${WATER}${hull(182, 44)}<path d="M36 100Q96 10 178 46" ${dash}/><path d="M92 16h44m-9-6 9 6-9 6" fill="none" stroke="#fff" stroke-width="3"/>${label(114, 34, "바람")}<circle cx="36" cy="100" r="8" fill="#23262B"/>` },
+    { short: "어뢰는 느려요. 앞을 보고 쏴요. 10발!", steps: ["어뢰는 천천히 나아가요.", "배가 지금 있는 곳 말고, 갈 자리를 보고 눌러요.", "10발 중 많이 맞힐수록 별이 늘어요."], art: `${WATER}${hull(66, 34, "#5B6470")}<path d="M90 42h70" ${dash}/><g opacity=".55">${hull(180, 34, "#5B6470")}</g>${label(180, 66, "갈 자리", "#FFE27A")}<path d="M120 104 174 56" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="2 6"/><circle cx="120" cy="104" r="5" fill="#FFE27A"/>` },
+    { short: "진짜 적함을 꾹! 깜빡이면 미끼예요. 10번!", steps: ["진짜 적함을 손가락으로 꾹 누르고 있어요.", "조준이 다 차면 미사일이 날아가요.", "깜빡이는 표적은 미끼예요. 누르면 손해예요."], art: `${WATER}${hull(70, 56, "#5B6470")}${bracket(70, 52, 28)}${label(70, 96, "꾹 눌러요")}<g opacity=".4">${hull(176, 40, "#8B97A5")}</g>${label(176, 76, "미끼")}` }
+  ],
+  reef: [
+    { short: "해류가 배를 밀어요. 손가락으로 버텨요!", steps: ["배를 손가락으로 좌우로 움직여요.", "해류가 배를 옆으로 밀어요. 반대로 버텨요.", "암초에 부딪히지 않고 오래 갈수록 점수가 올라요."], art: `${WATER}${rock(52, 28)}${rock(186, 44)}${rock(112, 20)}${hull(120, 78)}<path d="M44 86h34m-9-6 9 6-9 6M44 66h24m-8-6 8 6-8 6" fill="none" stroke="#BFE8FF" stroke-width="3"/>${label(58, 104, "해류", "#BFE8FF")}` },
+    { short: "안개 속 빙산은 늦게 보여요. 침착하게!", steps: ["배를 손가락으로 좌우로 움직여요.", "안개 때문에 빙산이 가까이 와야 보여요.", "부딪히지 않고 오래 갈수록 점수가 올라요."], art: `<defs><linearGradient id="hf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8EEF2"/><stop offset=".65" stop-color="#E8EEF2" stop-opacity="0"/></linearGradient></defs>${WATER}<path d="M60 64l13-24 12 14 8-6 12 16z" fill="#DDF3FA"/><path d="M160 26l10-16 12 16z" fill="#DDF3FA" opacity=".35"/><rect width="240" height="110" rx="10" fill="url(#hf)"/>${hull(130, 88)}` },
+    { short: "기뢰는 파동이 지나갈 때만 보여요!", steps: ["배를 손가락으로 좌우로 움직여요.", "기뢰는 소나 파동이 지나갈 때만 보여요. 위치를 기억해요.", "움직이는 기뢰도 있어요. 조심해요."], art: `${WATER}<g fill="none" stroke="#9DF2C7" stroke-width="2"><path d="M60 92a60 60 0 0 1 120 0" opacity=".9"/><path d="M90 92a30 30 0 0 1 60 0" opacity=".5"/><path d="M28 92a92 92 0 0 1 184 0" opacity=".35"/></g>${mine(66, 46)}${mine(176, 58)}${mine(122, 20, .3)}${hull(120, 88, "#5B6470")}` }
+  ],
+  memory: [
+    { short: "같은 그림의 짝을 찾아요!", steps: ["카드를 두 장씩 뒤집어요.", "같은 그림이면 짝이 맞아 열린 채로 남아요.", "적게 뒤집을수록 점수가 높아요."], art: `<rect width="240" height="110" rx="10" fill="#3C3430"/>${[0, 1, 2, 3].flatMap(c => [0, 1].map(r => { const x = 42 + c * 42, y = 12 + r * 46, up = (c === 0 && r === 0) || (c === 2 && r === 1); return `<rect x="${x}" y="${y}" width="34" height="40" rx="6" fill="${up ? "#FFF6E0" : "#8A5A3B"}"/>${up ? `<text x="${x + 17}" y="${y + 27}" font-size="20" fill="#D84B6B" text-anchor="middle">♥</text>` : ""}`; })).join("")}` },
+    { short: "불빛 순서를 외워서 똑같이 눌러요!", steps: ["등대 불빛이 켜지는 순서를 잘 봐요.", "똑같은 순서로 눌러요. 라운드마다 길어져요.", "두 번 틀리면 끝나요."], art: `<rect width="240" height="110" rx="10" fill="#1E2C44"/>${[0, 1, 2, 3].map(i => { const x = 45 + i * 50, n = [2, 0, 3, 1][i]; return `<circle cx="${x}" cy="48" r="19" fill="${n === 1 ? "#FFE27A" : "#3B4E6D"}"/>${n ? label(x, 86, `${n}번째`, "#FFE27A") : ""}`; }).join("")}` },
+    { short: "암호표를 보고 숫자를 눌러요. 틀리면 3초 줄어요!", steps: ["위에 나온 기호를 암호표에서 찾아요.", "그 기호의 숫자를 빠르게 눌러요.", "틀리면 시간이 3초 줄어요. 40초 동안 많이 풀어요."], art: `<rect width="240" height="110" rx="10" fill="#14251F"/>${["★", "☾", "⚓", "♨"].map((t, i) => `<rect x="${22 + i * 50}" y="10" width="44" height="40" rx="6" fill="#23403A"/><text x="${44 + i * 50}" y="27" font-size="14" fill="#fff" text-anchor="middle">${t}</text>${label(44 + i * 50, 44, i + 1, "#9DF2C7")}`).join("")}<text x="82" y="92" font-size="28" fill="#fff" text-anchor="middle">☾</text><path d="M104 84h24m-8-6 8 6-8 6" fill="none" stroke="#9DF2C7" stroke-width="3"/><rect x="138" y="62" width="40" height="40" rx="8" fill="#9DF2C7"/><text x="158" y="90" font-size="24" font-weight="700" fill="#14251F" text-anchor="middle">2</text>` }
+  ]
+};
+// the explanation card; resolves true to play. `ask` is false when opened from the 게임 방법 button, where there is nothing to start
+const intro = (kind, map, title, stars, ask) => new Promise(done => { const h = HOW[kind][map || 0], m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+  m.innerHTML = `<div class="panel how"><h2>${title}</h2><svg viewBox="0 0 240 110" role="img" aria-label="게임 그림 설명">${h.art}</svg><ol>${h.steps.map(s => `<li>${s}</li>`).join("")}</ol><p class="small muted num">별 1개 ${stars[0]}점 · 별 2개 ${stars[1]}점 · 별 3개 ${stars[2]}점</p><div class="row how-go">${ask ? `<button type="button" class="btn primary lg" data-go>시작</button><button type="button" class="btn" data-no>취소</button>` : `<button type="button" class="btn primary lg" data-no>알겠어요</button>`}</div></div>`;
+  document.body.appendChild(m); const go = m.querySelector("[data-go]"), no = m.querySelector("[data-no]"), end = v => { m.remove(); done(v); }; if (go) go.onclick = () => end(true); no.onclick = () => end(false); (go || no).focus(); });
+// 3-2-1 with the game's one-line reminder, so a game never starts before the child is looking
+const countdown = (title, line) => new Promise(done => { const m = document.createElement("div"); m.className = "game-count"; m.setAttribute("role", "status"); m.innerHTML = `<b>${title}</b><span class="count-n num"></span><p>${line}</p>`; document.body.appendChild(m); const n = m.querySelector(".count-n"); let i = 3;
+  const step = () => { if (!i) { m.remove(); done(); return; } n.textContent = i; n.style.animation = "none"; void n.offsetWidth; n.style.animation = ""; window.Sfx?.tick?.(); i--; setTimeout(step, 750); }; step(); });
+window.Games = { intro, run: async (kind, opts) => { const map = opts.map || 0; await countdown(opts.title, HOW[kind][map].short); return ({ cannon: [cannon, torpedo, missile], reef: [reef, reef, reef], memory: [memory, lighthouse, codebreak] })[kind][map](opts); } };
 })();

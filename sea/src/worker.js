@@ -13,6 +13,7 @@ const BOSSES = [
   { name: "유령 구축함", ship: "destroyer", look: { camo: "stealth", smoke: "white" }, sail: "#3A4148" },
   { name: "해적왕의 항공모함", ship: "carrier", look: { camo: "splinter", att: ["fighter", "heli"] }, sail: "#8E2A22" }
 ];
+const BATTLE_AIM_MAX = 12; // good aiming before a battle adds this many % at most to the win chance
 const BOSS_QUEST_DMG = 10, BOSS_STAR_DMG = 2, BOSS_TEACHER_DMG = 20, BOSS_IDLE_SHARE = .3, BOSS_LAST_HIT_GOLD = 50; // a kid who took no part gets 30% of the reward
 
 // mini-games: the score needed for 1, 2 and 3 stars, the highest believable score, and the shortest believable play
@@ -74,6 +75,8 @@ const WEAPONS = [
   ["ciws", "근접 방어 기관포", "보통", 60, "gun", 2], ["gun127", "127mm 자동 함포", "보통", 70, "turret", 2], ["asm", "대함 미사일", "희귀", 90, "missile", 2], ["cruise", "순항 미사일", "전설", 120, "missile", 2]
 ].map(([id, name, rarity, power, kind, era]) => ({ key: `weapon.${id}`, slot: "weapon", id, name, price: 0, rarity, power, kind, era, dropOnly: true }));
 const ITEMS = [...DECO, ...WEAPONS];
+// titles are earned, then shown beside a kid's name; cur and goal also draw the progress bars in the collection book
+const TITLES = [["sail", "범선 제독", "범선 시대 무기 모두 모으기"], ["steam", "증기 제독", "증기 시대 무기 모두 모으기"], ["modern", "현대 제독", "현대 무기 모두 모으기"], ["fleet", "함대 사령관", "살 수 있는 배 모두 갖기"], ["stylist", "꾸미기 달인", "꾸미기 30개 모으기"], ["hunter", "보스 사냥꾼", "보스 격파에 3번 함께하기"], ["finisher", "마지막 일격", "보스에게 마지막 일격 넣기"], ["popular", "인기 선장", "친구에게 좋아요 10개 받기"]].map(([id, name, desc]) => ({ id, name, desc }));
 const itemOf = k => ITEMS.find(d => d.key === k);
 function parseLook(s) {
   let o = {}; try { o = JSON.parse(s || "{}") || {}; } catch (e) {}
@@ -84,6 +87,7 @@ function parseLook(s) {
     else if (o[slot] && itemOf(`${slot}.${o[slot]}`)) out[slot] = o[slot];
   }
   if (Number.isInteger(o.fc) && o.fc >= 0 && o.fc < SAILS) out.fc = o.fc;
+  if (TITLES.some(t => t.id === o.ttl)) out.ttl = o.ttl;
   return out;
 }
 // the approved photo travels with the look, so every ship drawing gets it from one place
@@ -203,14 +207,24 @@ async function hitBosses(db, game, hits) {
 // what a kid sees: this week's boss, and the last win if it is recent enough to still celebrate
 async function bossView(db, st, game, mates) {
   const b = await currentBoss(db, st.class_id, game), nameOf = id => mates.find(m => m.id === id)?.nickname || "";
+  // last week's boss, if the class fought it and it got away
+  const prev = await db.prepare("SELECT * FROM bosses WHERE class_id=? AND week=? AND defeated_at=0").bind(st.class_id, kstWeekStart(Date.now() - 7 * 864e5)).first(); let missed = null;
+  if (prev) { const left = await bossLeft(db, prev); if (left < prev.hp) missed = { id: prev.id, name: BOSSES[prev.kind].name, art: BOSSES[prev.kind], left, hp: prev.hp }; }
   const lastWin = await db.prepare("SELECT * FROM bosses WHERE class_id=? AND defeated_at>? ORDER BY id DESC LIMIT 1").bind(st.class_id, Date.now() - 8 * 864e5).first();
   let win = null;
   if (lastWin) { const joined = !!(await db.prepare("SELECT 1 FROM boss_hits WHERE boss_id=? AND student_id=? LIMIT 1").bind(lastWin.id, st.id).first());
     win = { id: lastWin.id, name: BOSSES[lastWin.kind].name, art: BOSSES[lastWin.kind], gold: bossGoldFor(lastWin, joined, lastWin.finisher === st.id), last: lastWin.finisher === st.id, finisher: nameOf(lastWin.finisher), joined }; }
-  if (!b) return { off: true, win };
+  if (!b) return { off: true, win, missed };
   const tot = (await db.prepare("SELECT student_id AS id, SUM(dmg) AS dmg FROM boss_hits WHERE boss_id=? GROUP BY student_id").bind(b.id).all()).results, sum = tot.reduce((n, x) => n + x.dmg, 0);
   const feed = (await db.prepare("SELECT student_id AS id, dmg, src FROM boss_hits WHERE boss_id=? ORDER BY id DESC LIMIT 4").bind(b.id).all()).results.map(x => ({ who: x.id ? nameOf(x.id) : "선생님", dmg: x.dmg, src: x.src })).filter(x => x.who);
-  return { id: b.id, name: BOSSES[b.kind].name, art: BOSSES[b.kind], hp: b.hp, left: Math.max(0, b.hp - sum), down: !!b.defeated_at, gold: b.gold, mine: tot.find(x => x.id === st.id)?.dmg || 0, joined: tot.filter(x => x.id).length, crew: mates.length, feed, questDmg: BOSS_QUEST_DMG, starDmg: BOSS_STAR_DMG, win };
+  return { id: b.id, name: BOSSES[b.kind].name, art: BOSSES[b.kind], hp: b.hp, left: Math.max(0, b.hp - sum), down: !!b.defeated_at, gold: b.gold, mine: tot.find(x => x.id === st.id)?.dmg || 0, joined: tot.filter(x => x.id).length, crew: mates.length, feed, questDmg: BOSS_QUEST_DMG, starDmg: BOSS_STAR_DMG, win, missed };
+}
+async function titlesFor(db, sid, owned) {
+  const has = k => owned.includes(k), era = n => { const w = WEAPONS.filter(x => x.era === n); return [w.filter(x => has(x.key)).length, w.length]; }, buyable = SHIPS.filter(s => s.price);
+  const hunts = (await db.prepare("SELECT COUNT(DISTINCT h.boss_id) AS n FROM boss_hits h JOIN bosses b ON b.id=h.boss_id WHERE h.student_id=? AND b.defeated_at>0").bind(sid).first()).n;
+  const lasts = (await db.prepare("SELECT COUNT(*) AS n FROM bosses WHERE finisher=?").bind(sid).first()).n, likes = (await db.prepare("SELECT COUNT(*) AS n FROM likes WHERE target=?").bind(sid).first()).n;
+  const prog = { sail: era(0), steam: era(1), modern: era(2), fleet: [buyable.filter(s => has(`ship.${s.id}`)).length, buyable.length], stylist: [Math.min(30, DECO.filter(d => has(d.key)).length), 30], hunter: [Math.min(3, hunts), 3], finisher: [Math.min(1, lasts), 1], popular: [Math.min(10, likes), 10] };
+  return TITLES.map(t => ({ ...t, cur: prog[t.id][0], goal: prog[t.id][1], got: prog[t.id][0] >= prog[t.id][1] }));
 }
 // energy from homework, stopping at the cap
 async function giveEnergy(db, game, pairs) {
@@ -329,7 +343,19 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
     upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
     bal, game, quests, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
-    battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates) };
+    battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates), titles: await titlesFor(db, st.id, owned),
+    approved: (await db.prepare("SELECT id, title, energy FROM logs WHERE student_id=? AND kind='quest' ORDER BY id DESC LIMIT 20").bind(st.id).all()).results,
+    likes: { counts: Object.fromEntries((await db.prepare("SELECT l.target AS id, COUNT(*) AS n FROM likes l JOIN students s ON s.id=l.target WHERE s.class_id=? GROUP BY l.target").bind(st.class_id).all()).results.map(r => [r.id, r.n])), mine: (await db.prepare("SELECT target FROM likes WHERE liker=? AND week=?").bind(st.id, ws).all()).results.map(r => r.target) } };
+});
+on("POST", "/api/kid/title", "student", async ({ db, me, body }) => {
+  const look = parseLook(me.student.look), id = String(body.id || "");
+  if (id) { const owned = (await db.prepare("SELECT item FROM owned WHERE student_id=?").bind(me.student.id).all()).results.map(r => r.item), t = (await titlesFor(db, me.student.id, owned)).find(x => x.id === id); if (!t) throw bad("없는 칭호예요"); if (!t.got) throw bad("아직 얻지 못한 칭호예요"); look.ttl = id; } else delete look.ttl;
+  await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run(); return { ok: true };
+});
+on("POST", "/api/kid/like/:id", "student", async ({ db, me, params }) => {
+  const target = Number(params.id); if (target === me.student.id) throw bad("내 배에는 누를 수 없어요");
+  if (!(await db.prepare("SELECT 1 FROM students WHERE id=? AND class_id=? AND active=1").bind(target, me.student.class_id).first())) throw bad("같은 반 친구에게만 누를 수 있어요");
+  const r = await db.prepare("INSERT OR IGNORE INTO likes (liker, target, week, at) VALUES (?,?,?,?)").bind(me.student.id, target, kstWeekStart(), Date.now()).run(); if (!r.meta.changes) throw bad("이번 주에는 이미 눌렀어요"); return { ok: true };
 });
 on("POST", "/api/kid/request", "student", async ({ db, me, body }) => {
   const q = await db.prepare("SELECT * FROM quests WHERE id=? AND active=1 AND deleted=0").bind(int(body.questId, 1)).first(); if (!q) throw bad("없는 미션이에요");
@@ -443,7 +469,7 @@ on("POST", "/api/kid/pass", "student", async ({ db, me }) => {
   return { ok: true };
 });
 // a battle: the opponent is picked for the attacker, close in power and not yet fought today. Only the attacker can lose gold.
-on("POST", "/api/kid/battle", "student", async ({ db, me }) => {
+on("POST", "/api/kid/battle", "student", async ({ db, me, body }) => {
   const st = me.student, game = await getGame(db), today = kstDate(), h = kstHour();
   if (!st.class_battle) throw bad("지금은 선생님이 전투를 쉬게 했어요");
   if (game.hourFrom !== game.hourTo && !(h >= game.hourFrom && h < game.hourTo)) throw bad(`전투는 ${game.hourFrom}시부터 ${game.hourTo}시까지 할 수 있어요`);
@@ -452,14 +478,14 @@ on("POST", "/api/kid/battle", "student", async ({ db, me }) => {
   const mates = (await db.prepare("SELECT id, nickname, sail, look, ship, photo FROM students WHERE class_id=? AND active=1").bind(st.class_id).all()).results, pw = await powers(db, mates);
   const near = mates.filter(m => m.id !== st.id && !fought.includes(m.id)).sort((a, b) => Math.abs(pw[a.id] - pw[st.id]) - Math.abs(pw[b.id] - pw[st.id])).slice(0, 3);
   if (!near.length) throw bad("오늘 겨룰 수 있는 친구가 없어요");
-  const opp = near[randInt(near.length)], A = pw[st.id], B = pw[opp.id], chance = Math.min(75, Math.max(25, Math.round(A / (A + B) * 100))), won = randInt(100) < chance;
+  const opp = near[randInt(near.length)], A = pw[st.id], B = pw[opp.id], aim = int(body.aim ?? 0, 0, BATTLE_AIM_MAX), chance = Math.min(75, Math.max(25, Math.round(A / (A + B) * 100))) + aim, won = randInt(100) < chance;
   if (!(await db.prepare("SELECT 1 FROM logs WHERE student_id=? AND kind='start' LIMIT 1").bind(st.id).first()) && game.startGold) await logStmt(db, { student_id: st.id, kind: "start", title: "첫 전투 준비 금화", gold: game.startGold }).run();
   const bal = (await balances(db, [st.id]))[st.id], delta = won ? game.win : -Math.min(game.lose, bal.gold);
   const ops = [db.prepare("INSERT INTO battles (attacker, defender, winner, a_power, d_power, delta, date, at) VALUES (?,?,?,?,?,?,?,?)").bind(st.id, opp.id, won ? st.id : opp.id, A, B, delta, today, Date.now()),
     logStmt(db, { student_id: st.id, kind: "battle", title: `${opp.nickname}와 전투 ${won ? "승리" : "패배"}`, gold: delta })];
   if (!won && game.defend) ops.push(logStmt(db, { student_id: opp.id, kind: "battle", title: `${st.nickname}의 공격을 막았어요`, gold: game.defend }));
   await db.batch(ops);
-  return { ok: true, won, delta, chance, left: game.battlesPerDay - fought.length - 1, rounds: simulate(won),
+  return { ok: true, won, delta, chance, aim, left: game.battlesPerDay - fought.length - 1, rounds: simulate(won),
     me: { nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, power: A }, opp: { nickname: opp.nickname, sail: opp.sail, look: lookOf(opp), ship: opp.ship, power: B } };
 });
 
