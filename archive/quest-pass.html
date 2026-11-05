@@ -1,0 +1,554 @@
+<title>학원 퀘스트 패스</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: sticky header with tabs, one working column; stamp-card pass track as the signature element */
+:root {
+  --bg: #F3F5FA; --surface: #FFFFFF; --sunk: #EAEEF6; --ink: #1C2540; --muted: #5A6583; --line: #D9DFEC;
+  --accent: #3552E8; --accent-ink: #FFFFFF; --accent-soft: #E3E8FF;
+  --coin: #B57F00; --coin-bg: #FFC93C; --coin-soft: #FFF3CF;
+  --eng: #0B8C76; --eng-soft: #D9F3EC; --math: #D2452F; --math-soft: #FCE3DD; --gen: #5A6583; --gen-soft: #E6E9F2;
+  --good: #198754; --danger: #C83A2A; --danger-soft: #FBE2DE;
+  --display: "Jua", "IBM Plex Sans KR", system-ui, sans-serif;
+  --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --r: 12px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #10142A; --surface: #191F3A; --sunk: #141933; --ink: #E7EBF8; --muted: #9AA4C4; --line: #2B3456;
+  --accent: #7D92FF; --accent-ink: #0E1230; --accent-soft: #252F5E;
+  --coin: #FFCF4D; --coin-bg: #E0AE2A; --coin-soft: #3A3216;
+  --eng: #3FD0B3; --eng-soft: #123530; --math: #FF8069; --math-soft: #3C1F1A; --gen: #A8B1CF; --gen-soft: #262D4C;
+  --good: #4CC98A; --danger: #FF7B6B; --danger-soft: #3D1E1B; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #10142A; --surface: #191F3A; --sunk: #141933; --ink: #E7EBF8; --muted: #9AA4C4; --line: #2B3456;
+  --accent: #7D92FF; --accent-ink: #0E1230; --accent-soft: #252F5E;
+  --coin: #FFCF4D; --coin-bg: #E0AE2A; --coin-soft: #3A3216;
+  --eng: #3FD0B3; --eng-soft: #123530; --math: #FF8069; --math-soft: #3C1F1A; --gen: #A8B1CF; --gen-soft: #262D4C;
+  --good: #4CC98A; --danger: #FF7B6B; --danger-soft: #3D1E1B; color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--body); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface) }
+button, input, select { font: inherit; color: inherit }
+h1, h2, h3 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; line-height: 1.25 }
+h2 { font-size: 1.45rem } h3 { font-size: 1.15rem }
+.num { font-variant-numeric: tabular-nums }
+
+header { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)) }
+.hwrap { max-width: 1120px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-block: 10px }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0 }
+.brand h1 { font-size: 1.5rem; color: var(--accent) }
+.brand small { color: var(--muted); font-size: .85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+nav { display: flex; gap: 4px; overflow-x: auto; margin-left: auto; scrollbar-width: none }
+nav button { border: 0; background: none; padding: 8px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; color: var(--muted); font-weight: 600 }
+nav button[aria-current="true"] { background: var(--accent-soft); color: var(--accent) }
+nav button:hover { color: var(--ink) }
+
+main { max-width: 1120px; margin: 0 auto; padding-block: 20px 80px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px }
+.status { padding: 10px 14px; border-radius: var(--r); background: var(--sunk); color: var(--muted); font-size: .9rem }
+.status.err { background: var(--danger-soft); color: var(--danger) }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; min-width: 0 }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.between { justify-content: space-between }
+.muted { color: var(--muted) } .small { font-size: .85rem }
+.cols { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 20px; align-items: start }
+@media (max-width: 820px) { .cols { grid-template-columns: minmax(0, 1fr) } }
+
+.btn { border: 1px solid var(--line); background: var(--surface); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-weight: 600 }
+.btn:hover { border-color: var(--accent) }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.btn.primary:disabled { opacity: .45; cursor: not-allowed }
+.btn.danger { color: var(--danger); border-color: var(--danger) }
+.btn.sm { padding: 4px 10px; font-size: .85rem }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted) }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+input[type=text], input[type=number], select { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 8px 10px; min-width: 0 }
+input[type=number] { width: 84px }
+label.f { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); font-weight: 600 }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: .9rem; font-weight: 600; color: var(--muted) }
+.chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg) }
+
+.tag { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: .78rem; font-weight: 700; white-space: nowrap }
+.t-영어 { background: var(--eng-soft); color: var(--eng) } .t-수학 { background: var(--math-soft); color: var(--math) } .t-공통 { background: var(--gen-soft); color: var(--gen) }
+.kind { background: var(--sunk); color: var(--muted) }
+.coin { display: inline-flex; align-items: center; gap: 4px; font-weight: 700; color: var(--coin) }
+.coin::before { content: ""; width: .9em; height: .9em; border-radius: 50%; background: var(--coin-bg); box-shadow: inset 0 0 0 2px var(--coin-soft) }
+.xp { font-weight: 700; color: var(--accent) }
+
+/* quest list */
+.qlist { display: grid; gap: 6px }
+.quest { display: grid; grid-template-columns: 4px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: left; width: 100%;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 8px 10px 8px 0; cursor: pointer; overflow: hidden }
+.quest .bar { align-self: stretch; background: var(--gen) }
+.quest.s-영어 .bar { background: var(--eng) } .quest.s-수학 .bar { background: var(--math) }
+.quest[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft) }
+.quest .t { font-weight: 600; min-width: 0 }
+.quest .meta { display: grid; justify-items: end; font-size: .8rem; gap: 2px }
+
+/* student picker */
+.sgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px }
+.spick { border: 1.5px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 12px; text-align: left; cursor: pointer; display: grid; gap: 4px; position: relative }
+.spick .nm { font-weight: 700; font-size: 1.02rem }
+.spick[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft) }
+.spick[aria-pressed="true"]::after { content: "✓"; position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: .8rem; font-weight: 700 }
+.spick:disabled { opacity: .5; cursor: not-allowed; background: var(--sunk) }
+.spick .done { font-size: .78rem; color: var(--good); font-weight: 700 }
+
+.mini { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden }
+.mini > i { display: block; height: 100%; background: var(--accent); border-radius: 3px }
+
+.feed { display: grid; gap: 0 }
+.feed li { list-style: none; display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line) }
+.feed li:first-child { border-top: 0 }
+.feed ul { padding: 0; margin: 0 }
+.feed time { color: var(--muted); font-size: .8rem }
+
+table { width: 100%; border-collapse: collapse }
+.tablewrap { overflow-x: auto }
+th { text-align: left; font-size: .8rem; color: var(--muted); font-weight: 600; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap }
+td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle }
+tr.click { cursor: pointer } tr.click:hover td { background: var(--sunk) }
+tr[aria-selected="true"] td { background: var(--accent-soft) }
+
+/* stamp card pass track */
+.track { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 8px }
+.stamp { aspect-ratio: 1; max-width: 100%; border-radius: 50%; border: 2px dashed var(--line); display: grid; place-items: center; font-family: var(--display); color: var(--muted); position: relative; font-size: 1rem }
+.stamp.on { border: 0; background: var(--accent); color: var(--accent-ink); transform: rotate(-8deg) }
+.stamp.tier { border-style: solid; border-color: var(--coin-bg) }
+.stamp.tier.on { background: var(--coin-bg); color: #3A2A00 }
+.stamp.tier::after { content: "🎁"; position: absolute; right: -6px; bottom: -6px; font-size: .8rem }
+.tiers { display: grid; gap: 6px }
+.tierrow { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: var(--sunk) }
+.tierrow b { font-family: var(--display); font-weight: 400; font-size: 1.05rem }
+.pill { padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 700; white-space: nowrap }
+.pill.wait { background: var(--coin-soft); color: var(--coin) } .pill.ok { background: var(--sunk); color: var(--good) } .pill.lock { color: var(--muted) }
+
+.badges { display: flex; flex-wrap: wrap; gap: 6px }
+.badge { display: inline-flex; gap: 6px; align-items: center; padding: 4px 10px; border-radius: 999px; background: var(--sunk); font-size: .82rem; font-weight: 600 }
+.badge.off { opacity: .4 }
+
+.confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--coin-soft) }
+.confirm.d { background: var(--danger-soft) }
+
+/* classroom display */
+.class-hero { display: grid; gap: 10px }
+.goal { height: 18px; border-radius: 9px; background: var(--sunk); overflow: hidden }
+.goal > i { display: block; height: 100%; background: linear-gradient(90deg, var(--eng), var(--accent)); border-radius: 9px }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px }
+.kcard { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: grid; gap: 10px }
+.kcard .top { display: flex; justify-content: space-between; align-items: center; gap: 8px }
+.kcard .nm { font-family: var(--display); font-size: 1.35rem }
+.lv { display: grid; place-items: center; width: 54px; height: 54px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-family: var(--display); line-height: 1; transform: rotate(-6deg); flex: none }
+.lv small { font-size: .62rem; font-family: var(--body); font-weight: 700 }
+.lv b { font-size: 1.35rem; font-weight: 400 }
+
+.shop { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px }
+.item { border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; background: var(--surface); align-content: start }
+.item.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft) }
+
+.empty { text-align: center; padding: 32px 16px; color: var(--muted); display: grid; gap: 10px; justify-items: center }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); background: var(--ink); color: var(--bg);
+  padding: 10px 18px; border-radius: 12px; font-weight: 600; max-width: calc(100% - 32px); z-index: 20; box-shadow: 0 6px 24px rgb(0 0 0 / .2) }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: up .25s ease-out } @keyframes up { from { transform: translate(-50%, 12px); opacity: 0 } } }
+</style>
+
+<header>
+  <div class="hwrap">
+    <div class="brand"><h1>퀘스트 패스</h1><small id="seasonName">초등 영어·수학</small></div>
+    <nav id="nav" aria-label="화면"></nav>
+  </div>
+</header>
+<main id="main">
+  <div class="status" id="status">데이터를 불러오는 중이에요…</div>
+  <div id="view"></div>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+const SUBJECTS = ["영어", "수학", "공통"];
+const KINDS = { daily: "매일", weekly: "매주", challenge: "도전" };
+const DEFAULT_CFG = {
+  id: "s1", name: "겨울 시즌", xpPerLevel: 100, maxLevel: 20, weeklyClassGoal: 1500,
+  tiers: [
+    { level: 3, reward: "칭찬 스티커 세트" }, { level: 5, reward: "간식 쿠폰" }, { level: 8, reward: "자리 우선 선택권" },
+    { level: 12, reward: "문구 선물" }, { level: 16, reward: "숙제 1회 면제권" }, { level: 20, reward: "시즌 완주 트로피 + 상장" }
+  ]
+};
+const BADGES = [
+  { key: "eng", icon: "🔤", name: "영어 탐험가", desc: "영어 퀘스트 10회", test: s => s.bySubj["영어"] >= 10 },
+  { key: "math", icon: "➗", name: "수학 탐험가", desc: "수학 퀘스트 10회", test: s => s.bySubj["수학"] >= 10 },
+  { key: "chal", icon: "🏔️", name: "도전자", desc: "도전 퀘스트 첫 완료", test: s => s.challenge >= 1 },
+  { key: "days", icon: "📅", name: "성실 도장", desc: "서로 다른 10일 퀘스트 완료", test: s => s.days.size >= 10 },
+  { key: "full", icon: "🏆", name: "패스 완주", desc: "이번 시즌 최고 단계", test: (s, c) => s.level >= c.maxLevel }
+];
+
+const S = {
+  db: null, editable: false, tab: "today", cls: "전체", subj: "전체",
+  students: [], quests: [], rewards: [], logs: [], cfg: null,
+  got: { students: false, quests: false, rewards: false, logs: false, cfg: false },
+  selQuest: null, selStudents: new Set(), detail: null, shopStudent: "", shopReward: null, confirm: null, editQuest: null
+};
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const pad = n => String(n).padStart(2, "0");
+const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => dstr(new Date());
+const weekStart = () => { const d = new Date(); const k = (d.getDay() + 6) % 7; d.setDate(d.getDate() - k); return dstr(d); };
+const cfg = () => S.cfg || DEFAULT_CFG;
+const fmtTime = ms => { const d = new Date(ms); return dstr(d) === today() ? `${pad(d.getHours())}:${pad(d.getMinutes())}` : `${d.getMonth() + 1}/${d.getDate()}`; };
+
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3200);
+}
+
+/* ---------- derived stats ---------- */
+function stats() {
+  const c = cfg(), map = {}, td = today(), ws = weekStart();
+  for (const st of S.students) map[st.id] = { xp: 0, coins: 0, bySubj: { 영어: 0, 수학: 0, 공통: 0 }, challenge: 0, days: new Set(), doneToday: new Set(), doneWeek: new Set(), tiersGiven: new Set(), weekXp: 0, level: 0 };
+  for (const l of S.logs) {
+    const s = map[l.studentId]; if (!s) continue;
+    s.coins += Number(l.coins) || 0;
+    if (l.season === c.id) s.xp += Number(l.xp) || 0;
+    if (l.date >= ws) s.weekXp += Number(l.xp) || 0;
+    if (l.kind === "quest") {
+      s.bySubj[l.subject] = (s.bySubj[l.subject] || 0) + 1;
+      if (l.questKind === "challenge") s.challenge++;
+      s.days.add(l.date);
+      if (l.date === td) s.doneToday.add(l.questId);
+      if (l.date >= ws) s.doneWeek.add(l.questId);
+    }
+    if (l.kind === "tier" && l.season === c.id) s.tiersGiven.add(l.level);
+  }
+  for (const id in map) map[id].level = Math.min(c.maxLevel, Math.floor(Math.max(0, map[id].xp) / c.xpPerLevel));
+  return map;
+}
+const classes = () => [...new Set(S.students.map(s => s.cls).filter(Boolean))].sort((a, b) => a.localeCompare(b, "ko"));
+const inClass = st => S.cls === "전체" || st.cls === S.cls;
+const sortedStudents = () => [...S.students].sort((a, b) => (a.cls || "").localeCompare(b.cls || "", "ko") || a.name.localeCompare(b.name, "ko"));
+const pendingTiers = (s) => cfg().tiers.filter(t => s.level >= t.level && !s.tiersGiven.has(t.level));
+
+/* ---------- render ---------- */
+const TABS = [
+  { k: "today", label: "퀘스트 지급", edit: true }, { k: "students", label: "학생·패스", edit: false },
+  { k: "shop", label: "보상 상점", edit: false }, { k: "quests", label: "퀘스트 관리", edit: true },
+  { k: "season", label: "시즌 설정", edit: true }, { k: "class", label: "교실 화면", edit: false }
+];
+function render() {
+  const tabs = TABS.filter(t => S.editable || !t.edit);
+  if (!tabs.some(t => t.k === S.tab)) S.tab = tabs[0].k;
+  $("#nav").innerHTML = tabs.map(t => `<button data-act="tab" data-v="${t.k}" aria-current="${t.k === S.tab}">${t.label}</button>`).join("");
+  $("#seasonName").textContent = `${cfg().name} · 초등 영어·수학`;
+  const view = $("#view");
+  const keep = [...view.querySelectorAll("input[id], select[id]")].map(el => [el.id, el.value]);
+  const focus = document.activeElement && document.activeElement.id;
+  const st = stats();
+  view.innerHTML = ({ today: vToday, students: vStudents, shop: vShop, quests: vQuests, season: vSeason, class: vClass })[S.tab](st);
+  for (const [id, v] of keep) { const el = document.getElementById(id); if (el && el.dataset.keep !== "no") el.value = v; }
+  if (focus) document.getElementById(focus)?.focus();
+}
+
+function classChips() {
+  const cs = classes(); if (cs.length < 2) return "";
+  return `<div class="chips" role="group" aria-label="반">${["전체", ...cs].map(c => `<button class="chip" data-act="cls" data-v="${esc(c)}" aria-pressed="${S.cls === c}">${esc(c)}</button>`).join("")}</div>`;
+}
+function noStudents() {
+  return `<div class="panel"><div class="empty"><h3>아직 등록된 학생이 없어요</h3><p>학생·패스 화면에서 이름과 반을 입력해 첫 학생을 등록하세요.</p><button class="btn primary" data-act="tab" data-v="students">학생 등록하러 가기</button></div></div>`;
+}
+
+function vToday(st) {
+  if (!S.students.length) return noStudents();
+  const quests = S.quests.filter(q => q.active !== false && (S.subj === "전체" || q.subject === S.subj))
+    .sort((a, b) => Object.keys(KINDS).indexOf(a.kind) - Object.keys(KINDS).indexOf(b.kind) || a.title.localeCompare(b.title, "ko"));
+  const q = S.quests.find(x => x.id === S.selQuest);
+  const blocked = id => q && ((q.kind === "daily" && st[id].doneToday.has(q.id)) || (q.kind === "weekly" && st[id].doneWeek.has(q.id)));
+  const list = sortedStudents().filter(inClass);
+  for (const id of [...S.selStudents]) if (!list.some(s => s.id === id) || blocked(id)) S.selStudents.delete(id);
+  const n = S.selStudents.size;
+  const recent = S.logs.filter(l => l.date === today()).slice(0, 15);
+  const name = id => S.students.find(s => s.id === id)?.name || "삭제된 학생";
+  return `<div class="cols">
+    <section class="panel">
+      <div class="row between"><h2>① 퀘스트 고르기</h2></div>
+      <div class="chips">${["전체", ...SUBJECTS].map(s => `<button class="chip" data-act="subj" data-v="${s}" aria-pressed="${S.subj === s}">${s}</button>`).join("")}</div>
+      <div class="qlist">${quests.map(x => `<button class="quest s-${esc(x.subject)}" data-act="pickq" data-v="${x.id}" aria-pressed="${x.id === S.selQuest}">
+          <span class="bar"></span><span class="t">${esc(x.title)}<br><span class="tag kind">${KINDS[x.kind] || ""}</span> <span class="tag t-${esc(x.subject)}">${esc(x.subject)}</span></span>
+          <span class="meta"><span class="xp num">+${x.xp} XP</span><span class="coin num">${x.coins}</span></span></button>`).join("") || `<p class="muted small">이 과목의 퀘스트가 없어요. 퀘스트 관리에서 추가하세요.</p>`}</div>
+    </section>
+    <div style="display:grid;gap:20px;min-width:0">
+      <section class="panel">
+        <div class="row between"><h2>② 완료한 학생 고르기</h2>
+          <div class="row"><button class="btn sm ghost" data-act="selall">모두 선택</button><button class="btn sm ghost" data-act="selnone">선택 해제</button></div></div>
+        ${classChips()}
+        ${q ? `<p class="small muted">${q.kind === "daily" ? "매일 퀘스트는 하루 한 번, " : q.kind === "weekly" ? "매주 퀘스트는 한 주에 한 번, " : ""}선택한 학생에게 <span class="xp">+${q.xp} XP</span>와 <span class="coin">${q.coins}</span> 코인이 지급돼요.</p>` : `<p class="small muted">왼쪽에서 퀘스트를 먼저 고르세요.</p>`}
+        <div class="sgrid">${list.map(s => { const b = blocked(s.id), x = st[s.id], per = cfg().xpPerLevel;
+          return `<button class="spick" data-act="picks" data-v="${s.id}" aria-pressed="${S.selStudents.has(s.id)}" ${!q || b ? "disabled" : ""}>
+            <span class="nm">${esc(s.name)}</span><span class="small muted">${esc(s.cls || "")} · ${x.level}단계 · <span class="coin num">${x.coins}</span></span>
+            <span class="mini"><i style="width:${x.level >= cfg().maxLevel ? 100 : (x.xp % per) / per * 100}%"></i></span>
+            ${b ? `<span class="done">${q.kind === "daily" ? "오늘 완료" : "이번 주 완료"}</span>` : ""}</button>`; }).join("")}</div>
+        <div class="row"><button class="btn primary" data-act="grant" ${!q || !n ? "disabled" : ""}>${n ? `${n}명에게 지급하기` : "학생을 선택하세요"}</button></div>
+      </section>
+      <section class="panel feed">
+        <h3>오늘 기록</h3>
+        ${recent.length ? `<ul>${recent.map(l => `<li><time class="num">${fmtTime(l.at)}</time><span><b>${esc(name(l.studentId))}</b> · ${esc(l.title)}
+          ${l.xp ? ` <span class="xp num small">${l.xp > 0 ? "+" : ""}${l.xp} XP</span>` : ""}${l.coins ? ` <span class="coin num small">${l.coins > 0 ? "+" : ""}${l.coins}</span>` : ""}</span>
+          <button class="btn sm ghost" data-act="undo" data-v="${l.id}">취소</button></li>`).join("")}</ul>` : `<p class="muted small">오늘 지급한 기록이 여기 쌓여요. 잘못 지급했다면 취소할 수 있어요.</p>`}
+      </section>
+    </div></div>`;
+}
+
+function vStudents(st) {
+  const list = sortedStudents().filter(inClass);
+  const c = cfg();
+  const add = S.editable ? `<section class="panel"><h3>학생 등록</h3>
+    <form class="row" data-form="addStudent"><label class="f">이름<input type="text" id="ns-name" required maxlength="20" placeholder="예: 김하늘"></label>
+    <label class="f">반<input type="text" id="ns-cls" maxlength="20" placeholder="예: 3학년 A반" list="cls-list"></label>
+    <datalist id="cls-list">${classes().map(x => `<option value="${esc(x)}">`).join("")}</datalist>
+    <button class="btn primary" style="align-self:end">등록</button></form>
+    <p class="small muted">아이 개인정보 보호를 위해 이름 대신 별명을 써도 괜찮아요.</p></section>` : "";
+  const table = list.length ? `<div class="tablewrap"><table><thead><tr><th>이름</th><th>반</th><th>단계</th><th>시즌 XP</th><th>코인</th><th>대기 보상</th><th>배지</th></tr></thead><tbody>
+    ${list.map(s => { const x = st[s.id], p = pendingTiers(x).length, bg = BADGES.filter(b => b.test(x, c));
+      return `<tr class="click" data-act="detail" data-v="${s.id}" aria-selected="${S.detail === s.id}"><td><b>${esc(s.name)}</b></td><td class="muted">${esc(s.cls || "-")}</td>
+      <td class="num"><b>${x.level}</b><span class="muted"> / ${c.maxLevel}</span></td><td class="num xp">${x.xp}</td><td><span class="coin num">${x.coins}</span></td>
+      <td>${p ? `<span class="pill wait">${p}개</span>` : `<span class="muted">-</span>`}</td><td>${bg.map(b => `<span title="${esc(b.name)}">${b.icon}</span>`).join(" ") || `<span class="muted">-</span>`}</td></tr>`; }).join("")}
+    </tbody></table></div>` : "";
+  const s = S.students.find(x => x.id === S.detail);
+  return `${add}
+    ${S.students.length ? `<section class="panel"><div class="row between"><h2>학생 패스 현황</h2>${classChips()}</div>${table}<p class="small muted">학생을 누르면 스탬프 카드와 기록을 볼 수 있어요.</p></section>` : (S.editable ? "" : noStudents())}
+    ${s ? vDetail(s, st[s.id]) : ""}`;
+}
+
+function vDetail(s, x) {
+  const c = cfg(), tierLv = new Set(c.tiers.map(t => t.level)), per = c.xpPerLevel;
+  const logs = S.logs.filter(l => l.studentId === s.id).slice(0, 25);
+  const next = x.level >= c.maxLevel ? null : (x.level + 1) * per - x.xp;
+  const cf = S.confirm && S.confirm.type === "delStudent" && S.confirm.id === s.id;
+  return `<section class="panel" id="detail">
+    <div class="row between"><div><h2>${esc(s.name)}의 스탬프 카드</h2><p class="small muted">${esc(s.cls || "")} · ${esc(c.name)} · ${next ? `다음 단계까지 ${next} XP` : "최고 단계 달성!"}</p></div>
+      <div class="row"><span class="xp num">${x.xp} XP</span><span class="coin num">${x.coins} 코인</span><button class="btn sm ghost" data-act="closeDetail">닫기</button></div></div>
+    <div class="track">${Array.from({ length: c.maxLevel }, (_, i) => i + 1).map(n => `<div class="stamp ${n <= x.level ? "on" : ""} ${tierLv.has(n) ? "tier" : ""}" title="${n}단계">${n}</div>`).join("")}</div>
+    <h3>단계 보상</h3>
+    <div class="tiers">${c.tiers.map(t => { const got = x.tiersGiven.has(t.level), reached = x.level >= t.level;
+      return `<div class="tierrow"><b>${t.level}단계</b><span>${esc(t.reward)}</span>
+        ${got ? `<span class="pill ok">지급 완료</span>` : reached ? (S.editable ? `<button class="btn sm primary" data-act="giveTier" data-v="${t.level}">지급 완료로 표시</button>` : `<span class="pill wait">받을 수 있어요</span>`) : `<span class="pill lock">${t.level - x.level}단계 남음</span>`}</div>`; }).join("")}</div>
+    <h3>배지</h3>
+    <div class="badges">${BADGES.map(b => `<span class="badge ${b.test(x, c) ? "" : "off"}" title="${esc(b.desc)}">${b.icon} ${esc(b.name)}</span>`).join("")}</div>
+    ${S.editable ? `<h3>직접 조정</h3>
+      <form class="row" data-form="adjust"><select id="adj-type"><option value="coins">코인</option><option value="xp">XP</option></select>
+      <input type="number" id="adj-amt" placeholder="+10 / -5" required><input type="text" id="adj-why" placeholder="사유 (예: 발표 잘함)" maxlength="40" style="flex:1 1 160px">
+      <button class="btn">반영</button></form>` : ""}
+    <h3>최근 기록</h3>
+    <div class="feed">${logs.length ? `<ul>${logs.map(l => `<li><time class="num">${fmtTime(l.at)}</time><span>${esc(l.title)}</span>
+      <span class="small">${l.xp ? `<span class="xp num">${l.xp > 0 ? "+" : ""}${l.xp}</span> ` : ""}${l.coins ? `<span class="coin num">${l.coins > 0 ? "+" : ""}${l.coins}</span>` : ""}</span></li>`).join("")}</ul>` : `<p class="muted small">아직 기록이 없어요.</p>`}</div>
+    ${S.editable ? (cf ? `<div class="confirm d"><span>${esc(s.name)} 학생을 삭제할까요? 기록은 남지만 목록에서 사라져요.</span><button class="btn sm danger" data-act="delStudent" data-v="${s.id}">삭제</button><button class="btn sm" data-act="cancel">취소</button></div>`
+      : `<div><button class="btn sm ghost" data-act="askDelStudent" data-v="${s.id}">학생 삭제</button></div>`) : ""}
+  </section>`;
+}
+
+function vShop(st) {
+  const rs = [...S.rewards].sort((a, b) => a.cost - b.cost);
+  const stu = S.students.find(s => s.id === S.shopStudent);
+  const coins = stu ? st[stu.id].coins : 0;
+  const cf = S.confirm && S.confirm.type === "redeem";
+  const r = cf && S.rewards.find(x => x.id === S.confirm.rewardId);
+  const kindGroup = k => rs.filter(x => x.kind === k);
+  const card = x => { const out = x.stock !== null && x.stock !== undefined && x.stock <= 0, can = stu && coins >= x.cost && !out;
+    return `<div class="item ${cf && r && r.id === x.id ? "sel" : ""}"><div class="row between"><b>${esc(x.name)}</b><span class="coin num">${x.cost}</span></div>
+      <span class="small muted">${x.stock === null || x.stock === undefined ? "수량 제한 없음" : `남은 수량 ${x.stock}개`}</span>
+      ${S.editable ? `<div class="row"><button class="btn sm ${can ? "primary" : ""}" data-act="askRedeem" data-v="${x.id}" ${can ? "" : "disabled"}>${out ? "품절" : !stu ? "학생을 고르세요" : coins < x.cost ? `${x.cost - coins}코인 부족` : "교환하기"}</button>
+        <button class="btn sm ghost" data-act="delReward" data-v="${x.id}">삭제</button></div>` : ""}</div>`; };
+  return `<section class="panel">
+      <div class="row between"><h2>보상 상점</h2>
+      ${S.editable ? `<label class="row small muted">교환할 학생 <select id="shop-stu" data-act-change="shopStu" data-keep="no"><option value="">선택…</option>${sortedStudents().map(s => `<option value="${s.id}" ${s.id === S.shopStudent ? "selected" : ""}>${esc(s.name)} (${esc(s.cls || "")}) · ${st[s.id].coins}코인</option>`).join("")}</select></label>` : ""}</div>
+      ${cf && r && stu ? `<div class="confirm"><span><b>${esc(stu.name)}</b> 학생이 <b>${esc(r.name)}</b>을(를) <span class="coin">${r.cost}</span> 코인으로 교환해요. 남는 코인 ${coins - r.cost}개.</span>
+        <button class="btn sm primary" data-act="redeem">교환 확정</button><button class="btn sm" data-act="cancel">취소</button></div>` : ""}
+      <h3>🎁 실물 보상</h3><div class="shop">${kindGroup("실물").map(card).join("") || `<p class="muted small">실물 보상이 없어요.</p>`}</div>
+      <h3>⭐ 학원 특권</h3><div class="shop">${kindGroup("특권").map(card).join("") || `<p class="muted small">특권 보상이 없어요.</p>`}</div>
+    </section>
+    ${S.editable ? `<section class="panel"><h3>보상 추가</h3>
+      <form class="row" data-form="addReward"><label class="f">이름<input type="text" id="nr-name" required maxlength="30" placeholder="예: 젤리 한 봉지"></label>
+      <label class="f">종류<select id="nr-kind"><option>실물</option><option>특권</option></select></label>
+      <label class="f">코인<input type="number" id="nr-cost" min="1" value="30" required></label>
+      <label class="f">수량 (비우면 무제한)<input type="number" id="nr-stock" min="0"></label>
+      <button class="btn primary" style="align-self:end">추가</button></form></section>` : ""}`;
+}
+
+function vQuests() {
+  const qs = [...S.quests].sort((a, b) => SUBJECTS.indexOf(a.subject) - SUBJECTS.indexOf(b.subject) || Object.keys(KINDS).indexOf(a.kind) - Object.keys(KINDS).indexOf(b.kind));
+  const e = S.quests.find(q => q.id === S.editQuest);
+  return `<section class="panel"><h2>${e ? "퀘스트 수정" : "새 퀘스트"}</h2>
+    <form class="row" data-form="saveQuest"><label class="f" style="flex:1 1 220px">내용<input type="text" id="nq-title" required maxlength="40" placeholder="예: 영어 단어 20개 외우기" value="${esc(e?.title || "")}" data-keep="no"></label>
+    <label class="f">과목<select id="nq-subj" data-keep="no">${SUBJECTS.map(s => `<option ${e?.subject === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+    <label class="f">주기<select id="nq-kind" data-keep="no">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${e?.kind === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    <label class="f">XP<input type="number" id="nq-xp" min="0" value="${e?.xp ?? 20}" required data-keep="no"></label>
+    <label class="f">코인<input type="number" id="nq-coins" min="0" value="${e?.coins ?? 5}" required data-keep="no"></label>
+    <button class="btn primary" style="align-self:end">${e ? "저장" : "추가"}</button>${e ? `<button type="button" class="btn ghost" style="align-self:end" data-act="cancelEdit">취소</button>` : ""}</form>
+    <p class="small muted">매일 퀘스트는 하루 한 번, 매주 퀘스트는 한 주(월~일)에 한 번만 지급돼요. 도전 퀘스트는 제한이 없어요.</p></section>
+    <section class="panel"><h2>퀘스트 목록</h2>
+    ${qs.length ? `<div class="tablewrap"><table><thead><tr><th>내용</th><th>과목</th><th>주기</th><th>보상</th><th>사용</th><th></th></tr></thead><tbody>
+      ${qs.map(q => `<tr><td>${esc(q.title)}</td><td><span class="tag t-${esc(q.subject)}">${esc(q.subject)}</span></td><td>${KINDS[q.kind]}</td>
+      <td class="num"><span class="xp">+${q.xp}</span> · <span class="coin">${q.coins}</span></td>
+      <td><button class="btn sm ${q.active === false ? "" : "primary"}" data-act="toggleQuest" data-v="${q.id}">${q.active === false ? "꺼짐" : "켜짐"}</button></td>
+      <td class="row"><button class="btn sm ghost" data-act="editQuest" data-v="${q.id}">수정</button><button class="btn sm ghost" data-act="delQuest" data-v="${q.id}">삭제</button></td></tr>`).join("")}
+    </tbody></table></div>` : `<p class="muted small">위에서 첫 퀘스트를 추가하세요.</p>`}</section>`;
+}
+
+function vSeason() {
+  const c = cfg();
+  const cf = S.confirm && S.confirm.type === "newSeason";
+  return `<section class="panel"><h2>시즌 설정</h2>
+    <form class="row" data-form="saveSeason"><label class="f" style="flex:1 1 200px">시즌 이름<input type="text" id="se-name" value="${esc(c.name)}" maxlength="30" required data-keep="no"></label>
+    <label class="f">단계당 XP<input type="number" id="se-per" min="10" value="${c.xpPerLevel}" required data-keep="no"></label>
+    <label class="f">최고 단계<input type="number" id="se-max" min="1" max="50" value="${c.maxLevel}" required data-keep="no"></label>
+    <label class="f">반 주간 목표 XP<input type="number" id="se-goal" min="0" value="${c.weeklyClassGoal}" data-keep="no"></label>
+    <button class="btn primary" style="align-self:end">저장</button></form></section>
+    <section class="panel"><h2>단계 보상</h2>
+    <div class="tiers">${c.tiers.map((t, i) => `<div class="tierrow"><b>${t.level}단계</b><span>${esc(t.reward)}</span><button class="btn sm ghost" data-act="delTier" data-v="${i}">삭제</button></div>`).join("")}</div>
+    <form class="row" data-form="addTier"><label class="f">단계<input type="number" id="nt-lv" min="1" max="${c.maxLevel}" required></label>
+    <label class="f" style="flex:1 1 200px">보상<input type="text" id="nt-rw" maxlength="40" required placeholder="예: 보드게임 시간"></label>
+    <button class="btn" style="align-self:end">추가</button></form></section>
+    <section class="panel"><h2>새 시즌 시작</h2>
+    <p class="muted">새 시즌을 시작하면 모든 학생의 XP와 단계가 0부터 다시 시작해요. 코인과 배지 기록은 그대로 남아요.</p>
+    ${cf ? `<form class="confirm d" data-form="newSeason"><input type="text" id="ns-season" required maxlength="30" placeholder="새 시즌 이름 (예: 봄 시즌)"><button class="btn sm danger">시작하기</button><button type="button" class="btn sm" data-act="cancel">취소</button></form>`
+      : `<div><button class="btn" data-act="askNewSeason">새 시즌 시작…</button></div>`}</section>`;
+}
+
+function vClass(st) {
+  if (!S.students.length) return noStudents();
+  const c = cfg(), list = sortedStudents().filter(inClass), per = c.xpPerLevel;
+  const wk = list.reduce((a, s) => a + st[s.id].weekXp, 0), goal = c.weeklyClassGoal || 0;
+  return `<section class="panel class-hero"><div class="row between"><h2>${S.cls === "전체" ? "우리 학원" : esc(S.cls)} 이번 주 함께 모은 XP</h2>${classChips()}</div>
+    ${goal ? `<div class="goal" role="progressbar" aria-valuenow="${wk}" aria-valuemax="${goal}"><i style="width:${Math.min(100, wk / goal * 100)}%"></i></div>
+    <p class="num"><b class="xp">${wk}</b> / ${goal} XP ${wk >= goal ? "· 목표 달성! 🎉" : `· ${goal - wk} XP 남았어요`}</p>` : `<p class="num xp">${wk} XP</p>`}</section>
+    <div class="cards">${list.map(s => { const x = st[s.id], nt = c.tiers.find(t => t.level > x.level), pct = x.level >= c.maxLevel ? 100 : (x.xp % per) / per * 100;
+      return `<div class="kcard"><div class="top"><div><div class="nm">${esc(s.name)}</div><span class="coin num">${x.coins} 코인</span></div><div class="lv"><small>단계</small><b class="num">${x.level}</b></div></div>
+        <div class="mini" style="height:10px"><i style="width:${pct}%"></i></div>
+        <span class="small muted">${nt ? `${nt.level}단계 보상: ${esc(nt.reward)}` : "모든 단계 보상 달성!"}</span>
+        <div class="badges">${BADGES.filter(b => b.test(x, c)).map(b => `<span class="badge" title="${esc(b.desc)}">${b.icon} ${esc(b.name)}</span>`).join("")}</div></div>`; }).join("")}</div>`;
+}
+
+/* ---------- actions ---------- */
+function logDoc(studentId, extra) {
+  const now = new Date();
+  return { studentId, at: now.getTime(), date: dstr(now), season: cfg().id, xp: 0, coins: 0, ...extra };
+}
+async function write(fn, okMsg) {
+  try { await fn(); if (okMsg) toast(okMsg); }
+  catch (e) { toast(e && e.code === "quota_exceeded" ? "저장 공간이 가득 찼어요. 오래된 기록을 정리해야 해요." : e && e.code === "invalid_argument" ? "저장할 권한이 없어요. 선생님 계정으로 열어 주세요." : "저장하지 못했어요. 잠시 후 다시 시도하세요."); console.error(e); }
+}
+const col = n => S.db.collection(n);
+
+const ACTS = {
+  tab: v => { S.tab = v; S.confirm = null; render(); scrollTo(0, 0); },
+  cls: v => { S.cls = v; render(); },
+  subj: v => { S.subj = v; render(); },
+  pickq: v => { S.selQuest = S.selQuest === v ? null : v; render(); },
+  picks: v => { S.selStudents.has(v) ? S.selStudents.delete(v) : S.selStudents.add(v); render(); },
+  selall: () => { document.querySelectorAll(".spick:not(:disabled)").forEach(b => S.selStudents.add(b.dataset.v)); render(); },
+  selnone: () => { S.selStudents.clear(); render(); },
+  grant: async () => {
+    const q = S.quests.find(x => x.id === S.selQuest); if (!q) return;
+    const ids = [...S.selStudents], before = stats(), c = cfg(), ups = [];
+    for (const id of ids) {
+      const b = before[id], after = Math.min(c.maxLevel, Math.floor((b.xp + q.xp) / c.xpPerLevel));
+      const t = c.tiers.filter(t => t.level > b.level && t.level <= after);
+      const nm = S.students.find(s => s.id === id).name;
+      if (t.length) ups.push(`${nm} ${t.at(-1).level}단계 달성! 보상: ${t.at(-1).reward}`);
+      else if (after > b.level) ups.push(`${nm} ${after}단계로 올라갔어요`);
+    }
+    S.selStudents.clear();
+    await write(() => Promise.all(ids.map(id => col("logs").add(logDoc(id, { kind: "quest", questId: q.id, title: q.title, subject: q.subject, questKind: q.kind, xp: Number(q.xp), coins: Number(q.coins) })))),
+      ups.length ? ups.join(" · ") : `${ids.length}명에게 지급했어요`);
+  },
+  undo: async v => {
+    const l = S.logs.find(x => x.id === v); if (!l) return;
+    await write(async () => {
+      await col("logs").doc(v).delete();
+      const r = l.kind === "redeem" && S.rewards.find(x => x.id === l.rewardId);
+      if (r && r.stock !== null && r.stock !== undefined) await col("rewards").doc(r.id).update({ stock: r.stock + 1 });
+    }, "기록을 취소했어요");
+  },
+  detail: v => { S.detail = S.detail === v ? null : v; S.confirm = null; render(); if (S.detail) $("#detail")?.scrollIntoView({ behavior: "smooth", block: "start" }); },
+  closeDetail: () => { S.detail = null; render(); },
+  giveTier: async v => {
+    const lv = Number(v), t = cfg().tiers.find(x => x.level === lv);
+    await write(() => col("logs").add(logDoc(S.detail, { kind: "tier", level: lv, title: `${lv}단계 보상 지급: ${t ? t.reward : ""}` })), "단계 보상을 지급 완료로 표시했어요");
+  },
+  askDelStudent: v => { S.confirm = { type: "delStudent", id: v }; render(); },
+  delStudent: async v => { S.confirm = null; S.detail = null; await write(() => col("students").doc(v).delete(), "학생을 삭제했어요"); },
+  cancel: () => { S.confirm = null; render(); },
+  askRedeem: v => { S.confirm = { type: "redeem", rewardId: v }; render(); },
+  redeem: async () => {
+    const r = S.rewards.find(x => x.id === S.confirm.rewardId), stu = S.students.find(s => s.id === S.shopStudent);
+    S.confirm = null; if (!r || !stu) return render();
+    if (stats()[stu.id].coins < r.cost) { toast("코인이 부족해요"); return render(); }
+    await write(async () => {
+      await col("logs").add(logDoc(stu.id, { kind: "redeem", rewardId: r.id, title: `상점 교환: ${r.name}`, coins: -Number(r.cost) }));
+      if (r.stock !== null && r.stock !== undefined) await col("rewards").doc(r.id).update({ stock: Math.max(0, r.stock - 1) });
+    }, `${stu.name} 학생이 ${r.name}을(를) 받았어요`);
+  },
+  delReward: async v => write(() => col("rewards").doc(v).delete(), "보상을 삭제했어요"),
+  toggleQuest: async v => { const q = S.quests.find(x => x.id === v); await write(() => col("quests").doc(v).update({ active: q.active === false })); },
+  editQuest: v => { S.editQuest = v; render(); scrollTo(0, 0); },
+  cancelEdit: () => { S.editQuest = null; render(); },
+  delQuest: async v => { if (S.selQuest === v) S.selQuest = null; await write(() => col("quests").doc(v).delete(), "퀘스트를 삭제했어요"); },
+  delTier: async v => { const c = cfg(); await write(() => col("config").doc("season").set({ ...c, tiers: c.tiers.filter((_, i) => i !== Number(v)) })); },
+  askNewSeason: () => { S.confirm = { type: "newSeason" }; render(); }
+};
+const val = id => document.getElementById(id).value.trim();
+const FORMS = {
+  addStudent: async f => { const name = val("ns-name"); if (!name) return; const cls = val("ns-cls");
+    await write(() => col("students").add({ name, cls, createdAt: Date.now() }), `${name} 학생을 등록했어요`); document.getElementById("ns-name").value = ""; document.getElementById("ns-name").focus(); },
+  adjust: async () => { const amt = Math.round(Number(val("adj-amt"))); if (!amt) return; const type = val("adj-type"), why = val("adj-why") || "선생님 조정";
+    await write(() => col("logs").add(logDoc(S.detail, { kind: "adjust", title: why, [type]: amt })), "반영했어요"); document.getElementById("adj-amt").value = ""; document.getElementById("adj-why").value = ""; },
+  addReward: async () => { const name = val("nr-name"); if (!name) return; const s = val("nr-stock");
+    await write(() => col("rewards").add({ name, kind: val("nr-kind"), cost: Math.max(1, Number(val("nr-cost")) || 1), stock: s === "" ? null : Math.max(0, Number(s)) }), "보상을 추가했어요");
+    document.getElementById("nr-name").value = ""; document.getElementById("nr-stock").value = ""; },
+  saveQuest: async () => { const d = { title: val("nq-title"), subject: val("nq-subj"), kind: val("nq-kind"), xp: Math.max(0, Number(val("nq-xp")) || 0), coins: Math.max(0, Number(val("nq-coins")) || 0) };
+    if (!d.title) return; const id = S.editQuest; S.editQuest = null;
+    await write(() => id ? col("quests").doc(id).update(d) : col("quests").add({ ...d, active: true }), id ? "퀘스트를 저장했어요" : "퀘스트를 추가했어요"); render(); },
+  saveSeason: async () => { const c = cfg();
+    await write(() => col("config").doc("season").set({ ...c, name: val("se-name") || c.name, xpPerLevel: Math.max(10, Number(val("se-per")) || 100), maxLevel: Math.min(50, Math.max(1, Number(val("se-max")) || 20)), weeklyClassGoal: Math.max(0, Number(val("se-goal")) || 0) }), "시즌 설정을 저장했어요"); },
+  addTier: async () => { const c = cfg(), lv = Number(val("nt-lv")), rw = val("nt-rw"); if (!lv || !rw) return;
+    const tiers = [...c.tiers.filter(t => t.level !== lv), { level: lv, reward: rw }].sort((a, b) => a.level - b.level);
+    await write(() => col("config").doc("season").set({ ...c, tiers }), "단계 보상을 추가했어요"); },
+  newSeason: async () => { const name = val("ns-season"); if (!name) return; S.confirm = null;
+    await write(() => col("config").doc("season").set({ ...cfg(), id: "s" + Date.now(), name }), `${name}을(를) 시작했어요`); }
+};
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
+  const f = ACTS[b.dataset.act]; if (f) { e.preventDefault(); f(b.dataset.v); }
+});
+document.addEventListener("submit", e => { const f = FORMS[e.target.dataset.form]; if (f) { e.preventDefault(); f(e.target); } });
+document.addEventListener("change", e => { if (e.target.dataset.actChange === "shopStu") { S.shopStudent = e.target.value; S.confirm = null; render(); } });
+
+/* ---------- boot ---------- */
+function setStatus(msg, err) { const s = $("#status"); s.hidden = !msg; s.textContent = msg || ""; s.classList.toggle("err", !!err); }
+(async function boot() {
+  render();
+  let db = null;
+  try { db = await window.claude?.use?.("db"); } catch (e) { db = null; }
+  if (!db) { setStatus("데이터를 불러올 수 없어요. claude.ai에 로그인한 상태로 이 페이지를 열어 주세요.", true); return; }
+  S.db = db;
+  let user = null;
+  try { user = await window.claude.use("user"); } catch (e) { user = null; }
+  S.editable = user ? await user.canEdit().catch(() => false) : false;
+  const timer = setTimeout(() => setStatus("데이터에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.", true), 10000);
+  const done = () => { if (Object.values(S.got).every(Boolean)) { clearTimeout(timer); setStatus(S.editable ? "" : "보기 전용 화면이에요. 지급과 수정은 선생님 계정에서 할 수 있어요."); } };
+  const onErr = e => { clearTimeout(timer); setStatus(e.code === "revoked" ? "이 화면의 접근 권한이 바뀌었어요." : "데이터 연결이 끊겼어요. 페이지를 다시 열어 주세요.", true); };
+  const list = (name, sort) => db.collection(name).onSnapshot(snap => {
+    S[name] = snap.docs.map(d => ({ id: d.id, ...d.data() })); if (sort) S[name].sort(sort);
+    if (!snap.metadata.fromCache) S.got[name] = true; done(); render();
+  }, onErr);
+  list("students"); list("quests"); list("rewards"); list("logs", (a, b) => b.at - a.at);
+  db.doc("config/season").onSnapshot(d => { S.cfg = d.exists ? d.data() : null; if (!d.metadata.fromCache) S.got.cfg = true; done(); render(); }, onErr);
+})();
+</script>

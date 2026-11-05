@@ -1,0 +1,20 @@
+# 하이포스 방학 트레저 헌터 전용 Worker.
+# 다른 학원 작업물(highfos-commercial-dev, highfos-cost-ledger 등)과 이름·DB를 공유하지 않는다.
+name = "highfos-treasure-hunter"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+preview_urls = false
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "highfos-treasure-hunter"
+database_id = "REPLACE_WITH_DATABASE_ID"
+
+# 선생님 계정을 처음 만들 때 필요한 설정 코드.
+# 로컬: .dev.vars 파일의 SETUP_CODE / 배포: `npx wrangler secret put SETUP_CODE`

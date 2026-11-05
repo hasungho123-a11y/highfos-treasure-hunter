@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>하이포스 해적선 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=IBM+Plex+Sans+KR:wght@400;600;700&display=swap">
+<style>
+/* One dark nautical look on purpose: the 3D sea is the page. Stage on top (left on wide screens), controls below (right). */
+:root {
+  --night: #0B1A2C; --panel: #12263D; --panel2: #18324F; --line: #26476B; --ink: #EAF2FA; --muted: #9DB3C9;
+  --gold: #F1C04B; --gold-ink: #3A2A00; --coral: #E0573F;
+  --display: "Jua", "IBM Plex Sans KR", system-ui, sans-serif; --body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { margin: 0; height: 100% }
+body { background: var(--night); color: var(--ink); font: 15px/1.5 var(--body); padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px) }
+button { font: inherit; color: inherit }
+h1, h2 { font-family: var(--display); font-weight: 400; margin: 0; line-height: 1.2 }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 12px max(16px, env(safe-area-inset-right, 0px)) 24px max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 14px }
+header { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap }
+header h1 { font-size: 1.5rem; color: var(--gold) }
+.tag { font-size: .78rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--panel2); color: var(--muted) }
+.layout { display: grid; gap: 14px }
+@media (min-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr) 360px; align-items: start } }
+.stage { position: relative; border-radius: 18px; overflow: hidden; background: #000; height: min(64vh, 620px); min-height: 340px; touch-action: none; user-select: none; -webkit-user-select: none }
+@media (min-width: 900px) { .stage { height: min(82vh, 760px) } }
+.stage canvas { display: block; width: 100%; height: 100%; cursor: grab }
+.stage canvas:active { cursor: grabbing }
+.views { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; pointer-events: none }
+.views button { pointer-events: auto; border: 0; border-radius: 999px; padding: 7px 14px; background: rgb(8 20 36 / .72); color: #fff; font-weight: 700; font-size: .88rem; backdrop-filter: blur(6px); cursor: pointer }
+.views button[aria-pressed="true"] { background: var(--gold); color: var(--gold-ink) }
+.hint { position: absolute; top: 10px; left: 12px; font-size: .8rem; color: rgb(255 255 255 / .8); text-shadow: 0 1px 3px rgb(0 0 0 / .6); pointer-events: none }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); background: var(--night) }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px; display: grid; gap: 12px; min-width: 0 }
+.tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none }
+.tabs button { border: 0; background: none; padding: 7px 12px; border-radius: 999px; color: var(--muted); font-weight: 700; white-space: nowrap; cursor: pointer }
+.tabs button[aria-current="true"] { background: var(--panel2); color: var(--ink) }
+.opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px }
+.opt { border: 1.5px solid var(--line); background: var(--panel2); border-radius: 14px; padding: 10px 8px; display: grid; gap: 6px; justify-items: center; text-align: center; cursor: pointer; font-weight: 600; font-size: .88rem }
+.opt[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px rgb(241 192 75 / .25) }
+.sw { width: 34px; height: 34px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgb(255 255 255 / .25) }
+.ic { width: 40px; height: 40px }
+.note { font-size: .82rem; color: var(--muted); margin: 0 }
+.section-t { font-family: var(--display); font-size: 1.05rem; color: var(--ink) }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>하이포스 해적선 3D</h1><span class="tag">시제품 · 아직 실제 사이트에는 없어요</span></header>
+  <div class="layout">
+    <div class="stage" id="stage">
+      <div class="loading" id="loading">바다를 준비하는 중…</div>
+      <span class="hint">끌어서 돌리고, 두 손가락이나 휠로 가까이 볼 수 있어요</span>
+      <div class="views" id="views"></div>
+    </div>
+    <div class="panel">
+      <nav class="tabs" id="tabs" aria-label="꾸미기 종류"></nav>
+      <div id="opts"></div>
+      <p class="note">시제품이라 포인트 없이 모두 눌러 볼 수 있어요. 실제로는 이 꾸미기들을 포인트로 사서 달게 돼요.</p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script>
+(() => {
+const T = THREE;
+const stageEl = document.getElementById("stage");
+if (!window.THREE) { document.getElementById("loading").textContent = "3D를 불러오지 못했어요. 인터넷 연결을 확인해 주세요."; return; }
+
+/* ================= choices ================= */
+const HULLS = { wood: ["나무", "#7A4A28"], ebony: ["흑단", "#2A221D"], crimson: ["진홍", "#8E2A22"], navy: ["남색", "#1F3A63"], ivory: ["상아", "#E8DFC9"], gold: ["황금", "#C99A2E"] };
+const TRIMS = { gold: ["금테", "#E3B34A"], silver: ["은테", "#C9D3DC"], none: ["없음", null] };
+const SAILS = { ivory: ["아이보리", "#EFE4C8"], black: ["검정", "#2B2B2E"], crimson: ["진홍", "#A8322A"], navy: ["남색", "#2A4470"], sky: ["하늘", "#8CC4E8"] };
+const PATTERNS = { none: "무늬 없음", stripe: "줄무늬", skull: "해골", star: "별", compass: "나침반" };
+const FLAGS = { skull: "해골", heart: "하트", star: "별", crown: "왕관", wave: "파도" };
+const ATTACH = { cannon: "대포", dragon: "용 선수상", nest: "망루", lantern: "랜턴", parrot: "앵무새", treasure: "보물 더미", anchor: "닻" };
+const TIMES = { day: "낮", sunset: "노을", night: "달밤" };
+const S = { hull: "wood", trim: "gold", sail: "ivory", pattern: "skull", flag: "skull", att: new Set(["cannon", "lantern", "nest", "parrot"]), time: "sunset", tab: "hull" };
+
+/* ================= renderer, scene, camera ================= */
+const renderer = new T.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+renderer.outputEncoding = T.sRGBEncoding;
+renderer.toneMapping = T.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+stageEl.prepend(renderer.domElement);
+const scene = new T.Scene();
+const camera = new T.PerspectiveCamera(42, 1, 0.1, 1200);
+
+const hemi = new T.HemisphereLight(0xffffff, 0x223344, .6); scene.add(hemi);
+const sun = new T.DirectionalLight(0xffffff, 1.4);
+sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
+Object.assign(sun.shadow.camera, { left: -12, right: 12, top: 14, bottom: -6, near: 1, far: 80 });
+scene.add(sun, sun.target);
+
+// sky dome with a vertical gradient
+const skyMat = new T.ShaderMaterial({ side: T.BackSide, depthWrite: false, fog: false,
+  uniforms: { top: { value: new T.Color() }, hor: { value: new T.Color() } },
+  vertexShader: "varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
+  fragmentShader: "uniform vec3 top; uniform vec3 hor; varying vec3 vP; void main(){ float h = clamp(vP.y*1.6, 0.0, 1.0); gl_FragColor = vec4(mix(hor, top, pow(h, .7)), 1.0); }" });
+scene.add(new T.Mesh(new T.SphereGeometry(500, 32, 16), skyMat));
+
+const glowTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d"), r = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  r.addColorStop(0, "rgba(255,255,255,1)"); r.addColorStop(.25, "rgba(255,255,255,.85)"); r.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new T.CanvasTexture(c); })();
+const orb = new T.Sprite(new T.SpriteMaterial({ map: glowTex, fog: false, depthWrite: false })); orb.scale.set(70, 70, 1); scene.add(orb);
+const stars = (() => { const g = new T.BufferGeometry(), p = [];
+  for (let i = 0; i < 700; i++) { const a = Math.random() * Math.PI * 2, e = .15 + Math.random() * 1.2; p.push(Math.cos(a) * Math.cos(e) * 420, Math.sin(e) * 420, Math.sin(a) * Math.cos(e) * 420); }
+  g.setAttribute("position", new T.Float32BufferAttribute(p, 3));
+  return new T.Points(g, new T.PointsMaterial({ size: 1.6, color: 0xffffff, fog: false, transparent: true, opacity: .9, sizeAttenuation: false })); })();
+scene.add(stars);
+scene.fog = new T.Fog(0xffffff, 70, 260);
+
+/* ================= ocean ================= */
+const oceanGeo = new T.PlaneGeometry(420, 420, 120, 120); oceanGeo.rotateX(-Math.PI / 2);
+const oBase = Float32Array.from(oceanGeo.attributes.position.array);
+const oceanMat = new T.MeshStandardMaterial({ color: 0x1F6E9A, roughness: .32, metalness: .15, flatShading: true });
+const ocean = new T.Mesh(oceanGeo, oceanMat); ocean.receiveShadow = true; scene.add(ocean);
+// x travels with the ship so the sea seems to slide past
+const wave = (x, z, t) => .32 * Math.sin(x * .32 + t * 1.3) + .22 * Math.sin(z * .41 - t * 1.1) + .14 * Math.sin((x + z) * .7 + t * 2.1) + .06 * Math.sin(x * 1.7 - z * 1.3 + t * 3);
+
+/* ================= textures drawn on canvas ================= */
+function canvasTex(w, h, draw) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new T.CanvasTexture(c); t.encoding = T.sRGBEncoding; t.anisotropy = 4; return t; }
+const plankTex = canvasTex(256, 128, (g, w, h) => { g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);
+  for (let y = 0; y < h; y += 16) { g.fillStyle = `rgba(0,0,0,${.06 + Math.random() * .08})`; g.fillRect(0, y, w, 16); g.fillStyle = "rgba(0,0,0,.35)"; g.fillRect(0, y, w, 1.5);
+    for (let x = (y / 16 % 2) * 64; x < w; x += 128) g.fillRect(x, y, 1.5, 16); } });
+plankTex.wrapS = plankTex.wrapT = T.RepeatWrapping;
+const EMBLEM = {
+  // bg: the colour behind, used for the eye sockets and teeth gaps
+  skull(g, cx, cy, s, col, bg) { g.strokeStyle = col; g.fillStyle = col; g.lineCap = "round";
+    // crossed bones behind the skull, with knobbly ends
+    g.lineWidth = s * .09; for (const d of [1, -1]) { g.beginPath(); g.moveTo(cx - s * .5 * d, cy + s * .02); g.lineTo(cx + s * .5 * d, cy + s * .5); g.stroke();
+      for (const [x, y] of [[cx - s * .5 * d, cy + s * .02], [cx + s * .5 * d, cy + s * .5]]) { g.beginPath(); g.arc(x - s * .03, y - s * .04, s * .055, 0, Math.PI * 2); g.arc(x + s * .03, y + s * .04, s * .055, 0, Math.PI * 2); g.fill(); } }
+    g.beginPath(); g.ellipse(cx, cy - s * .16, s * .3, s * .27, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.roundRect ? g.roundRect(cx - s * .17, cy - s * .02, s * .34, s * .2, s * .05) : g.rect(cx - s * .17, cy - s * .02, s * .34, s * .2); g.fill();
+    g.fillStyle = bg; g.beginPath(); g.ellipse(cx - s * .11, cy - s * .15, s * .08, s * .09, 0, 0, Math.PI * 2); g.ellipse(cx + s * .11, cy - s * .15, s * .08, s * .09, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.moveTo(cx, cy - s * .06); g.lineTo(cx - s * .035, cy + s * .01); g.lineTo(cx + s * .035, cy + s * .01); g.fill();
+    for (const x of [-.08, 0, .08]) g.fillRect(cx + x * s - s * .012, cy + s * .08, s * .024, s * .1); },
+  star(g, cx, cy, s, col) { g.fillStyle = col; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? s * .22 : s * .55; g.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); } g.closePath(); g.fill(); },
+  heart(g, cx, cy, s, col) { g.fillStyle = col; g.beginPath(); g.moveTo(cx, cy + s * .45); g.bezierCurveTo(cx - s * .75, cy - s * .05, cx - s * .4, cy - s * .55, cx, cy - s * .2); g.bezierCurveTo(cx + s * .4, cy - s * .55, cx + s * .75, cy - s * .05, cx, cy + s * .45); g.fill(); },
+  crown(g, cx, cy, s, col) { g.fillStyle = col; g.beginPath(); g.moveTo(cx - s * .5, cy + s * .3); g.lineTo(cx - s * .55, cy - s * .3); g.lineTo(cx - s * .25, cy); g.lineTo(cx, cy - s * .4); g.lineTo(cx + s * .25, cy); g.lineTo(cx + s * .55, cy - s * .3); g.lineTo(cx + s * .5, cy + s * .3); g.closePath(); g.fill(); },
+  compass(g, cx, cy, s, col) { g.strokeStyle = col; g.fillStyle = col; g.lineWidth = s * .06; g.beginPath(); g.arc(cx, cy, s * .45, 0, Math.PI * 2); g.stroke();
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * .55, cy + Math.sin(a) * s * .55); g.lineTo(cx + Math.cos(a + Math.PI / 2) * s * .1, cy + Math.sin(a + Math.PI / 2) * s * .1); g.lineTo(cx + Math.cos(a - Math.PI / 2) * s * .1, cy + Math.sin(a - Math.PI / 2) * s * .1); g.fill(); } },
+  wave(g, cx, cy, s, col) { g.strokeStyle = col; g.lineWidth = s * .12; g.lineCap = "round"; for (const dy of [-.18, .12]) { g.beginPath(); for (let i = 0; i <= 20; i++) { const x = cx - s * .55 + i * s * .055; g.lineTo(x, cy + dy * s + Math.sin(i / 20 * Math.PI * 3) * s * .1); } g.stroke(); } }
+};
+const contrast = hex => { const c = new T.Color(hex); return (c.r * .3 + c.g * .59 + c.b * .11) > .5 ? "#2A2420" : "#F3EAD6"; };
+function sailTexture(color, pattern, emblem) {
+  return canvasTex(256, 256, (g, w, h) => { g.fillStyle = color; g.fillRect(0, 0, w, h);
+    g.fillStyle = "rgba(0,0,0,.07)"; for (let x = 0; x < w; x += 32) g.fillRect(x, 0, 2, h);
+    const grad = g.createLinearGradient(0, 0, 0, h); grad.addColorStop(0, "rgba(255,255,255,.08)"); grad.addColorStop(1, "rgba(0,0,0,.18)"); g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    if (pattern === "stripe") { g.fillStyle = contrast(color) === "#2A2420" ? "rgba(168,50,42,.85)" : "rgba(243,234,214,.8)"; for (let y = 18; y < h; y += 52) g.fillRect(0, y, w, 22); }
+    else if (emblem && EMBLEM[pattern]) EMBLEM[pattern](g, w / 2, h / 2, 170, contrast(color), color);
+    g.strokeStyle = "rgba(0,0,0,.25)"; g.lineWidth = 6; g.strokeRect(0, 0, w, h); });
+}
+function flagTexture(kind) {
+  const bg = { skull: "#141414", heart: "#C9406A", star: "#1F3A63", crown: "#6B2A8E", wave: "#156A8A" }[kind], fg = { crown: "#F1C04B", star: "#F4D03F" }[kind] || "#F7F1E3";
+  return canvasTex(256, 160, (g, w, h) => { g.fillStyle = bg; g.fillRect(0, 0, w, h); EMBLEM[kind](g, w / 2, h / 2 + (kind === "skull" ? 0 : -4), 150, fg, bg); });
+}
+
+/* ================= the ship ================= */
+const ship = new T.Group(); scene.add(ship);
+const L = 11, W = 1.85, D = 1.35, H0 = 1.1;
+const halfW = u => u < .12 ? W * (.8 + .2 * u / .12) : u < .62 ? W : W * Math.max(.04, Math.pow(Math.cos((u - .62) / .38 * Math.PI / 2), .9));
+const depth = u => u > .75 ? D * (1 - .45 * (u - .75) / .25) : D;
+const sheer = u => H0 + 1.0 * Math.max(0, (.22 - u) / .22) + .55 * Math.pow(Math.max(0, (u - .78) / .22), 1.5);
+const xAt = u => -L / 2 + u * L;
+const deckY = u => sheer(u) - .34;
+// point on the hull side, `drop` below the rail
+function sideP(u, drop, side = 1) { const top = sheer(u), d = depth(u), s = Math.min(1, drop / (top + d)), a = Math.asin(s);
+  return new T.Vector3(xAt(u), top - drop, side * halfW(u) * Math.cos(a) * (.82 + .18 * (1 - s))); }
+
+const M = {
+  hull: new T.MeshStandardMaterial({ color: 0x7A4A28, roughness: .7, metalness: .05, side: T.DoubleSide }),
+  deck: new T.MeshStandardMaterial({ color: 0xB4845A, roughness: .85, map: plankTex }),
+  wood: new T.MeshStandardMaterial({ color: 0x4E321E, roughness: .8 }),
+  trim: new T.MeshStandardMaterial({ color: 0xE3B34A, roughness: .3, metalness: .8 }),
+  iron: new T.MeshStandardMaterial({ color: 0x23262B, roughness: .45, metalness: .7 }),
+  gold: new T.MeshStandardMaterial({ color: 0xE9B43C, roughness: .28, metalness: .9 }),
+  window: new T.MeshStandardMaterial({ color: 0xFFD27A, emissive: 0xFFB347, emissiveIntensity: 1.2 }),
+  sailMain: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
+  sailPlain: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
+  flag: new T.MeshStandardMaterial({ side: T.DoubleSide, roughness: .9 }),
+  rope: new T.LineBasicMaterial({ color: 0x2B2118, transparent: true, opacity: .75 })
+};
+const add = (mesh, parent = ship) => { mesh.castShadow = true; mesh.receiveShadow = true; parent.add(mesh); return mesh; };
+
+// hull: lofted cross-sections from stern (u=0) to bow (u=1)
+(function buildHull() {
+  const NS = 48, NC = 18, pos = [], uv = [], idx = [];
+  for (let i = 0; i <= NS; i++) { const u = i / NS, top = sheer(u), d = depth(u), w = halfW(u);
+    for (let k = 0; k <= NC; k++) { const a = k / NC * Math.PI, s = Math.sin(a), c = Math.cos(a);
+      pos.push(xAt(u), top - (top + d) * s, w * c * (.82 + .18 * (1 - s))); uv.push(u * 5, k / NC * 2); } }
+  for (let i = 0; i < NS; i++) for (let k = 0; k < NC; k++) { const a = i * (NC + 1) + k, b = a + NC + 1; idx.push(a, b, a + 1, b, b + 1, a + 1); }
+  // flat transom at the stern
+  const c0 = pos.length / 3; pos.push(xAt(0), sheer(0) - .9, 0); uv.push(0, 0);
+  for (let k = 0; k < NC; k++) idx.push(c0, k, k + 1);
+  const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setAttribute("uv", new T.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals();
+  add(new T.Mesh(g, M.hull));
+  // deck: a strip that follows the sheer, a little below the rail
+  const dp = [], du = [], di = [];
+  for (let i = 0; i <= NS; i++) { const u = i / NS, w = halfW(u) * .93, y = deckY(u); dp.push(xAt(u), y, w, xAt(u), y, -w); du.push(u * 6, 0, u * 6, 1.2); if (i < NS) { const a = i * 2; di.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } }
+  const dg = new T.BufferGeometry(); dg.setAttribute("position", new T.Float32BufferAttribute(dp, 3)); dg.setAttribute("uv", new T.Float32BufferAttribute(du, 2)); dg.setIndex(di); dg.computeVertexNormals();
+  add(new T.Mesh(dg, M.deck));
+})();
+
+// gold rail cap and two wale stripes, as tubes along each side
+const trimGroup = new T.Group(); ship.add(trimGroup);
+for (const side of [1, -1]) for (const drop of [0, .48, .78]) {
+  const pts = []; for (let i = 0; i <= 40; i++) { const u = i / 40 * .985; const p = sideP(u, drop, side); p.z *= 1.012; pts.push(p); }
+  add(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3(pts), 80, drop ? .045 : .07, 6, false), M.trim), trimGroup);
+}
+// stern windows and a gold frame
+for (let r = 0; r < 2; r++) for (let k = -2; k <= 2; k++) { const m = add(new T.Mesh(new T.BoxGeometry(.06, .32, .26), M.window)); m.position.set(xAt(0) - .02, sheer(0) - .45 - r * .45, k * .38); }
+add(new T.Mesh(new T.BoxGeometry(.08, .08, 2.3), M.trim), trimGroup).position.set(xAt(0) - .03, sheer(0) - .2, 0);
+// stern cabin wall and roof on the quarterdeck
+{ const cab = add(new T.Mesh(new T.BoxGeometry(1.6, .9, 2.6), M.hull)); cab.position.set(xAt(.08), deckY(.08) + .45, 0);
+  const roof = add(new T.Mesh(new T.BoxGeometry(1.8, .1, 2.8), M.wood)); roof.position.set(xAt(.08), deckY(.08) + .95, 0);
+  for (const z of [-.6, 0, .6]) { const w = add(new T.Mesh(new T.BoxGeometry(.05, .3, .24), M.window)); w.position.set(xAt(.08) + .81, deckY(.08) + .5, z); } }
+
+// masts, yards and sails
+const mastSpec = [{ u: .7, h: 7.6, sails: [[3.4, 2.4, 1.4], [2.7, 1.9, 4.3]] }, { u: .45, h: 9.2, sails: [[3.9, 2.8, 1.5], [3.1, 2.2, 4.8], [2.3, 1.5, 7.3]] }, { u: .2, h: 6.6, sails: [[2.8, 2.0, 1.4], [2.1, 1.5, 3.9]] }];
+const mainSails = [], plainSails = [], mastTops = [];
+function sailGeo(w, h, bulge) { const g = new T.PlaneGeometry(w, h, 10, 8), p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i) / (w / 2), y = p.getY(i) / (h / 2); p.setZ(i, bulge * (1 - x * x) * (.75 + .25 * (1 - y)) * (1 - .35 * y * y)); }
+  g.rotateY(Math.PI / 2); g.computeVertexNormals(); return g; }
+for (const [mi, m] of mastSpec.entries()) {
+  const x = xAt(m.u), base = deckY(m.u);
+  const mast = add(new T.Mesh(new T.CylinderGeometry(.09, .14, m.h, 10), M.wood)); mast.position.set(x, base + m.h / 2, 0);
+  mastTops.push(new T.Vector3(x, base + m.h, 0));
+  for (const [si, [w, h, y0]] of m.sails.entries()) {
+    const yard = add(new T.Mesh(new T.CylinderGeometry(.05, .05, w * 1.12, 8), M.wood)); yard.rotation.x = Math.PI / 2; yard.position.set(x + .08, base + y0 + h, 0);
+    const big = si === 0 && mi < 2;
+    const s = add(new T.Mesh(sailGeo(w, h, .55), big ? M.sailMain : M.sailPlain)); s.position.set(x + .1, base + y0 + h / 2, 0);
+    (big ? mainSails : plainSails).push(s);
+  }
+}
+// bowsprit and a triangular jib
+const bowTip = new T.Vector3(xAt(1) + 2.6, sheer(1) + 1.0, 0);
+{ const from = new T.Vector3(xAt(.93), sheer(.93), 0), dir = bowTip.clone().sub(from), len = dir.length();
+  const bs = add(new T.Mesh(new T.CylinderGeometry(.05, .09, len, 8), M.wood)); bs.position.copy(from).add(bowTip).multiplyScalar(.5); bs.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), dir.normalize());
+  const fx = xAt(.7), fb = deckY(.7), g = new T.BufferGeometry();
+  g.setAttribute("position", new T.Float32BufferAttribute([bowTip.x - .4, bowTip.y - .05, 0, fx + .3, fb + 5.2, 0, fx + 1.4, fb + 1.7, 0], 3)); g.setAttribute("uv", new T.Float32BufferAttribute([1, .5, 0, 1, 0, 0], 2)); g.computeVertexNormals();
+  plainSails.push(add(new T.Mesh(g, M.sailPlain))); }
+// rigging: shrouds to the rails and stays between masts
+{ const v = [];
+  for (const [mi, m] of mastSpec.entries()) { const x = xAt(m.u), top = deckY(m.u) + m.h * .82;
+    for (const side of [1, -1]) for (const dx of [-.5, 0, .5]) { const r = sideP(m.u + dx / L, 0, side); v.push(x, top, 0, r.x, r.y, r.z); } }
+  const [f, mn, mz] = mastTops; v.push(f.x, f.y, 0, bowTip.x, bowTip.y, 0, mn.x, mn.y - .4, 0, f.x, f.y - .6, 0, mz.x, mz.y - .3, 0, mn.x, mn.y - 1.6, 0, mz.x, mz.y - .5, 0, xAt(0), sheer(0) + .1, 0);
+  const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(v, 3)); ship.add(new T.LineSegments(g, M.rope)); }
+// flag on the main mast
+const flagGeo = new T.PlaneGeometry(1.6, 1, 14, 6); flagGeo.translate(.8, 0, 0);
+const flagBase = Float32Array.from(flagGeo.attributes.position.array);
+const flag = add(new T.Mesh(flagGeo, M.flag)); flag.rotation.y = Math.PI; flag.position.copy(mastTops[1]).add(new T.Vector3(0, -.45, 0));
+
+/* ----- attachments: built once, shown or hidden ----- */
+const A = {};
+A.cannon = new T.Group(); ship.add(A.cannon);
+for (const side of [1, -1]) for (const u of [.28, .38, .48, .58]) { const p = sideP(u, .72, side);
+  const port = add(new T.Mesh(new T.BoxGeometry(.34, .3, .06), M.iron), A.cannon); port.position.copy(p); port.lookAt(p.clone().add(new T.Vector3(0, 0, side)));
+  const c = add(new T.Mesh(new T.CylinderGeometry(.08, .11, .62, 10), M.iron), A.cannon); c.rotation.x = Math.PI / 2; c.position.copy(p).add(new T.Vector3(0, 0, side * .2)); }
+A.dragon = new T.Group(); ship.add(A.dragon);
+{ const base = new T.Vector3(xAt(1) + .05, sheer(1) - .35, 0);
+  const neck = add(new T.Mesh(new T.CylinderGeometry(.16, .24, 1.3, 10), M.gold), A.dragon); neck.position.copy(base).add(new T.Vector3(.45, .4, 0)); neck.rotation.z = -.95;
+  const head = add(new T.Mesh(new T.ConeGeometry(.24, .85, 10), M.gold), A.dragon); head.position.copy(base).add(new T.Vector3(1.2, .9, 0)); head.rotation.z = -1.75;
+  const skull = add(new T.Mesh(new T.SphereGeometry(.27, 12, 10), M.gold), A.dragon); skull.position.copy(base).add(new T.Vector3(.95, .92, 0));
+  for (const z of [-.14, .14]) { const horn = add(new T.Mesh(new T.ConeGeometry(.06, .45, 8), M.gold), A.dragon); horn.position.copy(base).add(new T.Vector3(.82, 1.25, z)); horn.rotation.z = .6;
+    const eye = add(new T.Mesh(new T.SphereGeometry(.05, 8, 6), new T.MeshStandardMaterial({ color: 0xD9402F, emissive: 0xD9402F, emissiveIntensity: .8 })), A.dragon); eye.position.copy(base).add(new T.Vector3(1.08, 1.0, z * 1.15)); } }
+A.nest = new T.Group(); ship.add(A.nest);
+{ const y = deckY(.45) + 6.3, x = xAt(.45); const ring = add(new T.Mesh(new T.CylinderGeometry(.55, .45, .42, 16, 1, true), M.wood), A.nest); ring.position.set(x, y, 0);
+  const floor = add(new T.Mesh(new T.CylinderGeometry(.45, .45, .06, 16), M.wood), A.nest); floor.position.set(x, y - .2, 0);
+  const band = add(new T.Mesh(new T.TorusGeometry(.55, .03, 6, 24), M.trim), A.nest); band.rotation.x = Math.PI / 2; band.position.set(x, y + .2, 0); }
+A.lantern = new T.Group(); ship.add(A.lantern);
+const lanternLights = [];
+for (const z of [-1.05, 1.05]) { const x = xAt(.015), y = sheer(0) + .25;
+  const post = add(new T.Mesh(new T.CylinderGeometry(.03, .03, .5, 6), M.iron), A.lantern); post.position.set(x, y, z);
+  const glass = add(new T.Mesh(new T.SphereGeometry(.17, 12, 10), new T.MeshStandardMaterial({ color: 0xFFE2A0, emissive: 0xFFB347, emissiveIntensity: 2 })), A.lantern); glass.position.set(x, y + .35, z);
+  const cap = add(new T.Mesh(new T.ConeGeometry(.17, .2, 8), M.iron), A.lantern); cap.position.set(x, y + .58, z);
+  const pl = new T.PointLight(0xFFB347, 1.2, 6, 2); pl.position.set(x, y + .35, z); A.lantern.add(pl); lanternLights.push(pl); }
+A.parrot = new T.Group(); ship.add(A.parrot);
+{ const red = new T.MeshStandardMaterial({ color: 0xD9402F, roughness: .6 }), blue = new T.MeshStandardMaterial({ color: 0x2E6FD0, roughness: .6 }), yel = new T.MeshStandardMaterial({ color: 0xF4C430, roughness: .5 });
+  const p = new T.Group(); A.parrot.add(p); p.position.set(xAt(.45) + .1, deckY(.45) + 1.5 + 2.8 + .18, 1.55);
+  const body = add(new T.Mesh(new T.SphereGeometry(.18, 12, 10), red), p); body.scale.set(1, 1.35, 1);
+  const head = add(new T.Mesh(new T.SphereGeometry(.13, 12, 10), red), p); head.position.set(.05, .27, 0);
+  const beak = add(new T.Mesh(new T.ConeGeometry(.05, .14, 8), yel), p); beak.position.set(.19, .25, 0); beak.rotation.z = -Math.PI / 2;
+  const wing = add(new T.Mesh(new T.SphereGeometry(.13, 10, 8), blue), p); wing.scale.set(.6, 1.2, .35); wing.position.set(-.02, .02, .14);
+  const wing2 = wing.clone(); wing2.position.z = -.14; p.add(wing2);
+  const tail = add(new T.Mesh(new T.ConeGeometry(.06, .45, 8), blue), p); tail.position.set(-.1, -.32, 0); tail.rotation.z = .35;
+  for (const z of [-.05, .05]) { const e = add(new T.Mesh(new T.SphereGeometry(.025, 6, 6), M.iron), p); e.position.set(.13, .31, z * 1.8); }
+  A.parrotBird = p; }
+A.treasure = new T.Group(); ship.add(A.treasure);
+{ const x = xAt(.56), y = deckY(.56);
+  const chest = add(new T.Mesh(new T.BoxGeometry(.7, .42, .5), new T.MeshStandardMaterial({ color: 0x8A5328, roughness: .7 })), A.treasure); chest.position.set(x, y + .21, .7);
+  const lid = add(new T.Mesh(new T.CylinderGeometry(.25, .25, .7, 12, 1, false, 0, Math.PI), new T.MeshStandardMaterial({ color: 0xA9652F, roughness: .7 })), A.treasure); lid.rotation.z = Math.PI / 2; lid.position.set(x, y + .42, .7);
+  const band = add(new T.Mesh(new T.BoxGeometry(.72, .06, .52), M.gold), A.treasure); band.position.set(x, y + .32, .7);
+  for (let i = 0; i < 26; i++) { const c = add(new T.Mesh(new T.CylinderGeometry(.09, .09, .03, 12), M.gold), A.treasure); const a = Math.random() * Math.PI * 2, r = Math.random() * .55;
+    c.position.set(x - .55 + Math.cos(a) * r * .6, y + .03 + Math.random() * .18, .7 + Math.sin(a) * r); c.rotation.set(Math.random(), Math.random(), Math.random()); } }
+A.anchor = new T.Group(); ship.add(A.anchor);
+{ const p = sideP(.88, .2, 1); const g = A.anchor; const a = new T.Group(); g.add(a); a.position.copy(p).add(new T.Vector3(0, -.35, .12));
+  const shank = add(new T.Mesh(new T.CylinderGeometry(.05, .05, 1.1, 8), M.iron), a);
+  const arm = add(new T.Mesh(new T.TorusGeometry(.38, .05, 8, 20, Math.PI), M.iron), a); arm.rotation.z = Math.PI; arm.position.y = -.38;
+  const ring = add(new T.Mesh(new T.TorusGeometry(.12, .03, 6, 16), M.iron), a); ring.position.y = .62;
+  const stock = add(new T.Mesh(new T.CylinderGeometry(.04, .04, .6, 8), M.iron), a); stock.rotation.z = Math.PI / 2; stock.position.y = .4; }
+
+/* ----- wake: foam bits that slide back from the stern ----- */
+const foamN = 160, foamGeo = new T.BufferGeometry(), foamPos = new Float32Array(foamN * 3), foamAge = new Float32Array(foamN);
+foamGeo.setAttribute("position", new T.BufferAttribute(foamPos, 3));
+const foam = new T.Points(foamGeo, new T.PointsMaterial({ map: glowTex, size: .55, transparent: true, opacity: .85, depthWrite: false, color: 0xffffff }));
+scene.add(foam);
+const resetFoam = i => { const bow = Math.random() < .35; foamAge[i] = 0;
+  foamPos[i * 3] = bow ? xAt(.97) : xAt(0) - .2; foamPos[i * 3 + 1] = .1; foamPos[i * 3 + 2] = (Math.random() - .5) * (bow ? .6 : 2.4); };
+for (let i = 0; i < foamN; i++) { resetFoam(i); foamAge[i] = Math.random() * 3; }
+
+/* ================= applying choices ================= */
+function applyLook() {
+  const [, hc] = HULLS[S.hull]; M.hull.color.set(hc); M.hull.map = S.hull === "wood" ? plankTex : null;
+  M.hull.metalness = S.hull === "gold" ? .75 : .05; M.hull.roughness = S.hull === "gold" ? .3 : .7; M.hull.needsUpdate = true;
+  const tc = TRIMS[S.trim][1]; trimGroup.visible = !!tc; if (tc) M.trim.color.set(tc);
+  const sc = SAILS[S.sail][1];
+  M.sailMain.map?.dispose(); M.sailPlain.map?.dispose();
+  M.sailMain.map = sailTexture(sc, S.pattern, true); M.sailPlain.map = sailTexture(sc, S.pattern === "stripe" ? "stripe" : "none", false);
+  M.sailMain.needsUpdate = M.sailPlain.needsUpdate = true;
+  M.flag.map?.dispose(); M.flag.map = flagTexture(S.flag); M.flag.needsUpdate = true;
+  for (const k in ATTACH) A[k].visible = S.att.has(k);
+}
+const PRESET = {
+  day: { top: "#3E8FD6", hor: "#D4ECF8", sea: "#1D6E98", sun: "#FFF1D6", si: 1.5, sd: [12, 22, 8], hs: "#CFE8FF", hg: "#1C4D6E", hi: .75, fog: "#CDE6F4", orb: "#FFF8E0", exp: 1.0, lamp: .4, starsOn: false },
+  sunset: { top: "#2A2C63", hor: "#F39A5B", sea: "#28506F", sun: "#FFB070", si: 1.8, sd: [-30, 9, 18], hs: "#F7B28A", hg: "#2A2F55", hi: .55, fog: "#E9906A", orb: "#FFD08A", exp: 1.05, lamp: 1.2, starsOn: false },
+  night: { top: "#040A1C", hor: "#1B2D57", sea: "#0E2A46", sun: "#9EB8FF", si: .7, sd: [-14, 26, -10], hs: "#5068A8", hg: "#050B1E", hi: .38, fog: "#16264A", orb: "#E8EEFF", exp: 1.15, lamp: 3.2, starsOn: true }
+};
+function applyTime() {
+  const p = PRESET[S.time];
+  skyMat.uniforms.top.value.set(p.top); skyMat.uniforms.hor.value.set(p.hor);
+  oceanMat.color.set(p.sea); scene.fog.color.set(p.fog);
+  sun.color.set(p.sun); sun.intensity = p.si; sun.position.set(...p.sd); hemi.color.set(p.hs); hemi.groundColor.set(p.hg); hemi.intensity = p.hi;
+  orb.material.color.set(p.orb); orb.position.copy(new T.Vector3(...p.sd).normalize().multiplyScalar(400)); orb.scale.setScalar(S.time === "night" ? 45 : 80);
+  renderer.toneMappingExposure = p.exp; lanternLights.forEach(l => l.intensity = p.lamp); stars.visible = p.starsOn;
+  M.window.emissiveIntensity = S.time === "day" ? .6 : 1.6;
+}
+
+/* ================= camera: drag to orbit, pinch or wheel to zoom ================= */
+const target = new T.Vector3(0, 3.2, 0);
+const cam = { th: .85, ph: 1.22, r: 21 }, goal = { ...cam };
+let auto = true, lastTouch = 0, tween = null;
+function placeCam() { const s = Math.sin(cam.ph); camera.position.set(target.x + cam.r * s * Math.cos(cam.th), target.y + cam.r * Math.cos(cam.ph), target.z + cam.r * s * Math.sin(cam.th)); camera.lookAt(target); }
+const pts = new Map(); let pinch0 = 0, r0 = 0;
+const cv = renderer.domElement;
+cv.addEventListener("pointerdown", e => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); stopAuto(); tween = null;
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch0 = Math.hypot(a[0] - b[0], a[1] - b[1]); r0 = cam.r; } });
+cv.addEventListener("pointermove", e => { if (!pts.has(e.pointerId)) return; const prev = pts.get(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]);
+  if (pts.size === 1) { cam.th += (e.clientX - prev[0]) * .008; cam.ph = Math.min(1.5, Math.max(.2, cam.ph - (e.clientY - prev[1]) * .006)); }
+  else if (pts.size === 2) { const [a, b] = [...pts.values()]; cam.r = Math.min(34, Math.max(8, r0 * pinch0 / Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])))); }
+  lastTouch = performance.now(); });
+const up = e => { pts.delete(e.pointerId); lastTouch = performance.now(); };
+cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+cv.addEventListener("wheel", e => { e.preventDefault(); stopAuto(); cam.r = Math.min(34, Math.max(8, cam.r * (1 + Math.sign(e.deltaY) * .08))); }, { passive: false });
+
+const VIEWS = [["side", "측면", { th: Math.PI / 2, ph: 1.38, r: 22 }], ["front", "정면", { th: 0, ph: 1.32, r: 20 }], ["back", "뒤", { th: Math.PI, ph: 1.3, r: 20 }], ["top", "위", { th: Math.PI / 2, ph: .35, r: 24 }], ["auto", "자동 회전", null]];
+const viewsEl = document.getElementById("views");
+function drawViews(active) { viewsEl.innerHTML = VIEWS.map(([k, l]) => `<button type="button" data-view="${k}" aria-pressed="${k === active}">${l}</button>`).join(""); }
+function stopAuto() { if (auto) { auto = false; drawViews(null); } }
+viewsEl.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; const v = VIEWS.find(x => x[0] === b.dataset.view);
+  if (!v[2]) { auto = true; tween = null; drawViews("auto"); return; }
+  auto = false; drawViews(v[0]);
+  // turn the short way round
+  let th = v[2].th; while (th - cam.th > Math.PI) th -= Math.PI * 2; while (cam.th - th > Math.PI) th += Math.PI * 2;
+  tween = { from: { ...cam }, to: { ...v[2], th }, t0: performance.now() }; });
+drawViews("auto");
+
+/* ================= controls panel ================= */
+const swatch = c => `<span class="sw" style="background:${c}"></span>`;
+const icon = (draw) => { const c = document.createElement("canvas"); c.width = c.height = 80; const g = c.getContext("2d"); draw(g); return `<img class="ic" alt="" src="${c.toDataURL()}">`; };
+const TABS = {
+  hull: ["배", () => `<div class="section-t">배 몸통 색</div><div class="opts">${Object.entries(HULLS).map(([k, [n, c]]) => `<button class="opt" data-set="hull" data-v="${k}" aria-pressed="${S.hull === k}">${swatch(c)}${n}</button>`).join("")}</div>
+      <div class="section-t">테두리 장식</div><div class="opts">${Object.entries(TRIMS).map(([k, [n, c]]) => `<button class="opt" data-set="trim" data-v="${k}" aria-pressed="${S.trim === k}">${swatch(c || "transparent")}${n}</button>`).join("")}</div>`],
+  sail: ["돛", () => `<div class="section-t">돛 색</div><div class="opts">${Object.entries(SAILS).map(([k, [n, c]]) => `<button class="opt" data-set="sail" data-v="${k}" aria-pressed="${S.sail === k}">${swatch(c)}${n}</button>`).join("")}</div>
+      <div class="section-t">돛 무늬</div><div class="opts">${Object.entries(PATTERNS).map(([k, n]) => `<button class="opt" data-set="pattern" data-v="${k}" aria-pressed="${S.pattern === k}">${k === "none" ? swatch(SAILS[S.sail][1]) : k === "stripe" ? icon(g => { g.fillStyle = SAILS[S.sail][1]; g.fillRect(0, 0, 80, 80); g.fillStyle = contrast(SAILS[S.sail][1]); for (let y = 6; y < 80; y += 22) g.fillRect(0, y, 80, 9); }) : icon(g => { g.fillStyle = SAILS[S.sail][1]; g.fillRect(0, 0, 80, 80); EMBLEM[k](g, 40, 42, 66, contrast(SAILS[S.sail][1]), SAILS[S.sail][1]); })}${n}</button>`).join("")}</div>`],
+  flag: ["깃발", () => `<div class="opts">${Object.entries(FLAGS).map(([k, n]) => `<button class="opt" data-set="flag" data-v="${k}" aria-pressed="${S.flag === k}"><img class="ic" alt="" src="${flagTexture(k).image.toDataURL()}" style="height:26px;width:42px;border-radius:3px">${n}</button>`).join("")}</div>`],
+  att: ["부착물", () => `<p class="note">여러 개를 같이 달 수 있어요. 누를 때마다 달고 떼요.</p><div class="opts">${Object.entries(ATTACH).map(([k, n]) => `<button class="opt" data-att="${k}" aria-pressed="${S.att.has(k)}">${n}</button>`).join("")}</div>`],
+  time: ["시간", () => `<p class="note">배는 그대로, 바다와 하늘만 바뀌어요.</p><div class="opts">${Object.entries(TIMES).map(([k, n]) => `<button class="opt" data-set="time" data-v="${k}" aria-pressed="${S.time === k}">${swatch(PRESET[k].hor)}${n}</button>`).join("")}</div>`]
+};
+const tabsEl = document.getElementById("tabs"), optsEl = document.getElementById("opts");
+function drawPanel() {
+  tabsEl.innerHTML = Object.entries(TABS).map(([k, [n]]) => `<button type="button" data-tab="${k}" aria-current="${S.tab === k}">${n}</button>`).join("");
+  optsEl.innerHTML = `<div style="display:grid;gap:10px">${TABS[S.tab][1]()}</div>`;
+}
+tabsEl.addEventListener("click", e => { const b = e.target.closest("[data-tab]"); if (!b) return; S.tab = b.dataset.tab; drawPanel(); });
+optsEl.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.att) { const k = b.dataset.att; S.att.has(k) ? S.att.delete(k) : S.att.add(k); }
+  else if (b.dataset.set) S[b.dataset.set] = b.dataset.v;
+  if (b.dataset.set === "time") applyTime(); else applyLook();
+  drawPanel(); });
+
+/* ================= loop ================= */
+function resize() { const w = stageEl.clientWidth, h = stageEl.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+new ResizeObserver(resize).observe(stageEl);
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const clock = new T.Clock();
+function frame() {
+  const dt = Math.min(.05, clock.getDelta()), t = clock.elapsedTime;
+  const sailT = t * 2.2; // the sea slides back past the ship
+  // ocean
+  const p = oceanGeo.attributes.position.array;
+  for (let i = 0; i < p.length; i += 3) p[i + 1] = wave(oBase[i] + sailT, oBase[i + 2], t);
+  oceanGeo.attributes.position.needsUpdate = true;
+  // ship rides the waves
+  const h0 = wave(sailT, 0, t), hb = wave(3.5 + sailT, 0, t), hs = wave(-3.5 + sailT, 0, t), hl = wave(sailT, 1.6, t), hr = wave(sailT, -1.6, t);
+  ship.position.y = h0 * .85 + .05; ship.rotation.z = (hb - hs) * .09; ship.rotation.x = (hr - hl) * .12;
+  // flag flutter
+  const f = flagGeo.attributes.position.array;
+  for (let i = 0; i < f.length; i += 3) { const x = flagBase[i]; f[i + 2] = flagBase[i + 2] + Math.sin(x * 3.4 - t * 7) * .14 * (x / 1.6); }
+  flagGeo.attributes.position.needsUpdate = true;
+  // parrot bobs its head
+  if (A.parrotBird) A.parrotBird.rotation.z = Math.sin(t * 3) * .08;
+  // foam
+  for (let i = 0; i < foamN; i++) { foamAge[i] += dt; const k = i * 3;
+    foamPos[k] -= dt * 2.4; foamPos[k + 2] *= 1 + dt * .35; foamPos[k + 1] = wave(foamPos[k] + sailT, foamPos[k + 2], t) + .08;
+    if (foamAge[i] > 3) resetFoam(i); }
+  foamGeo.attributes.position.needsUpdate = true;
+  // camera
+  if (tween) { const k = Math.min(1, (performance.now() - tween.t0) / 800), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    for (const key of ["th", "ph", "r"]) cam[key] = tween.from[key] + (tween.to[key] - tween.from[key]) * e; if (k >= 1) tween = null; }
+  else if (auto && !reduced) cam.th += dt * .18;
+  placeCam();
+  sun.target.position.set(0, 0, 0);
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+applyLook(); applyTime(); drawPanel(); resize();
+document.getElementById("loading").remove();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
