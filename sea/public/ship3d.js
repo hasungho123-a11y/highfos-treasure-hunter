@@ -69,7 +69,7 @@ function shipSpecs(T) {
       build({ add, M, xAt, deckY }) { const y = deckY(.55); box(add, M, xAt(.56), y + .55, 0, 3, 1.1, 2, M.steel); box(add, M, xAt(.6), y + 1.5, 0, 1.5, .8, 1.5, M.steel); funnel(add, M, xAt(.42), deckY(.42), .4, 1.9); gun(add, M, xAt(.8), deckY(.8), 1, 1); gun(add, M, xAt(.7), deckY(.7) + .4, .85, 1); gun(add, M, xAt(.13), deckY(.13), 1, -1); box(add, M, xAt(.27), deckY(.27) + .3, 0, 1.6, .55, .8, M.iron); } },
     cruiser: { air: { heli: [.08, 3, 0, 1.2], drone: [.9, 5, 0, 1.1] }, wm: { u: .93, s: 1.1 }, L: 19, W: 2.3, D: 1.5, H0: 1.25, stern: 0, bow: 1, hull: "#5F6973", lookY: 3.8, masts: [{ u: .62, h: 9.5, sails: [] }, { u: .36, h: 7.5, sails: [] }],
       build({ add, M, xAt, deckY }) { const y = deckY(.55); box(add, M, xAt(.54), y + .7, 0, 5.4, 1.4, 2.8, M.steel); box(add, M, xAt(.62), y + 2, 0, 2.4, 1.2, 2.1, M.steel); box(add, M, xAt(.64), y + 3, 0, 1.3, .8, 1.6, M.iron); funnel(add, M, xAt(.47), y + 1.4, .5, 2.2); funnel(add, M, xAt(.4), y + 1.4, .5, 2); gun(add, M, xAt(.84), deckY(.84), 1.4, 1); gun(add, M, xAt(.75), deckY(.75) + .5, 1.3, 1); gun(add, M, xAt(.2), deckY(.2) + .5, 1.3, -1); gun(add, M, xAt(.1), deckY(.1), 1.4, -1); } },
-    carrier: { air: { heli: [.22, 4, 1.6, 1.7], drone: [.8, 7.5, 0, 1.6], vtol: [.9, 3.6, -1.6, 1.5], fighter: [.32, 8, 0, 1.7], awacs: [.55, 6.2, -2.2, 2] }, wm: { u: .9, s: 2, y: .85, z: 1.5 }, L: 26, W: 3.3, D: 1.9, H0: 1.7, stern: 0, bow: .7, hull: "#555E67", lookY: 4.6, masts: [{ u: .6, h: 11, sails: [] }],
+    carrier: { flatTop: .85, catAt: [.3, 2.4], air: { heli: [.22, 4, 1.6, 1.7], drone: [.8, 7.5, 0, 1.6], vtol: [.9, 3.6, -1.6, 1.5], fighter: [.32, 8, 0, 1.7], awacs: [.55, 6.2, -2.2, 2] }, wm: { u: .9, s: 2, y: .85, z: 1.5 }, L: 26, W: 3.3, D: 1.9, H0: 1.7, stern: 0, bow: .7, hull: "#555E67", lookY: 4.6, masts: [{ u: .6, h: 11, sails: [] }],
       build({ add, M, xAt, deckY, L }) { const y = deckY(.5) + .7; add.stacks.push(new T.Vector3(xAt(.62), y + 3.3, 2.5)); box(add, M, xAt(.5), y, 0, L * .98, .3, 6.9, M.deck2);
         box(add, M, xAt(.6), y + 1.2, 2.5, 3.4, 2.2, 1.2, M.steel); box(add, M, xAt(.62), y + 2.75, 2.5, 2, .9, 1, M.iron);
         for (const u of [.2, .42, .78]) box(add, M, xAt(u), y + .16, 0, L * .2, .012, .1, M.paint);
@@ -174,7 +174,7 @@ function build() {
   };
   /* ----- ships: one spec per class in SHIPS below; each is built once on first use ----- */
   let ship, A, H, bird, balloons, lamps, flagGeo, flagBase, xAt, mount, photoPanel, rotors, stacks, shipSpec, shipK = 1;
-  const AIRCRAFT = ["heli", "drone", "vtol", "fighter", "awacs"];
+  const OLD_ONLY_ATT = ["anchor", "cannon", "nest", "parrot", "treasure"]; // same list as the server: these never show on a steel ship
   // real ship camouflage painted over the hull, as a repeating tile (see CAMO in voyage.js)
   const camoTex = {};
   function camoTexture(id) {
@@ -239,6 +239,9 @@ function build() {
   const flag = add(new T.Mesh(flagGeo, M.flag)); flag.rotation.y = Math.PI; flag.position.copy(mastTops[mainI]).add(new T.Vector3(0, -.45, 0));
 
   /* ----- attachments (ids match "att" items in DECO) ----- */
+  // decorations shared with steel ships grow with the ship and sit on its real top: on a carrier that is the flight deck, not the hull under it
+  const decoK = spec.sailed ? 1 : Math.min(1.8, .7 + L / 26), flat = spec.flatTop, railY = u => flat != null ? deckY(.5) + flat : sheer(u);
+  const bowEnd = spec.sailed ? bowTip : new T.Vector3(xAt(.985), railY(1) + .3, 0);
   const A = {}; const grp = k => (A[k] = new T.Group(), ship.add(A[k]), A[k]);
   grp("cannon"); for (const side of [1, -1]) for (const u of [.28, .38, .48, .58]) { const p = sideP(u, .72, side);
     const port = add(new T.Mesh(new T.BoxGeometry(.34, .3, .06), M.iron), A.cannon); port.position.copy(p); port.lookAt(p.clone().add(new T.Vector3(0, 0, side)));
@@ -266,11 +269,12 @@ function build() {
     add(new T.Mesh(new T.CylinderGeometry(.45, .45, .06, 16), M.wood), A.nest).position.set(x, y - .2, 0);
     const band = add(new T.Mesh(new T.TorusGeometry(.55, .03, 6, 24), M.trim), A.nest); band.rotation.x = Math.PI / 2; band.position.set(x, y + .2, 0); }
   grp("lantern"); const lamps = [];
-  for (const z of [-1.05, 1.05]) { const x = xAt(.015), y = sheer(0) + .25;
-    add(new T.Mesh(new T.CylinderGeometry(.03, .03, .5, 6), M.iron), A.lantern).position.set(x, y, z);
-    add(new T.Mesh(new T.SphereGeometry(.17, 12, 10), new T.MeshStandardMaterial({ color: 0xFFE2A0, emissive: 0xFFB347, emissiveIntensity: 2 })), A.lantern).position.set(x, y + .35, z);
-    add(new T.Mesh(new T.ConeGeometry(.17, .2, 8), M.iron), A.lantern).position.set(x, y + .58, z);
-    const pl = new T.PointLight(0xFFB347, 1.2, 6, 2); pl.position.set(x, y + .35, z); A.lantern.add(pl); lamps.push(pl); }
+  const lampZ = spec.sailed ? 1.05 : flat != null ? W - .25 : W * .62;
+  for (const z of [-lampZ, lampZ]) { const lamp = new T.Group(); A.lantern.add(lamp); lamp.position.set(xAt(.015), railY(0) + .25 * decoK, z); lamp.scale.setScalar(decoK);
+    add(new T.Mesh(new T.CylinderGeometry(.03, .03, .5, 6), M.iron), lamp);
+    add(new T.Mesh(new T.SphereGeometry(.17, 12, 10), new T.MeshStandardMaterial({ color: 0xFFE2A0, emissive: 0xFFB347, emissiveIntensity: 2 })), lamp).position.y = .35;
+    add(new T.Mesh(new T.ConeGeometry(.17, .2, 8), M.iron), lamp).position.y = .58;
+    const pl = new T.PointLight(0xFFB347, 1.2, 6, 2); pl.position.y = .35; lamp.add(pl); lamps.push(pl); }
   // the parrot perches on the rail beside the main mast
   grp("parrot"); const bird = new T.Group(); A.parrot.add(bird); bird.position.copy(sideP(.5, 0, 1)).add(new T.Vector3(0, .26, -.08)); bird.scale.setScalar(1.5);
   { const red = new T.MeshStandardMaterial({ color: 0xD9402F, roughness: .6 }), blue = new T.MeshStandardMaterial({ color: 0x2E6FD0, roughness: .6 }), yel = new T.MeshStandardMaterial({ color: 0xF4C430, roughness: .5 });
@@ -294,28 +298,31 @@ function build() {
   const PASTEL = [0xF7A8C4, 0xFFD3A8, 0xFFF1A8, 0xA8E6CF, 0xA8D8F7, 0xC9B6F2];
   const mat = c => new T.MeshStandardMaterial({ color: c, roughness: .55 });
   grp("flowers"); { const leaf = mat(0x6FAE5A), cols = [0xF7A8C4, 0xFFFFFF, 0xFFE27A, 0xC9B6F2].map(mat);
-    for (const side of [1, -1]) for (const [i, u] of [.22, .32, .42, .52, .62, .72].entries()) { const p = sideP(u, 0, side).add(new T.Vector3(0, .1, -side * .06));
-      for (let k = 0; k < 3; k++) add(new T.Mesh(new T.SphereGeometry(.11, 10, 8), cols[(i + k) % 4]), A.flowers).position.copy(p).add(new T.Vector3((k - 1) * .16, (k % 2) * .06, 0));
-      const lf = add(new T.Mesh(new T.SphereGeometry(.12, 8, 6), leaf), A.flowers); lf.scale.set(1.6, .35, .7); lf.position.copy(p).add(new T.Vector3(0, -.05, side * .05)); } }
-  grp("bunting"); { const pts = [bowTip.clone(), ...mastTops.map(m => m.clone().add(new T.Vector3(0, -.4, 0))), new T.Vector3(xAt(.01), sheer(0) + .35, 0)];
+    const spots = spec.sailed ? 6 : Math.round(L / 2.2);
+    for (const side of [1, -1]) for (let i = 0; i < spots; i++) { const u = .22 + .5 * i / (spots - 1), p = sideP(u, 0, side).add(new T.Vector3(0, .1, -side * .06)); if (flat != null) { p.y = railY(u) + .1; p.z = side * (W + .03); }
+      const posy = new T.Group(); A.flowers.add(posy); posy.position.copy(p); posy.scale.setScalar(decoK);
+      for (let k = 0; k < 3; k++) add(new T.Mesh(new T.SphereGeometry(.11, 10, 8), cols[(i + k) % 4]), posy).position.set((k - 1) * .16, (k % 2) * .06, 0);
+      const lf = add(new T.Mesh(new T.SphereGeometry(.12, 8, 6), leaf), posy); lf.scale.set(1.6, .35, .7); lf.position.set(0, -.05, side * .05); } }
+  grp("bunting"); A.bunting.name = "fpString"; { const pts = [bowEnd.clone(), ...mastTops.map(m => m.clone().add(new T.Vector3(0, -.4, 0))), new T.Vector3(xAt(.01), railY(0) + .35, 0)];
     for (let s = 0; s < pts.length - 1; s++) { const a = pts[s], b = pts[s + 1], mid = a.clone().lerp(b, .5).add(new T.Vector3(0, -.9, 0)), curve = new T.QuadraticBezierCurve3(a, mid, b);
       A.bunting.add(new T.Mesh(new T.TubeGeometry(curve, 16, .015, 4, false), M.rope));
-      const n = Math.max(3, Math.round(a.distanceTo(b) / .55));
+      const n = Math.max(3, Math.round(a.distanceTo(b) / (.55 * decoK)));
       for (let k = 1; k < n; k++) { const p = curve.getPoint(k / n), g = new T.BufferGeometry();
         g.setAttribute("position", new T.Float32BufferAttribute([-.17, 0, 0, .17, 0, 0, 0, -.34, 0], 3)); g.computeVertexNormals();
-        const m = add(new T.Mesh(g, new T.MeshStandardMaterial({ color: PASTEL[(s * 7 + k) % 6], side: T.DoubleSide, roughness: .8 })), A.bunting); m.position.copy(p); m.rotation.y = Math.PI / 2; } } }
+        const m = add(new T.Mesh(g, new T.MeshStandardMaterial({ color: PASTEL[(s * 7 + k) % 6], side: T.DoubleSide, roughness: .8 })), A.bunting); m.position.copy(p); m.rotation.y = Math.PI / 2; m.scale.setScalar(decoK); } } }
   grp("balloons"); const balloons = [];
   { const heart = (c) => { const g = new T.Group(), m = new T.MeshStandardMaterial({ color: c, roughness: .25, metalness: .05 });
       for (const z of [-.17, .17]) add(new T.Mesh(new T.SphereGeometry(.26, 16, 12), m), g).position.set(0, .08, z);
       const tip = add(new T.Mesh(new T.ConeGeometry(.33, .5, 16), m), g); tip.rotation.x = Math.PI; tip.position.y = -.26; tip.scale.set(1, 1, .9); return g; };
-    [[0xF28AB0, -.6, 2.6], [0xC9B6F2, 0, 3.1], [0xFFB6A3, .6, 2.4]].forEach(([c, z, h], i) => { const b = heart(c), anchorP = new T.Vector3(xAt(.03), sheer(0) + .1, z * .5);
-      b.position.set(xAt(.03) - .4 + i * .3, sheer(0) + h, z); b.rotation.y = Math.PI / 2; A.balloons.add(b); balloons.push({ g: b, y: b.position.y, ph: i * 1.7 });
+    [[0xF28AB0, -.6, 2.6], [0xC9B6F2, 0, 3.1], [0xFFB6A3, .6, 2.4]].forEach(([c, z, h], i) => { const b = heart(c), anchorP = new T.Vector3(xAt(.03), railY(0) + .1, z * .5);
+      b.scale.setScalar(decoK); b.position.set(xAt(.03) - .4 + i * .3, railY(0) + h * decoK, z * decoK); b.rotation.y = Math.PI / 2; A.balloons.add(b); balloons.push({ g: b, y: b.position.y, ph: i * 1.7 });
       const sg = new T.BufferGeometry().setFromPoints([anchorP, b.position.clone().add(new T.Vector3(0, -.5, 0))]); A.balloons.add(new T.Line(sg, M.rope)); }); }
   grp("bowribbon"); { const pink = mat(0xF28AB0), x = xAt(0) - .12, y = sheer(0) - .25;
     for (const z of [-.42, .42]) { const loop = add(new T.Mesh(new T.SphereGeometry(.3, 14, 10), pink), A.bowribbon); loop.scale.set(.35, .7, 1.1); loop.position.set(x, y + .05, z); loop.rotation.x = z > 0 ? .5 : -.5;
       const tail = add(new T.Mesh(new T.BoxGeometry(.08, .6, .16), pink), A.bowribbon); tail.position.set(x, y - .38, z * .45); tail.rotation.x = z > 0 ? -.35 : .35; }
-    add(new T.Mesh(new T.SphereGeometry(.16, 12, 10), mat(0xE0608F)), A.bowribbon).position.set(x - .02, y + .05, 0); }
-  grp("cat"); { const fur = mat(0xF2A65A), belly = mat(0xFFF3E6), u = .8, x = xAt(u), y = deckY(u), c = new T.Group(); A.cat.add(c); c.position.set(x, y, .3); c.rotation.y = -.6;
+    add(new T.Mesh(new T.SphereGeometry(.16, 12, 10), mat(0xE0608F)), A.bowribbon).position.set(x - .02, y + .05, 0);
+    A.bowribbon.position.set(x * (1 - decoK), y * (1 - decoK), 0); A.bowribbon.scale.setScalar(decoK); }
+  grp("cat"); { const fur = mat(0xF2A65A), belly = mat(0xFFF3E6), u = spec.sailed ? .8 : spec.catAt?.[0] ?? .04, x = xAt(u), y = flat != null ? railY(u) : deckY(u), c = new T.Group(); A.cat.add(c); c.position.set(x, y, spec.sailed ? .3 : spec.catAt?.[1] ?? 0); c.rotation.y = -.6; c.scale.setScalar(decoK);
     add(new T.Mesh(new T.SphereGeometry(.3, 14, 12), fur), c).scale.set(1, 1.05, .85); c.children[0].position.y = .3;
     add(new T.Mesh(new T.SphereGeometry(.18, 12, 10), belly), c).position.set(.16, .26, 0);
     const head = add(new T.Mesh(new T.SphereGeometry(.24, 14, 12), fur), c); head.position.set(.12, .72, 0);
@@ -323,11 +330,11 @@ function build() {
       add(new T.Mesh(new T.SphereGeometry(.035, 8, 6), M.iron), c).position.set(.32, .76, z * .7); }
     add(new T.Mesh(new T.SphereGeometry(.03, 6, 6), mat(0xE0608F)), c).position.set(.35, .69, 0);
     const tail = add(new T.Mesh(new T.TorusGeometry(.26, .05, 8, 16, Math.PI * 1.1), fur), c); tail.position.set(-.3, .3, 0); tail.rotation.y = Math.PI / 2; }
-  grp("fairylights"); { const bulbs = [0xFFE27A, 0xF7A8C4, 0xA8D8F7, 0xA8E6CF].map(c => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.4 }));
-    for (const [a, b] of [[mastTops[mainI], bowTip], [mastTops[mainI], new T.Vector3(xAt(.01), sheer(0) + .3, 0)]]) {
+  grp("fairylights"); A.fairylights.name = "fpString"; { const bulbs = [0xFFE27A, 0xF7A8C4, 0xA8D8F7, 0xA8E6CF].map(c => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.4 }));
+    for (const [a, b] of [[mastTops[mainI], bowEnd], [mastTops[mainI], new T.Vector3(xAt(.01), railY(0) + .3, 0)]]) {
       const mid = a.clone().lerp(b, .5).add(new T.Vector3(0, -.6, 0)), curve = new T.QuadraticBezierCurve3(a.clone().add(new T.Vector3(0, -.3, 0)), mid, b);
       A.fairylights.add(new T.Mesh(new T.TubeGeometry(curve, 20, .012, 4, false), M.rope));
-      const n = Math.round(a.distanceTo(b) / .45); for (let k = 1; k < n; k++) add(new T.Mesh(new T.SphereGeometry(.075, 8, 6), bulbs[k % 4]), A.fairylights).position.copy(curve.getPoint(k / n)); } }
+      const n = Math.round(a.distanceTo(b) / (.45 * decoK)); for (let k = 1; k < n; k++) add(new T.Mesh(new T.SphereGeometry(.075 * decoK, 8, 6), bulbs[k % 4]), A.fairylights).position.copy(curve.getPoint(k / n)); } }
 
   /* ----- aircraft over the larger warships (ids match "att" items with group "air"); spec.air gives [u along the ship, height above the deck, z, size] ----- */
   const rotors = [];
@@ -440,7 +447,7 @@ function build() {
       const tex = canvasTex(512, 426, (g, w, h) => { g.drawImage(im, 0, 0, w, h); g.strokeStyle = "rgba(0,0,0,.22)"; g.lineWidth = 6; g.strokeRect(0, 0, w, h); });
       const mat = shipSpec.sailed ? M.sailMain : M.hullPhoto; mat.map?.dispose(); mat.map = tex; mat.needsUpdate = true; if (!shipSpec.sailed) photoPanel.visible = true; done(); }; im.src = photo; });
     // hand-placed sailing-ship attachments sit under the raised decks of steel ships, so those ships show only aircraft
-    const on = new Set((look.att || []).filter(k => shipSpec.sailed || AIRCRAFT.includes(k))); for (const k in A) A[k].visible = on.has(k);
+    const on = new Set((look.att || []).filter(k => shipSpec.sailed || !OLD_ONLY_ATT.includes(k))); for (const k in A) A[k].visible = on.has(k);
     for (const k in H) H[k].visible = look.head === k && shipSpec.sailed;
     const wm = mount.userData.models; for (const k in wm) wm[k].visible = false;
     if (look.weapon) { if (!wm[look.weapon]) mount.add(wm[look.weapon] = weaponModel(T, M, look.weapon)); wm[look.weapon].visible = true; }
@@ -590,7 +597,8 @@ function build() {
       const eyeX = wm0.position.x - (racked ? 2 * s + 4 : 1.9 * s + 1.8), eyeY = racked ? rack.max.y + 2.5 + La * .12 : wm0.position.y + 1.4 * s + 1.05, eyeZ = wm0.position.z * .55, shoulder = 1.05 * s + .35; // over the gun's shoulder
       // aircraft parked ahead of the camera wait high above the picture; from the deck they stay out of sight until they take off
       a.userData.air.forEach(o => { if (o.position.x > eyeX - 4) { o.position.x = Math.min(o.position.x, eyeX + 4); o.position.y = Math.max(o.position.y, eyeY + 7); } }); a.updateMatrixWorld(true);
-      const fpHide = []; { const bb = new T.Box3(); a.traverse(o => { if (!o.isMesh || !o.visible) return; let w = o; while (w && w !== wm0) w = w.parent; if (w === wm0) return; o.geometry.boundingBox || o.geometry.computeBoundingBox(); bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); if (bb.max.y > eyeY - .1 && bb.max.x > eyeX - .2 && bb.min.y > .3 && bb.max.x - bb.min.x < spec.L * .6) fpHide.push(o); }); }
+      const fpHide = []; a.traverse(o => { if (o.name === "fpString" && o.visible) fpHide.push(o); }); // strings of flags and lights run past the eye and would fill the view
+      { const bb = new T.Box3(); a.traverse(o => { if (!o.isMesh || !o.visible) return; let w = o; while (w && w !== wm0) w = w.parent; if (w === wm0) return; o.geometry.boundingBox || o.geometry.computeBoundingBox(); bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); if (bb.max.y > eyeY - .1 && bb.max.x > eyeX - .2 && bb.min.y > .3 && bb.max.x - bb.min.x < spec.L * .6) fpHide.push(o); }); }
 
       const v1 = new T.Vector3(), v2 = new T.Vector3(), v3 = new T.Vector3(), poseA = { p: new T.Vector3(), l: new T.Vector3() }, poseB = { p: new T.Vector3(), l: new T.Vector3() };
       let view = "intro", blend = 1, blendFrom = "intro", clock0 = 0, won = null;

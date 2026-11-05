@@ -42,6 +42,8 @@ const shipOf = id => SHIPS.find(s => s.id === id) || SHIPS[0];
 
 // Decorations cost gold. Slots hold one item, except att (several) and emblem (on the sail, the flag or both: look.se / look.fe).
 const DECO_SLOTS = ["hull", "trim", "pattern", "emblem", "head", "att", "wake", "tag", "weapon", "camo", "smoke"];
+// attachments that only make sense on a wooden sailing ship; everything else in att also fits steel ships, and aircraft (from) only steel ones
+const OLD_ONLY_ATT = ["anchor", "cannon", "nest", "parrot", "treasure"];
 const DECO = [
   ["hull", "red", "진홍 배", 30], ["hull", "navy", "남색 배", 30], ["hull", "mint", "민트 배", 30], ["hull", "pink", "분홍 배", 30], ["hull", "lavender", "라벤더 배", 30], ["hull", "sky", "하늘 배", 30], ["hull", "lemon", "레몬 배", 30],
   ["hull", "ebony", "흑단 배", 60], ["hull", "white", "상아 배", 80], ["hull", "gold", "황금 배", 250],
@@ -60,9 +62,10 @@ const DECO = [
   ["camo", "ocean", "바다 위장", 100, "ironclad"], ["camo", "splinter", "분할 위장", 120, "ironclad"], ["camo", "dazzle", "다즐 위장", 200, "ironclad"], ["camo", "digital", "디지털 위장", 200, "ironclad"], ["camo", "pink", "분홍 위장", 200, "ironclad"], ["camo", "pastel", "파스텔 위장", 200, "ironclad"], ["camo", "stealth", "스텔스 회색", 250, "ironclad"],
   ["smoke", "white", "흰 연기", 60, "ironclad"], ["smoke", "pink", "분홍 연기", 100, "ironclad"], ["smoke", "lavender", "보라 연기", 100, "ironclad"], ["smoke", "sky", "하늘 연기", 100, "ironclad"], ["smoke", "mint", "민트 연기", 100, "ironclad"], ["smoke", "rainbow", "무지개 연기", 250, "ironclad"],
   ["att", "drone", "무인 정찰기", 250, "cruiser", "air"], ["att", "heli", "해상작전 헬기", 300, "cruiser", "air"], ["att", "vtol", "수직이착륙기", 450, "carrier", "air"], ["att", "fighter", "전투기 편대", 500, "carrier", "air"], ["att", "awacs", "조기경보기", 600, "carrier", "air"]
-].map(([slot, id, name, price, from, group]) => ({ key: `${slot}.${id}`, slot, id, name, price, rarity: price <= 40 ? "보통" : price <= 100 ? "희귀" : "전설", ...(from ? { from } : {}), ...(group ? { group } : {}) }));
-const shipReaches = (shipId, d) => !d.from || SHIPS.findIndex(s => s.id === shipId) >= SHIPS.findIndex(s => s.id === d.from);
-const fromName = d => SHIPS.find(s => s.id === d.from).name;
+].map(([slot, id, name, price, from, group]) => ({ key: `${slot}.${id}`, slot, id, name, price, rarity: price <= 40 ? "보통" : price <= 100 ? "희귀" : "전설", ...(from ? { from } : {}), ...(group ? { group } : {}), ...(slot === "att" && OLD_ONLY_ATT.includes(id) ? { upto: "galleon" } : {}) }));
+const shipRank = id => SHIPS.findIndex(s => s.id === id);
+const shipReaches = (shipId, d) => (!d.from || shipRank(shipId) >= shipRank(d.from)) && (!d.upto || shipRank(shipId) <= shipRank(d.upto));
+const reachNote = d => d.upto ? "돛이 있는 옛날 배에만 달 수 있어요" : `${SHIPS.find(s => s.id === d.from).name}부터 쓸 수 있어요`;
 // upgrades are the gold sink with no end in sight: dearer each level, the same small power gain, kept when changing ships
 const UPGRADES = [["engine", "기관 강화", "엔진을 손봐서 힘을 키워요"], ["armor", "장갑 강화", "선체를 더 튼튼하게 덧대요"], ["gunnery", "포술 훈련", "선원들의 사격 솜씨를 키워요"]].map(([id, name, desc]) => ({ id, name, desc }));
 const UP_MAX = 10, UP_POWER = 10, upPrice = level => level * 100;
@@ -393,7 +396,7 @@ on("POST", "/api/kid/play/finish/:id", "student", async ({ db, me, params, body 
 // gold shop
 on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
   const d = itemOf(String(body.key || "")); if (!d || d.dropOnly) throw bad("살 수 없는 꾸미기예요");
-  if (!shipReaches(me.student.ship, d)) throw bad(`${fromName(d)}부터 쓸 수 있어요`);
+  if (!shipReaches(me.student.ship, d)) throw bad(reachNote(d));
   const sid = me.student.id, bal = (await balances(db, [sid]))[sid]; if (bal.gold < d.price) throw bad(`금화가 ${d.price - bal.gold}개 모자라요`);
   const r = await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, d.key, Date.now()).run(); if (!r.meta.changes) throw bad("이미 가지고 있어요");
   const lg = await logStmt(db, { student_id: sid, kind: "deco", title: `꾸미기: ${d.name}`, gold: -d.price }).run(), old = parseLook(me.student.look);
@@ -408,7 +411,7 @@ on("POST", "/api/kid/deco/wear", "student", async ({ db, me, body }) => {
     if (!(await db.prepare("SELECT 1 FROM owned WHERE student_id=? AND item=?").bind(me.student.id, d.key).first())) throw bad("아직 없는 꾸미기예요");
     if (slot === "weapon" && d.era > shipOf(me.student.ship).era) throw bad(`${SHIPS.find(s => s.era === d.era).name}부터 장착할 수 있어요`);
     const worn = slot === "att" ? (look.att || []).includes(d.id) : slot === "emblem" ? look[where === "flag" ? "fe" : "se"] === d.id : false;
-    if (!worn && !shipReaches(me.student.ship, d)) throw bad(`${fromName(d)}부터 쓸 수 있어요`);
+    if (!worn && !shipReaches(me.student.ship, d)) throw bad(reachNote(d));
     wearItem(look, d, slot === "att" || slot === "emblem" ? !worn : true, where);
   } else if (slot === "emblem") delete look[where === "flag" ? "fe" : "se"]; else delete look[slot];
   await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run(); return { ok: true };
