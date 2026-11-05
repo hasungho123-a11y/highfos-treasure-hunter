@@ -1,0 +1,17 @@
+name = "highfos-sea"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "highfos-sea-db"
+database_id = "REPLACE_WITH_DATABASE_ID"
+
+[vars]
+# SETUP_CODE is a secret: set it with `npx wrangler secret put SETUP_CODE`
