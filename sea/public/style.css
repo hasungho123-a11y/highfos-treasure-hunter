@@ -332,6 +332,9 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .world .lbl { font-family: var(--display); fill: #fff; paint-order: stroke; stroke: rgb(10 30 55 / .6); stroke-width: 5px }
 .isle { cursor: pointer; transition: filter .15s } .isle:hover, .isle:focus-visible, .isle.on { filter: brightness(1.15) drop-shadow(0 0 8px rgb(255 230 150 / .9)); outline: none }
 .worldship { width: 11% !important; transition: left .6s ease-in-out, top .6s ease-in-out; pointer-events: none }
+.worldship.s3 { width: calc(17% * var(--k)) !important; transform: translate(-50%, -58%) }
+.worldship.s3 img { display: block; width: 100%; height: auto; -webkit-user-drag: none }
+@media (max-width: 639px) { .worldship.s3 { width: calc(23% * var(--k)) !important } }
 /* painted maps: the picture sits under the svg; light and clouds move on their own layer so the phone never repaints the picture */
 .world.art { background: #123E66 }
 .world.art > svg { position: relative; z-index: 1 }

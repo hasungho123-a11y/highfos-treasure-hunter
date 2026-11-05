@@ -90,7 +90,8 @@ function build() {
   const T = window.THREE;
   const stage = document.createElement("div"); stage.className = "s3d";
   stage.innerHTML = `<div class="s3d-views"></div><button type="button" class="s3d-sky" aria-label="하늘 바꾸기"></button>`;
-  const renderer = new T.WebGLRenderer({ antialias: true });
+  const renderer = new T.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setClearColor(0x000000, 0); // the sky covers this in the live view; snapshots keep it see-through
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.outputEncoding = T.sRGBEncoding; renderer.toneMapping = T.ACESFilmicToneMapping;
   renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -102,7 +103,7 @@ function build() {
   const skyMat = new T.ShaderMaterial({ side: T.BackSide, depthWrite: false, fog: false, uniforms: { top: { value: new T.Color() }, hor: { value: new T.Color() } },
     vertexShader: "varying vec3 vP; void main(){ vP = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
     fragmentShader: "uniform vec3 top; uniform vec3 hor; varying vec3 vP; void main(){ float h = clamp(vP.y*1.6, 0.0, 1.0); gl_FragColor = vec4(mix(hor, top, pow(h, .7)), 1.0); }" });
-  scene.add(new T.Mesh(new T.SphereGeometry(500, 32, 16), skyMat));
+  const skyMesh = new T.Mesh(new T.SphereGeometry(500, 32, 16), skyMat); scene.add(skyMesh);
   const glowTex = canvasTex(128, 128, g => { const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, "rgba(255,255,255,1)"); r.addColorStop(.25, "rgba(255,255,255,.85)"); r.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = r; g.fillRect(0, 0, 128, 128); }, false);
   const orb = new T.Sprite(new T.SpriteMaterial({ map: glowTex, fog: false, depthWrite: false })); scene.add(orb);
   const stars = (() => { const g = new T.BufferGeometry(), p = [];
@@ -365,7 +366,7 @@ function build() {
   const foamN = 160, foamGeo = new T.BufferGeometry(), foamPos = new Float32Array(foamN * 3), foamCol = new Float32Array(foamN * 3), foamAge = new Float32Array(foamN);
   foamGeo.setAttribute("position", new T.BufferAttribute(foamPos, 3)); foamGeo.setAttribute("color", new T.BufferAttribute(foamCol, 3));
   const foamMat = new T.PointsMaterial({ map: glowTex, size: .55, transparent: true, opacity: .85, depthWrite: false, vertexColors: true });
-  scene.add(new T.Points(foamGeo, foamMat));
+  const foamPts = new T.Points(foamGeo, foamMat); scene.add(foamPts);
   const heartTex = canvasTex(64, 64, g => drawEmblem(g, "heart", 32, 32, 60, "#FFFFFF", "#FFFFFF"), false);
   const petalTex = canvasTex(64, 64, g => { g.fillStyle = "#fff"; g.beginPath(); g.ellipse(32, 32, 14, 26, .6, 0, Math.PI * 2); g.fill(); }, false);
   let wakeKind = "", spread = 2.4;
@@ -417,7 +418,7 @@ function build() {
   applyTime();
 
   /* ----- dressing the ship ----- */
-  let lookKey = "";
+  let lookKey = "", lookReady = Promise.resolve();
   // look: see parseLook in worker.js; sailHex/flagHex are the free colours already turned into hex
   function setLook(look = {}, sailHex = "#EFE4C8", flagHex = sailHex, shipId = "dinghy") {
     const key = JSON.stringify([look, sailHex, flagHex, shipId]); if (key === lookKey) return; lookKey = key;
@@ -435,9 +436,9 @@ function build() {
     M.sailMain.needsUpdate = M.sailPlain.needsUpdate = M.flag.needsUpdate = true;
     photoPanel.visible = false;
     const photo = V.photoSrc(look);
-    if (photo) { const im = new Image(); im.onload = () => { if (lookKey !== key) return;
+    lookReady = !photo ? Promise.resolve() : new Promise(done => { const im = new Image(); im.onerror = done; im.onload = () => { if (lookKey !== key) return done();
       const tex = canvasTex(512, 426, (g, w, h) => { g.drawImage(im, 0, 0, w, h); g.strokeStyle = "rgba(0,0,0,.22)"; g.lineWidth = 6; g.strokeRect(0, 0, w, h); });
-      const mat = shipSpec.sailed ? M.sailMain : M.hullPhoto; mat.map?.dispose(); mat.map = tex; mat.needsUpdate = true; if (!shipSpec.sailed) photoPanel.visible = true; }; im.src = photo; }
+      const mat = shipSpec.sailed ? M.sailMain : M.hullPhoto; mat.map?.dispose(); mat.map = tex; mat.needsUpdate = true; if (!shipSpec.sailed) photoPanel.visible = true; done(); }; im.src = photo; });
     // hand-placed sailing-ship attachments sit under the raised decks of steel ships, so those ships show only aircraft
     const on = new Set((look.att || []).filter(k => shipSpec.sailed || AIRCRAFT.includes(k))); for (const k in A) A[k].visible = on.has(k);
     for (const k in H) H[k].visible = look.head === k && shipSpec.sailed;
@@ -487,8 +488,43 @@ function build() {
   }
   function start() { if (running || !stage.isConnected) return; running = true; clock.getDelta(); requestAnimationFrame(frame); }
   document.addEventListener("visibilitychange", () => { if (!document.hidden) start(); });
+
+  /* ----- one still picture of the dressed ship for the painted maps: same high angle as the map, see-through background, shadow and foam on the water ----- */
+  const snapShadow = new T.Mesh(new T.PlaneGeometry(400, 400), new T.ShadowMaterial({ opacity: .38, depthWrite: false })); snapShadow.rotation.x = -Math.PI / 2; snapShadow.position.y = .01; snapShadow.receiveShadow = true; snapShadow.visible = false; scene.add(snapShadow);
+  const snapFoam = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: .55, depthWrite: false, toneMapped: false })); snapFoam.rotation.x = -Math.PI / 2; snapFoam.position.y = .005; snapFoam.visible = false; scene.add(snapFoam);
+  const waterline = [new T.Plane(new T.Vector3(0, 1, 0), 0)];
+  function snapshot(look, sailHex, flagHex, shipId, size = 512) {
+    setLook(look, sailHex, flagHex, shipId);
+    return lookReady.then(() => {
+      const hide = [skyMesh, orb, stars, ocean, foamPts, smokeObj], shown = hide.map(o => o.visible), oldTime = time, oldSize = renderer.getSize(new T.Vector2()), oldRatio = renderer.getPixelRatio(), oldFov = camera.fov, oldAspect = camera.aspect, oldFog = [scene.fog.near, scene.fog.far];
+      hide.forEach(o => o.visible = false); time = "day"; applyTime();
+      sun.position.set(-4, 26, 15); sun.color.set("#FFEBCF"); sun.intensity = 1.2; hemi.intensity = .55;
+      scene.fog.near = 1e4; scene.fog.far = 1e5;
+      ship.position.set(0, 0, 0); ship.rotation.set(0, 0, 0); ship.updateMatrixWorld(true);
+      const box = new T.Box3(), part = new T.Box3();
+      const visit = o => { if (!o.visible || o.isPoints) return; if (o.geometry) { if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); part.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); box.union(part); } o.children.forEach(visit); };
+      visit(ship); box.min.y = Math.max(0, box.min.y);
+      // three-quarter view from ahead, so the sails face the viewer; then zoom until the ship just fills the picture
+      const c = box.getCenter(new T.Vector3()), r0 = box.getSize(new T.Vector3()).length() / 2 * 1.08, fov = 14, th = .68, ph = 1.0, dist = r0 / Math.tan(fov / 2 * Math.PI / 180);
+      camera.fov = fov; camera.aspect = 1; camera.zoom = 1; camera.updateProjectionMatrix();
+      camera.position.set(c.x + dist * Math.sin(ph) * Math.cos(th), c.y + dist * Math.cos(ph), c.z + dist * Math.sin(ph) * Math.sin(th)); camera.lookAt(c); camera.updateMatrixWorld(true);
+      let far = 0; const pt = new T.Vector3();
+      for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) { pt.set(x, y, z).project(camera); far = Math.max(far, Math.abs(pt.x), Math.abs(pt.y)); }
+      camera.zoom = .84 / far; camera.updateProjectionMatrix(); const r = r0 / camera.zoom;
+      snapFoam.position.x = c.x; snapFoam.position.z = c.z; snapFoam.scale.set((box.max.x - box.min.x) * 1.16, Math.max(1.4, (box.max.z - box.min.z) * 2), 1);
+      snapShadow.visible = snapFoam.visible = true; renderer.clippingPlanes = waterline;
+      renderer.setPixelRatio(1); renderer.setSize(size, size, false);
+      renderer.render(scene, camera);
+      const url = renderer.domElement.toDataURL("image/webp", .9);
+      snapShadow.visible = snapFoam.visible = false; renderer.clippingPlanes = [];
+      hide.forEach((o, i) => o.visible = shown[i]); time = oldTime; applyTime();
+      [scene.fog.near, scene.fog.far] = oldFog; camera.zoom = 1; camera.fov = oldFov; camera.aspect = oldAspect; camera.updateProjectionMatrix();
+      renderer.setPixelRatio(oldRatio); renderer.setSize(oldSize.x, oldSize.y, false);
+      return { url, r };
+    });
+  }
   return {
-    el: stage, setLook, focusWeapon(on) { focusOn = !!on; },
+    el: stage, setLook, snapshot, focusWeapon(on) { focusOn = !!on; },
     mount(host) { if (stage.parentNode !== host) host.appendChild(stage); start(); },
     view(k) { viewsEl.querySelector(`[data-view="${k}"]`)?.click(); }
   };

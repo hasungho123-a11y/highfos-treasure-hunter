@@ -215,6 +215,21 @@ const SEAS = [
   { top: "#2A6FA5", bot: "#0A2740", land: { port: "#7E8B94", cannon: "#6F7B85", reef: "#46525C", memory: "#8E9AA4", battle: "#5A6168" } }
 ];
 const seaOpen = m => K.d.me.power >= m.power;
+/* the ship on a painted map is a still of the 3D ship; the flat one shows until that is ready, and stays where 3D can't run */
+const SHIP3D_MEM = "hs_ship3d_v1";
+const shipPic = me => { const key = JSON.stringify([me.ship, me.look, me.sail]);
+  if (!K.ship3d) try { K.ship3d = JSON.parse(ls.get(SHIP3D_MEM) || "null"); } catch (e) {}
+  return K.ship3d?.key === key ? K.ship3d : (wantShipPic(me, key), null); };
+function wantShipPic(me, key) {
+  if (K.ship3dBusy === key || K.ship3dFail || !window.Ship3D?.available() || $(".s3d")) return;
+  K.ship3dBusy = key;
+  Ship3D.get().then(v => $(".s3d") ? null : v.snapshot(me.look, sail(me.sail), me.look.fc != null ? sail(me.look.fc) : sail(me.sail), me.ship)).then(pic => {
+    if (!pic) return; K.ship3d = { key, ...pic }; try { ls.set(SHIP3D_MEM, JSON.stringify(K.ship3d)); } catch (e) {}
+    const el = $("#wship"); if (el && mapArt() && K.d.me === me) el.outerHTML = worldShip(me);
+  }).catch(() => { K.ship3dFail = true; }).finally(() => { K.ship3dBusy = null; });
+}
+function worldShip(me) { const pic = mapArt() && shipPic(me), k = pic ? Math.min(1.2, Math.sqrt(pic.r / 8)).toFixed(3) : 1;
+  return `<div class="ship mine worldship ${pic ? "s3" : ""} ${V.wakeClass(me.look)}" id="wship" style="--sail:${sail(me.sail)};--k:${k};${shipAt(K.at)}">${pic ? `<img class="hull" src="${pic.url}" alt="">` : shipSVG(me.ship, me.look, me.sail)}</div>`; }
 function kMap() {
   const d = K.d, me = d.me, { w, h } = mapSize(), tall = tallMap(), fs = tall ? 36 : 27, sea = SEAS[K.map], names = d.maps[K.map].isles;
   const art = mapArt();
@@ -233,7 +248,7 @@ function kMap() {
       <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>`}
       <path d="${art ? art.routes.map(r => route(...r)).join(" ") : `${route("port", "memory", 30)} ${route("port", "cannon", 20)} ${route("cannon", "reef", 40)} ${route("reef", "battle", 30)} ${route("port", "battle", -30)}`}" fill="none" stroke="#fff" stroke-width="3.5" stroke-dasharray="2 13" stroke-linecap="round" opacity=".55"/>
       ${Object.entries(ISLES).map(([k, s]) => isle(k, s)).join("")}
-    </svg><div class="ship mine worldship ${V.wakeClass(me.look)}" id="wship" style="--sail:${sail(me.sail)};${shipAt(K.at)}">${shipSVG(me.ship, me.look, me.sail)}</div></div>
+    </svg>${worldShip(me)}</div>
     ${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}`;
 }
 const isleSub = k => ({ port: "배를 사고 면제권을 받는 곳", cannon: "타이밍 맞춰 표적 맞히기", reef: `${["암초를", "빙산을", "기뢰를"][K.map]} 피해 멀리 가기`, memory: "그림 짝 맞히기", battle: "친구 배와 겨뤄 금화 얻기" })[k];
