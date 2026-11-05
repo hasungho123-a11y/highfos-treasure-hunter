@@ -113,14 +113,14 @@ function reef({ map, title, art }) {
       requestAnimationFrame(tick); })(last);
   });
 }
-/* 보물 동굴: find the pairs. Fewer turns scores higher. */
+/* 보물 동굴: find the pairs of cards worth the same (3/4 and 75%). Every deck is new. Fewer turns scores higher. */
 function memory({ map, title }) {
   return new Promise(done => {
-    const s = shell(title, "같은 그림의 짝을 찾아요. 적게 뒤집을수록 좋아요."), ids = ["star", "heart", "flower", "butterfly", "crown", "shell"];
+    const s = shell(title, "값이 같은 카드끼리 짝을 찾아요. 적게 뒤집을수록 좋아요."), set = MathQ.pairs(), ids = set.map(p => p.key);
     s.el.classList.add("g-mem", `era-${map}`); s.stage.style.setProperty("--pic", `url(/maps/sea${map + 1}.webp)`);
-    const deck = [...ids, ...ids].map(id => ({ id })).sort(() => Math.random() - .5);
-    s.stage.innerHTML = `<div class="mem">${deck.map((c, i) => `<button type="button" class="mem-c" data-i="${i}" aria-label="카드 ${i + 1}"><span class="mem-b"></span><span class="mem-f">${`<svg viewBox="0 0 100 100" aria-hidden="true">${V.embSVG(c.id, 50, 50, 78, "#14466F", "#FFFDF9")}</svg>`}</span></button>`).join("")}</div>`;
-    let first = null, lock = false, turns = 0, pairs = 0, left = [90, 70, 55][map], over = false;
+    const deck = MathQ.shuffle(set.flatMap(p => [{ id: p.key, label: p.a }, { id: p.key, label: p.b }]));
+    s.stage.innerHTML = `<div class="mem">${deck.map((c, i) => `<button type="button" class="mem-c" data-i="${i}" aria-label="카드 ${i + 1}"><span class="mem-b"></span><span class="mem-f"><span class="mem-q num${c.label.length > 6 ? " long" : ""}">${MathQ.html(c.label)}</span></span></button>`).join("")}</div>`;
+    let first = null, lock = false, turns = 0, pairs = 0, left = 120, over = false;
     const end = v => { if (over) return; over = true; clearInterval(tm); s.el.remove(); done(v); };
     const show = () => s.hud.textContent = `뒤집기 ${turns} · ${left}초`;
     const tm = setInterval(() => { left--; show(); if (left <= 0) end(pairs); }, 1000); show();
@@ -129,7 +129,7 @@ function memory({ map, title }) {
       if (!first) { first = { b, c }; return; }
       turns++; show();
       if (first.c.id === c.id) { pairs++; first = null; Sfx.match(); if (pairs === ids.length) { const score = Math.max(0, 30 - turns); setTimeout(() => end(score), 500); } return; }
-      lock = true; const a = first.b; first = null; setTimeout(() => { a.classList.remove("up"); b.classList.remove("up"); lock = false; }, 750); });
+      lock = true; const a = first.b; first = null; setTimeout(() => { a.classList.remove("up"); b.classList.remove("up"); lock = false; }, 1300); }); // long enough to read both and remember them
   });
 }
 /* 증기의 바다 포격: a torpedo is slow, so aim where the ship will be, not where it is. 10 torpedoes; score = hits. */
@@ -157,16 +157,17 @@ function torpedo({ map, title, art }) {
       requestAnimationFrame(tick); })(last);
   });
 }
-/* 현대의 바다 포격: press and hold the real warship until the lock closes; flickering contacts are decoys. 10 waves; score = kills. */
+/* 현대의 바다 포격: the order names one target by a math condition; press and hold it until the lock closes. Nothing else tells it from the rest. 10 waves; score = kills. */
 function missile({ map, title, art }) {
   return new Promise(done => {
-    const s = shell(title, "진짜 적함을 꾹 눌러 조준을 고정해요. 깜빡이는 표적은 미끼예요. 10번!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
-    const WAVES = 10, HOLD = .42;
-    let wave = 0, hits = 0, t = 0, last = performance.now(), cs = [], left = 0, lock = null, shot = null, pause = .5, msg = null, over = false;
-    const spawn = (w, h) => { wave++; const n = 2 + Math.min(2, Math.floor(wave / 4)), real = Math.floor(Math.random() * n); cs = []; left = 2.9 - wave * .11;
-      for (let i = 0; i < n; i++) { let x, y, tries = 0; do { x = 60 + Math.random() * (w - 120); y = h * .14 + Math.random() * h * .5; } while (cs.some(c => Math.hypot(c.x - x, c.y - y) < 110) && ++tries < 30); cs.push({ x, y, real: i === real, vx: (Math.random() - .5) * 26, seed: Math.random() * 9 }); } };
-    const say = (text, good) => { msg = { text, good, a: 1 }; };
-    const closeWave = () => { cs = []; lock = null; pause = .55; if (wave >= WAVES) { over = "ending"; setTimeout(() => end(hits), 800); } };
+    const s = shell(title, "명령에 맞는 표적을 계산해서 꾹 눌러요. 10번!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    const WAVES = 10, HOLD = .42, timeOf = w => 15 - w * .5; // time to work it out: 14.5 seconds, down to 10
+    let wave = 0, hits = 0, t = 0, last = performance.now(), cs = [], left = 0, lock = null, shot = null, pause = .5, msg = null, over = false, q = null;
+    const spawn = (w, h) => { wave++; const n = 2 + Math.min(2, Math.floor(wave / 4)); q = MathQ.order(wave, n); cs = []; left = timeOf(wave);
+      for (let i = 0; i < n; i++) { let x, y, tries = 0; do { x = 66 + Math.random() * (w - 132); y = h * .24 + Math.random() * h * .42; } while (cs.some(c => Math.abs(c.x - x) < 125 && Math.abs(c.y - y) < 96) && ++tries < 40); cs.push({ x, y, label: q.opts[i], real: q.opts[i] === q.real, vx: (Math.random() - .5) * 12 }); } };
+    const say = (text, good) => { msg = { text, good, a: good ? 1 : 2.4 }; }; // a wrong answer stays up longer, so the right one can be read
+    const closeWave = () => { cs = []; lock = null; pause = msg && !msg.good ? 1.5 : .55; if (wave >= WAVES) { over = "ending"; setTimeout(() => end(hits), 1000); } };
+    const plate = (x, y, text, size, bg, ink) => { g.font = `700 ${size}px ${getComputedStyle(document.body).fontFamily}`; g.textAlign = "center"; g.textBaseline = "middle"; const tw = g.measureText(text).width + size * .9, th = size * 1.55; g.fillStyle = bg; g.beginPath(); if (g.roundRect) g.roundRect(x - tw / 2, y - th / 2, tw, th, 8); else g.rect(x - tw / 2, y - th / 2, tw, th); g.fill(); g.fillStyle = ink; g.fillText(text, x, y + 1); g.textBaseline = "alphabetic"; };
     const at = e => { const r = s.stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     const near = e => { const [x, y] = at(e); let best = null, bd = 62; for (const c of cs) { const d = Math.hypot(c.x - x, c.y - y); if (d < bd) { bd = d; best = c; } } return best; };
     const down = e => { e.preventDefault(); if (shot) return; const c = near(e); if (c) { lock = { c, p: 0 }; Sfx.lock(); } };
@@ -179,16 +180,18 @@ function missile({ map, title, art }) {
       sea(g, w, h, t * .3, art); g.fillStyle = "rgba(3,18,30,.55)"; g.fillRect(0, 0, w, h); g.strokeStyle = "rgba(120,230,190,.13)"; g.lineWidth = 1; for (let r = 90; r < h * 1.25; r += 90) { g.beginPath(); g.arc(w / 2, h, r, 0, 7); g.stroke(); }
       const sweep = t * 1.3 % 6.283; g.strokeStyle = "rgba(120,230,190,.32)"; g.lineWidth = 2; g.beginPath(); g.moveTo(w / 2, h); g.lineTo(w / 2 + Math.cos(sweep) * h * 1.3, h + Math.sin(sweep) * h * 1.3); g.stroke();
       if (!cs.length && !shot && over !== "ending" && wave < WAVES) { pause -= dt; if (pause <= 0) spawn(w, h); }
-      if (cs.length && !shot) { left -= dt; if (left <= 0) { say("놓쳤어요", false); Sfx.splash(); closeWave(); } }
-      for (const c of cs) { c.x = Math.max(44, Math.min(w - 44, c.x + c.vx * dt)); const flicker = !c.real && Math.sin(t * 17 + c.seed) > .1; g.globalAlpha = c.real ? 1 : flicker ? .3 : .95;
-        if (art?.target) sprite(g, art.target, c.x, c.y + 10, 96, c.vx < 0); else targetShip(g, c.x, c.y + 8, 1.05, map); g.globalAlpha = 1;
-        g.strokeStyle = "#FF6A52"; g.lineWidth = 2; const b = 40; for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { g.beginPath(); g.moveTo(c.x + dx * b, c.y + dy * (b - 13)); g.lineTo(c.x + dx * b, c.y + dy * b); g.lineTo(c.x + dx * (b - 13), c.y + dy * b); g.stroke(); } }
+      if (cs.length && !shot) { left -= dt; if (left <= 0) { say(`시간 초과 · 정답 ${q.real}`, false); Sfx.splash(); closeWave(); } }
+      for (const c of cs) { c.x = Math.max(62, Math.min(w - 62, c.x + c.vx * dt));
+        if (art?.target) sprite(g, art.target, c.x, c.y + 4, 84, c.vx < 0); else targetShip(g, c.x, c.y + 2, .95, map);
+        g.strokeStyle = "#FF6A52"; g.lineWidth = 2; const b = 40; for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { g.beginPath(); g.moveTo(c.x + dx * b, c.y + dy * (b - 13)); g.lineTo(c.x + dx * b, c.y + dy * b); g.lineTo(c.x + dx * (b - 13), c.y + dy * b); g.stroke(); }
+        plate(c.x, c.y + 28, c.label, 19, "rgba(5,24,38,.92)", "#FFF3B8"); }
+      if (q && cs.length) plate(w / 2, 34, q.ask, Math.min(21, w / 17), "rgba(255,226,122,.96)", "#1B2A33");
       if (lock && !shot) { lock.p += dt / HOLD; g.strokeStyle = "#FFE27A"; g.lineWidth = 5; g.beginPath(); g.arc(lock.c.x, lock.c.y, 50, -1.57, -1.57 + Math.min(1, lock.p) * 6.283); g.stroke(); if (lock.p >= 1) { shot = { c: lock.c, p: 0 }; lock = null; Sfx.shot("missile"); } }
       if (shot) { shot.p += dt / .55; const p = Math.min(1, shot.p), mx = w / 2 + (shot.c.x - w / 2) * p, my = h - 20 + (shot.c.y - h + 20) * p * p; fx.add(mx, my + 8, 3, () => ({ vx: (Math.random() - .5) * 22, vy: 24, life: .55, c: "#F3F5F7", a: .7, r0: 3, r1: 10 })); g.fillStyle = "#EDEFF2"; g.beginPath(); g.ellipse(mx, my, 4, 12, Math.atan2(shot.c.x - w / 2, h) * .8, 0, 7); g.fill();
-        if (shot.p >= 1) { if (shot.c.real) { hits++; blast(fx, shot.c.x, shot.c.y); Sfx.boom(); say("격추!", true); } else { spray(fx, shot.c.x, shot.c.y); Sfx.wrong(); say("미끼였어요", false); } shot = null; closeWave(); } }
+        if (shot.p >= 1) { if (shot.c.real) { hits++; blast(fx, shot.c.x, shot.c.y); Sfx.boom(); say("격추!", true); } else { spray(fx, shot.c.x, shot.c.y); Sfx.wrong(); say(`아니에요 · 정답 ${q.real}`, false); } shot = null; closeWave(); } }
       fx.draw(g, dt);
-      if (cs.length) { g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(0, 0, w, 5); g.fillStyle = "#FF6A52"; g.fillRect(0, 0, w * Math.max(0, left) / (2.9 - wave * .11), 5); }
-      if (msg) { msg.a -= dt * 1.7; if (msg.a <= 0) msg = null; else { g.fillStyle = `rgba(255,255,255,${msg.a})`; g.font = "400 34px Jua, sans-serif"; g.textAlign = "center"; g.fillText(msg.text, w / 2, h * .82); } }
+      if (cs.length) { g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(0, 0, w, 5); g.fillStyle = "#FF6A52"; g.fillRect(0, 0, w * Math.max(0, left) / timeOf(wave), 5); }
+      if (msg) { msg.a -= dt * 1.7; if (msg.a <= 0) msg = null; else { g.fillStyle = `rgba(255,255,255,${Math.min(1, msg.a)})`; g.font = `400 ${Math.min(34, w / 13)}px Jua, sans-serif`; g.textAlign = "center"; g.fillText(msg.text, w / 2, h * .82); } }
       s.hud.textContent = `격추 ${hits} · 표적 ${Math.min(wave, WAVES)}/${WAVES}`;
       requestAnimationFrame(tick); })(last);
   });
@@ -215,25 +218,28 @@ function lighthouse({ map, title }) {
     hud(); show();
   });
 }
-/* 통신 기지: read the code table and key in the digit for each incoming symbol. The table changes every 6 right answers. Score = right answers. */
+/* 통신 기지: work out what a symbol is worth from the clues. Right answers bring harder messages, worth more:
+   the first 3 give 1 point each, the next 3 give 2, the rest give 3. Score = points, up to 24. */
 function codebreak({ map, title }) {
   return new Promise(done => {
-    const s = shell(title, "암호표를 보고 들어온 기호의 숫자를 눌러요. 틀리면 3초가 줄어요."), ids = ["star", "anchor", "compass", "moon", "flame", "shell"], MAX = 24, TOTAL = 40;
+    const s = shell(title, "식을 풀어 기호의 값을 알아내요. 틀리면 5초가 줄어요."), ids = ["star", "anchor", "compass", "moon", "flame", "shell"], MAX = 24, TOTAL = 120;
     s.el.classList.add("g-mem", `era-${map}`); s.stage.style.setProperty("--pic", `url(/maps/sea${map + 1}.webp)`);
-    const icon = (id, ink = "#BDF5DC") => `<svg viewBox="0 0 100 100" aria-hidden="true">${V.embSVG(id, 50, 50, 82, ink, "#0B2233")}</svg>`;
-    s.stage.innerHTML = `<div class="cipher"><div class="code-table"></div><div class="code-in"><span class="code-sym"></span><i class="code-time"><i></i></i><p class="sig-say" aria-live="polite"></p></div><div class="code-keys">${[1, 2, 3, 4, 5, 6].map(n => `<button type="button" data-n="${n}" class="num">${n}</button>`).join("")}</div></div>`;
-    const table = s.stage.querySelector(".code-table"), sym = s.stage.querySelector(".code-sym"), bar = s.stage.querySelector(".code-time i"), say = s.stage.querySelector(".sig-say");
-    let map2 = {}, cur = null, score = 0, left = TOTAL, over = false, lastT = performance.now();
-    const shuffle = () => { const digits = [1, 2, 3, 4, 5, 6].sort(() => Math.random() - .5); ids.forEach((id, i) => map2[id] = digits[i]); table.innerHTML = ids.map(id => `<div>${icon(id)}<b class="num">${map2[id]}</b></div>`).join(""); table.classList.remove("new"); table.offsetWidth; table.classList.add("new"); };
-    const next = () => { let id; do { id = ids[Math.floor(Math.random() * ids.length)]; } while (id === cur); cur = id; sym.innerHTML = icon(id, "#FFFFFF"); };
+    const icon = id => `<svg class="code-ic" viewBox="0 0 100 100" aria-hidden="true">${V.embSVG(id, 50, 50, 86, "#FFFFFF", "#0B2233")}</svg>`;
+    s.stage.innerHTML = `<div class="cipher"><div class="code-clues" aria-live="polite"></div><div class="code-in"><p class="code-ask num"></p><i class="code-time"><i></i></i><p class="sig-say" aria-live="polite"></p></div><div class="code-keys nine">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button type="button" data-n="${n}" class="num">${n}</button>`).join("")}</div></div>`;
+    const clues = s.stage.querySelector(".code-clues"), ask = s.stage.querySelector(".code-ask"), bar = s.stage.querySelector(".code-time i"), say = s.stage.querySelector(".sig-say");
+    let cur = null, solved = 0, wrong = 0, score = 0, left = TOTAL, over = false, wait2 = false, lastT = performance.now();
+    const levelOf = n => n < 3 ? 0 : n < 6 ? 1 : 2;
+    const next = () => { cur = MathQ.cipher(levelOf(solved)); wrong = 0; const pick = MathQ.shuffle(ids), sym = { a: pick[0], b: pick[1], c: pick[2] }, tok = t => sym[t] ? icon(sym[t]) : `<b>${t}</b>`;
+      clues.innerHTML = cur.clues.map(c => `<div class="num">${c.map(tok).join("")}</div>`).join(""); clues.classList.remove("new"); clues.offsetWidth; clues.classList.add("new");
+      ask.innerHTML = `${icon(sym[cur.ask])}<b>= ?</b>`; };
     const end = v => { if (over) return; over = true; clearInterval(tm); s.el.remove(); done(v); };
-    const hud = () => s.hud.textContent = `해독 ${score} · ${Math.ceil(left)}초`;
+    const hud = () => s.hud.textContent = `점수 ${score} · ${Math.ceil(left)}초`;
     const tm = setInterval(() => { const n = performance.now(); left -= (n - lastT) / 1000; lastT = n; bar.style.width = Math.max(0, left / TOTAL * 100) + "%"; hud(); if (left <= 0) end(score); }, 100);
     s.quit.onclick = () => end(null);
-    s.stage.addEventListener("click", e => { const b = e.target.closest("[data-n]"); if (!b || over) return;
-      if (Number(b.dataset.n) === map2[cur]) { score++; Sfx.match(); say.textContent = ""; if (score >= MAX) return end(score); if (score % 6 === 0) { shuffle(); Sfx.ping(); say.textContent = "암호표가 바뀌었어요!"; } next(); }
-      else { left -= 3; Sfx.wrong(); say.textContent = "틀렸어요! 3초 감소"; } hud(); });
-    shuffle(); next(); hud();
+    s.stage.addEventListener("click", e => { const b = e.target.closest("[data-n]"); if (!b || over || wait2) return;
+      if (Number(b.dataset.n) === cur.answer) { score = Math.min(MAX, score + levelOf(solved) + 1); solved++; Sfx.match(); say.textContent = solved === 3 || solved === 6 ? "더 어려운 암호가 들어와요!" : "해독 성공!"; if (score >= MAX) return end(score); next(); }
+      else { left -= 5; wrong++; Sfx.wrong(); if (wrong < 2) say.textContent = "틀렸어요! 5초 감소"; else { say.textContent = `정답은 ${cur.answer}이었어요. 다음 암호로 넘어가요`; wait2 = true; setTimeout(() => { wait2 = false; if (!over) { say.textContent = ""; next(); } }, 1800); } } hud(); });
+    next(); hud();
   });
 }
 // every sea plays its own game on each island; the score scale of each island stays the same, so the server's stars and rewards still fit
@@ -249,7 +255,7 @@ const HOW = {
   cannon: [
     { short: "바람에 포탄이 휘어요. 10발!", steps: ["바람 화살표를 봐요. 포탄은 바람 쪽으로 휘어요.", "점선이 닿는 곳에 표적이 올 때 눌러요.", "10발 중 많이 맞힐수록 별이 늘어요."], art: `${WATER}${hull(182, 44)}<path d="M36 100Q96 10 178 46" ${dash}/><path d="M92 16h44m-9-6 9 6-9 6" fill="none" stroke="#fff" stroke-width="3"/>${label(114, 34, "바람")}<circle cx="36" cy="100" r="8" fill="#23262B"/>` },
     { short: "어뢰는 느려요. 앞을 보고 쏴요. 10발!", steps: ["어뢰는 천천히 나아가요.", "배가 지금 있는 곳 말고, 갈 자리를 보고 눌러요.", "10발 중 많이 맞힐수록 별이 늘어요."], art: `${WATER}${hull(66, 34, "#5B6470")}<path d="M90 42h70" ${dash}/><g opacity=".55">${hull(180, 34, "#5B6470")}</g>${label(180, 66, "갈 자리", "#FFE27A")}<path d="M120 104 174 56" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="2 6"/><circle cx="120" cy="104" r="5" fill="#FFE27A"/>` },
-    { short: "진짜 적함을 꾹! 깜빡이면 미끼예요. 10번!", steps: ["진짜 적함을 손가락으로 꾹 누르고 있어요.", "조준이 다 차면 미사일이 날아가요.", "깜빡이는 표적은 미끼예요. 누르면 손해예요."], art: `${WATER}${hull(70, 56, "#5B6470")}${bracket(70, 52, 28)}${label(70, 96, "꾹 눌러요")}<g opacity=".4">${hull(176, 40, "#8B97A5")}</g>${label(176, 76, "미끼")}` }
+    { short: "명령에 맞는 표적을 계산해서 꾹! 10번!", steps: ["위에 나온 명령을 읽어요. 수나 식이 조건에 맞는 표적이 진짜예요.", "진짜 표적을 손가락으로 꾹 누르고 있으면 미사일이 날아가요.", "틀린 표적을 누르거나 시간이 지나면 놓쳐요. 뒤로 갈수록 어려워져요."], art: `${WATER}<rect x="66" y="4" width="108" height="20" rx="5" fill="#FFE27A"/>${label(120, 18, "3의 배수인 표적", "#1B2A33")}${hull(70, 52, "#5B6470")}${bracket(70, 50, 24)}${label(70, 84, "27", "#FFF3B8")}${hull(176, 52, "#5B6470")}${label(176, 84, "35", "#FFF3B8")}` }
   ],
   reef: [
     { short: "해류가 배를 밀어요. 손가락으로 버텨요!", steps: ["배를 손가락으로 좌우로 움직여요.", "해류가 배를 옆으로 밀어요. 반대로 버텨요.", "암초에 부딪히지 않고 오래 갈수록 점수가 올라요."], art: `${WATER}${rock(52, 28)}${rock(186, 44)}${rock(112, 20)}${hull(120, 78)}<path d="M44 86h34m-9-6 9 6-9 6M44 66h24m-8-6 8 6-8 6" fill="none" stroke="#BFE8FF" stroke-width="3"/>${label(58, 104, "해류", "#BFE8FF")}` },
@@ -257,9 +263,9 @@ const HOW = {
     { short: "기뢰는 파동이 지나갈 때만 보여요!", steps: ["배를 손가락으로 좌우로 움직여요.", "기뢰는 소나 파동이 지나갈 때만 보여요. 위치를 기억해요.", "움직이는 기뢰도 있어요. 조심해요."], art: `${WATER}<g fill="none" stroke="#9DF2C7" stroke-width="2"><path d="M60 92a60 60 0 0 1 120 0" opacity=".9"/><path d="M90 92a30 30 0 0 1 60 0" opacity=".5"/><path d="M28 92a92 92 0 0 1 184 0" opacity=".35"/></g>${mine(66, 46)}${mine(176, 58)}${mine(122, 20, .3)}${hull(120, 88, "#5B6470")}` }
   ],
   memory: [
-    { short: "같은 그림의 짝을 찾아요!", steps: ["카드를 두 장씩 뒤집어요.", "같은 그림이면 짝이 맞아 열린 채로 남아요.", "적게 뒤집을수록 점수가 높아요."], art: `<rect width="240" height="110" rx="10" fill="#3C3430"/>${[0, 1, 2, 3].flatMap(c => [0, 1].map(r => { const x = 42 + c * 42, y = 12 + r * 46, up = (c === 0 && r === 0) || (c === 2 && r === 1); return `<rect x="${x}" y="${y}" width="34" height="40" rx="6" fill="${up ? "#FFF6E0" : "#8A5A3B"}"/>${up ? `<text x="${x + 17}" y="${y + 27}" font-size="20" fill="#D84B6B" text-anchor="middle">♥</text>` : ""}`; })).join("")}` },
+    { short: "값이 같은 카드끼리 짝을 찾아요!", steps: ["카드를 두 장씩 뒤집어요.", "값이 같으면 짝이에요. 3/4과 75%, 2+3×2와 8처럼요.", "적게 뒤집을수록 점수가 높아요. 어디에 뭐가 있었는지 기억해요."], art: `<rect width="240" height="110" rx="10" fill="#3C3430"/>${[0, 1, 2, 3].flatMap(c => [0, 1].map(r => { const x = 42 + c * 42, y = 12 + r * 46, t = c === 0 && r === 0 ? "3/4" : c === 2 && r === 1 ? "75%" : ""; return `<rect x="${x}" y="${y}" width="34" height="40" rx="6" fill="${t ? "#FFF6E0" : "#8A5A3B"}"/>${t ? `<text x="${x + 17}" y="${y + 25}" font-size="13" font-weight="700" fill="#14466F" text-anchor="middle">${t}</text>` : ""}`; })).join("")}` },
     { short: "불빛 순서를 외워서 똑같이 눌러요!", steps: ["등대 불빛이 켜지는 순서를 잘 봐요.", "똑같은 순서로 눌러요. 라운드마다 길어져요.", "두 번 틀리면 끝나요."], art: `<rect width="240" height="110" rx="10" fill="#1E2C44"/>${[0, 1, 2, 3].map(i => { const x = 45 + i * 50, n = [2, 0, 3, 1][i]; return `<circle cx="${x}" cy="48" r="19" fill="${n === 1 ? "#FFE27A" : "#3B4E6D"}"/>${n ? label(x, 86, `${n}번째`, "#FFE27A") : ""}`; }).join("")}` },
-    { short: "암호표를 보고 숫자를 눌러요. 틀리면 3초 줄어요!", steps: ["위에 나온 기호를 암호표에서 찾아요.", "그 기호의 숫자를 빠르게 눌러요.", "틀리면 시간이 3초 줄어요. 40초 동안 많이 풀어요."], art: `<rect width="240" height="110" rx="10" fill="#14251F"/>${["★", "☾", "⚓", "♨"].map((t, i) => `<rect x="${22 + i * 50}" y="10" width="44" height="40" rx="6" fill="#23403A"/><text x="${44 + i * 50}" y="27" font-size="14" fill="#fff" text-anchor="middle">${t}</text>${label(44 + i * 50, 44, i + 1, "#9DF2C7")}`).join("")}<text x="82" y="92" font-size="28" fill="#fff" text-anchor="middle">☾</text><path d="M104 84h24m-8-6 8 6-8 6" fill="none" stroke="#9DF2C7" stroke-width="3"/><rect x="138" y="62" width="40" height="40" rx="8" fill="#9DF2C7"/><text x="158" y="90" font-size="24" font-weight="700" fill="#14251F" text-anchor="middle">2</text>` }
+    { short: "식을 풀어 기호의 값을 찾아요. 틀리면 5초 줄어요!", steps: ["위의 식을 보고 물어본 기호의 값을 구해요. 값은 1부터 9까지예요.", "맞힐수록 어려운 암호가 와요. 어려운 암호는 점수가 커요.", "틀리면 5초가 줄고, 두 번 틀리면 다음 암호로 넘어가요. 2분 동안 풀어요."], art: `<rect width="240" height="110" rx="10" fill="#14251F"/><text x="120" y="30" font-size="19" font-weight="700" fill="#fff" text-anchor="middle">★ + ★ = 8</text><text x="120" y="58" font-size="19" font-weight="700" fill="#fff" text-anchor="middle">★ + ☾ = 7</text><text x="96" y="92" font-size="21" font-weight="700" fill="#FFE27A" text-anchor="middle">☾ = ?</text><rect x="146" y="70" width="34" height="32" rx="8" fill="#9DF2C7"/><text x="163" y="93" font-size="21" font-weight="700" fill="#14251F" text-anchor="middle">3</text>` }
   ]
 };
 // the explanation card; resolves true to play. `ask` is false when opened from the 게임 방법 button, where there is nothing to start
