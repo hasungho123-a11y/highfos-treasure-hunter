@@ -60,9 +60,25 @@ const ORDER = {
   biggest(n) { const vs = shuffle(NEAT).slice(0, n), top = vs.reduce((m, v) => pctOf(v) > pctOf(m) ? v : m), labels = vs.map(anyForm); return { ask: "가장 큰 수인 표적", real: labels[vs.indexOf(top)], opts: labels }; },
   same(n) { const v = pick(NEAT.filter(x => x[1] <= 10)), k = ri(2, 4), real = pick([frac(v[0] * k, v[1] * k), decOf(v), pctText(v)]), others = NEAT.filter(x => pctOf(x) !== pctOf(v)), opts = distinct(real, () => anyForm(pick(others)), n); return opts && { ask: `${frac(...v)}${wa(v[0])} 크기가 같은 표적`, real, opts }; }
 };
-// wave runs from 1 to 10, n is how many targets are on the water
-function order(wave, n) { const pool = wave <= 3 ? ["value", "multiple", "divisor"] : wave <= 7 ? ["value", "common", "overHalf", "same"] : ["value", "biggest", "same", "common"], hard = wave > 3;
-  for (;;) { const q = ORDER[pick(pool)](n, hard); if (q && q.opts.length === n) return { ask: q.ask, real: q.real, opts: shuffle(q.opts) }; } }
+// wave runs from 1 to 10, n is how many choices are on the water; noun is what the player is picking
+function order(wave, n, noun = "표적") { const pool = wave <= 3 ? ["value", "multiple", "divisor"] : wave <= 7 ? ["value", "common", "overHalf", "same"] : ["value", "biggest", "same", "common"], hard = wave > 3;
+  for (;;) { const q = ORDER[pick(pool)](n, hard); if (q && q.opts.length === n) return { ask: q.ask.replace(/표적$/, noun), real: q.real, opts: shuffle(q.opts) }; } }
+
+/* ----- 포격 섬: a 6-by-6 sea. The hidden ship's two grid numbers are the answers to two sums; later a wind pushes the shot sideways. ----- */
+const divisors = v => { const out = []; for (let i = 1; i <= v; i++) if (v % i === 0) out.push(i); return out; };
+const WAYS = {
+  plus: v => { const a = ri(1, 9) + v; return `${a}−${a - v}`; },
+  add: v => { if (v < 2) return WAYS.plus(v); const a = ri(1, v - 1); return `${a}+${v - a}`; },
+  times: v => { const a = pick(divisors(v)); return `${a}×${v / a}`; },
+  over: v => { const b = ri(2, 9); return `${v * b}÷${b}`; },
+  fraction: v => { const opts = []; for (const q of [2, 3, 4, 5, 6, 8]) for (let p = 1; p < q; p++) if (gcd(p, q) === 1 && v % p === 0) opts.push([p, q]); const [p, q] = pick(opts); return `${q * v / p}의 ${p}/${q}`; },
+  percent: v => { const opts = [[50, 2 * v], [25, 4 * v], [10, 10 * v], [20, 5 * v]]; if (v % 3 === 0) opts.push([75, 4 * v / 3]); const [P, N] = pick(opts); return `${N}의 ${P}%`; },
+  ratio: v => { if (v === 1) return WAYS.fraction(v); const bs = divisors(v).filter(b => b < v), b = pick(bs), k = v / b; let a; do { a = ri(1, 5); } while (a === b); return `${a}:${b} = ${a * k}:□`; },
+  mixed: v => { let a, b, c; do { a = ri(2, 6); b = ri(2, 6); c = a * b - v; } while (c < 1); return `${a}×${b}−${c}`; }
+};
+const wayFor = wave => wave <= 3 ? pick(["plus", "add", "times", "over"]) : wave <= 6 ? pick(["fraction", "percent", "mixed"]) : pick(["fraction", "percent", "ratio", "mixed"]);
+function grid(wave) { const x = ri(1, 6), y = ri(1, 6); let wind = 0; if (wave >= 7) do { wind = pick([-2, -1, 1, 2]); } while (x - wind < 1 || x - wind > 6);
+  return { x, y, wind, xText: WAYS[wayFor(wave)](x), yText: WAYS[wayFor(wave)](y) }; }
 
 /* ----- 통신 기지: work out what a symbol stands for from the clues. Every symbol is worth 1 to 9, so one key press answers.
    A clue is a list of tokens; "a", "b" and "c" stand for the symbols on screen. ----- */
@@ -85,5 +101,5 @@ const levels = [
 const cipher = level => levels[Math.min(level, levels.length - 1)]();
 
 const html = label => String(label).replace(/(\d+)\/(\d+)/g, '<span class="frac"><i>$1</i><i>$2</i></span>');
-window.MathQ = { pairs, order, cipher, html, shuffle };
+window.MathQ = { pairs, order, cipher, grid, html, shuffle };
 })();

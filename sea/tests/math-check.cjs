@@ -28,4 +28,9 @@ for (let i = 0; i < N; i++) { const level = i % 3, q = Q.cipher(level), syms = [
   q.clues.forEach(c => { if (c.includes(null) || c[c.length - 1] < 0) fail("식 오류", q); });
   const walk = (k, env) => { if (k === syms.length) { const ok = q.clues.every(c => { const e = c.map(t => /^[abc]$/.test(t) ? env[t] : t === "×" ? "*" : t === "−" ? "-" : t === "=" ? "===" : t).join(" "); return Function(`return ${e}`)(); }); if (ok) sols.add(env[q.ask]); return; } for (let v = 1; v <= 9; v++) walk(k + 1, { ...env, [syms[k]]: v }); };
   walk(0, {}); if (sols.size !== 1 || !sols.has(q.answer)) fail("답이 하나가 아님", { q, sols: [...sols] }); }
+const gridVal = s => { let m; if ((m = s.match(/^(\d+)의 (\d+)\/(\d+)$/))) return m[1] * m[2] / m[3]; if ((m = s.match(/^(\d+)의 (\d+)%$/))) return m[1] * m[2] / 100; if ((m = s.match(/^(\d+):(\d+) = (\d+):□$/))) return m[3] * m[2] / m[1]; return val(s); };
+for (let i = 0; i < N; i++) { const wave = 1 + i % 10, q = Q.grid(wave);
+  for (const [v, t] of [[q.x, q.xText], [q.y, q.yText]]) { if (!Number.isInteger(v) || v < 1 || v > 6) fail("칸 범위", q); if (!eq(gridVal(t), v)) fail("칸 계산 다름", q); if (/undefined|NaN/.test(t)) fail("글자 오류", q); }
+  if (wave < 7 && q.wind) fail("이른 바람", q); if (q.x - q.wind < 1 || q.x - q.wind > 6) fail("조준 칸이 바다 밖", q); }
+if (!Q.order(5, 3, "통로").ask.endsWith("통로")) fail("통로 문구", {});
 console.log("검사 끝, 실패", bad, "건 / 문제 유형", JSON.stringify(asks)); process.exitCode = bad ? 1 : 0;
