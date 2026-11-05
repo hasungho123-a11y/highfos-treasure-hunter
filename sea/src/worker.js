@@ -18,9 +18,15 @@ const DROP_GOLD = { 보통: 20, 희귀: 50, 전설: 120 }; // paid instead when 
 
 // ship classes, smallest to largest; bought with gold. The look of each is in public/ship3d.js and app.js
 const SHIPS = [
-  ["dinghy", "작은 돛단배", 0, 0, true], ["sloop", "슬루프", 200, 15, true], ["brig", "브리그 범선", 500, 35, true], ["galleon", "갈레온", 1000, 70, true],
-  ["ironclad", "철갑 증기선", 1800, 120, false], ["destroyer", "구축함", 3000, 200, false], ["cruiser", "순양함", 4500, 320, false], ["carrier", "항공모함", 6500, 500, false]
-].map(([id, name, price, power, sails]) => ({ id, name, price, power, sails }));
+  ["dinghy", "작은 돛단배", 0, 0, true, 0], ["sloop", "슬루프", 200, 15, true, 0], ["brig", "브리그 범선", 500, 35, true, 0], ["galleon", "갈레온", 1000, 70, true, 0],
+  ["ironclad", "철갑 증기선", 1800, 120, false, 1], ["destroyer", "구축함", 3000, 200, false, 1], ["cruiser", "순양함", 4500, 320, false, 2], ["carrier", "항공모함", 6500, 500, false, 2]
+].map(([id, name, price, power, sails, era]) => ({ id, name, price, power, sails, era }));
+// three seas, one for each era. Each opens at a battle power, pays more per game, and drops only its own era's weapons.
+const MAPS = [
+  { id: 0, name: "범선의 바다", era: "중세·범선 시대", power: 0, mult: 1, isles: { port: "포구 마을", cannon: "포격 섬", reef: "암초 해협", memory: "보물 동굴", battle: "대결 해협" } },
+  { id: 1, name: "증기의 바다", era: "증기·세계대전 시대", power: 100, mult: 1.5, isles: { port: "증기 항구", cannon: "포대 요새", reef: "빙산 해협", memory: "암호 등대", battle: "해전 해협" } },
+  { id: 2, name: "현대의 바다", era: "현대", power: 300, mult: 2, isles: { port: "해군 기지", cannon: "사격 훈련장", reef: "기뢰 해역", memory: "통신 기지", battle: "결전 해역" } }
+];
 const shipOf = id => SHIPS.find(s => s.id === id) || SHIPS[0];
 
 // Decorations cost gold. Slots hold one item, except att (several) and emblem (on the sail, the flag or both: look.se / look.fe).
@@ -42,10 +48,10 @@ const DECO = [
 ].map(([slot, id, name, price]) => ({ key: `${slot}.${id}`, slot, id, name, price, rarity: price <= 40 ? "보통" : price <= 100 ? "희귀" : "전설" }));
 // Weapons only come from mini-games. One is mounted at a time and adds to battle power; kind picks the shot seen in battle.
 const WEAPONS = [
-  ["swivel", "선회포", "보통", 5, "cannon"], ["pdr12", "12파운드 함포", "보통", 6, "cannon"], ["mg", "기관총", "보통", 7, "gun"],
-  ["pdr32", "32파운드 함포", "희귀", 14, "cannon"], ["ac40", "40mm 기관포", "희귀", 16, "gun"], ["torpedo", "어뢰 발사관", "희귀", 16, "torpedo"],
-  ["gun127", "127mm 함포", "전설", 30, "turret"], ["asm", "대함 미사일", "전설", 32, "missile"], ["cruise", "순항 미사일", "전설", 36, "missile"]
-].map(([id, name, rarity, power, kind]) => ({ key: `weapon.${id}`, slot: "weapon", id, name, price: 0, rarity, power, kind, dropOnly: true }));
+  ["ballista", "대형 쇠뇌", "보통", 5, "bolt", 0], ["catapult", "투석기", "보통", 7, "stone", 0], ["swivel", "선회포", "희귀", 12, "cannon", 0], ["pdr32", "32파운드 함포", "전설", 18, "cannon", 0],
+  ["gatling", "개틀링 기관총", "보통", 28, "gun", 1], ["ac40", "40mm 기관포", "보통", 32, "gun", 1], ["torpedo", "어뢰 발사관", "희귀", 45, "torpedo", 1], ["triple203", "203mm 3연장 함포", "전설", 65, "turret", 1],
+  ["ciws", "근접 방어 기관포", "보통", 60, "gun", 2], ["gun127", "127mm 자동 함포", "보통", 70, "turret", 2], ["asm", "대함 미사일", "희귀", 90, "missile", 2], ["cruise", "순항 미사일", "전설", 120, "missile", 2]
+].map(([id, name, rarity, power, kind, era]) => ({ key: `weapon.${id}`, slot: "weapon", id, name, price: 0, rarity, power, kind, era, dropOnly: true }));
 const ITEMS = [...DECO, ...WEAPONS];
 const itemOf = k => ITEMS.find(d => d.key === k);
 function parseLook(s) {
@@ -150,8 +156,8 @@ async function giveEnergy(db, game, pairs) {
   return { given: pairs.length - skipped.length, skipped };
 }
 // a random item for a good mini-game; one already owned pays gold instead
-async function rollItem(db, sid) {
-  const r = randInt(100), rarity = r < 75 ? "보통" : r < 97 ? "희귀" : "전설", list = randInt(100) < 60 ? DECO : WEAPONS, pool = list.filter(d => d.rarity === rarity), d = pool[randInt(pool.length)];
+async function rollItem(db, sid, map) {
+  const r = randInt(100), rarity = r < 75 ? "보통" : r < 97 ? "희귀" : "전설", list = randInt(100) < 60 ? DECO : WEAPONS.filter(d => d.era === map), pool = list.filter(d => d.rarity === rarity), d = pool[randInt(pool.length)];
   const has = await db.prepare("SELECT 1 FROM owned WHERE student_id=? AND item=?").bind(sid, d.key).first();
   if (has) { const gold = DROP_GOLD[rarity]; await logStmt(db, { student_id: sid, kind: "game", title: `${d.name} (이미 있어서 금화로)`, gold }).run(); return { key: d.key, name: d.name, rarity, slot: d.slot, dup: true, gold }; }
   await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, d.key, Date.now()).run();
@@ -239,7 +245,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const orders = (await db.prepare("SELECT id, name, status, created_at FROM orders WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
   const h = kstHour(), open = !!st.class_battle && (game.hourFrom === game.hourTo || (h >= game.hourFrom && h < game.hourTo));
   return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: parseLook(st.look), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id] },
-    bal, game, quests, owned, log, deco: ITEMS, ships: SHIPS, games: GAMES,
+    bal, game, quests, owned, log, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: parseLook(m.look), ship: m.ship, power: pw[m.id] })),
     battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders };
 });
@@ -257,19 +263,21 @@ on("POST", "/api/kid/play/start", "student", async ({ db, me, body }) => {
   const g = GAMES[body.game]; if (!g) throw bad("없는 게임이에요");
   const game = await getGame(db), sid = me.student.id, bal = (await balances(db, [sid]))[sid];
   if (bal.energy < game.playCost) throw bad("행동력이 모자라요. 미션을 하고 선생님께 확인받으면 생겨요");
-  const r = await db.prepare("INSERT INTO plays (student_id, game, started_at) VALUES (?,?,?)").bind(sid, body.game, Date.now()).run();
-  await logStmt(db, { student_id: sid, kind: "play", title: `${g.name} 출항`, energy: -game.playCost }).run();
+  const map = MAPS[int(body.map || 0, 0, MAPS.length - 1)], power = (await powers(db, [me.student]))[sid];
+  if (power < map.power) throw bad(`${map.name}는 전투력 ${map.power}부터 열려요`);
+  const r = await db.prepare("INSERT INTO plays (student_id, game, map, started_at) VALUES (?,?,?,?)").bind(sid, body.game, map.id, Date.now()).run();
+  await logStmt(db, { student_id: sid, kind: "play", title: `${map.isles[body.game]} 출항`, energy: -game.playCost }).run();
   return { ok: true, playId: r.meta.last_row_id };
 });
 on("POST", "/api/kid/play/finish/:id", "student", async ({ db, me, params, body }) => {
   const sid = me.student.id, p = await db.prepare("SELECT * FROM plays WHERE id=? AND student_id=?").bind(params.id, sid).first();
   if (!p) throw bad("없는 게임이에요"); if (p.finished_at) throw bad("이미 끝난 게임이에요");
   const g = GAMES[p.game], fast = Date.now() - p.started_at < g.minMs, score = fast ? 0 : int(body.score || 0, 0, g.max);
-  const stars = g.stars.filter(n => score >= n).length, points = STAR_POINTS[stars];
+  const stars = g.stars.filter(n => score >= n).length, map = MAPS[p.map] || MAPS[0], points = Math.round(STAR_POINTS[stars] * map.mult);
   const r = await db.prepare("UPDATE plays SET finished_at=?, score=?, stars=? WHERE id=? AND finished_at IS NULL").bind(Date.now(), score, stars, p.id).run();
   if (!r.meta.changes) throw bad("이미 끝난 게임이에요");
-  await logStmt(db, { student_id: sid, kind: "game", title: `${g.name} 별 ${stars}개`, points }).run();
-  const item = randInt(100) < STAR_DROP[stars] ? await rollItem(db, sid) : null;
+  await logStmt(db, { student_id: sid, kind: "game", title: `${map.isles[p.game]} 별 ${stars}개`, points }).run();
+  const item = randInt(100) < STAR_DROP[stars] ? await rollItem(db, sid, map.id) : null;
   return { ok: true, stars, score, points, item };
 });
 // gold shop
@@ -287,23 +295,27 @@ on("POST", "/api/kid/deco/wear", "student", async ({ db, me, body }) => {
   const where = body.where === "flag" ? "flag" : "sail", look = parseLook(me.student.look);
   if (body.key) { const d = itemOf(String(body.key)); if (!d || d.slot !== slot) throw bad("없는 꾸미기예요");
     if (!(await db.prepare("SELECT 1 FROM owned WHERE student_id=? AND item=?").bind(me.student.id, d.key).first())) throw bad("아직 없는 꾸미기예요");
+    if (slot === "weapon" && d.era > shipOf(me.student.ship).era) throw bad(`${SHIPS.find(s => s.era === d.era).name}부터 장착할 수 있어요`);
     const worn = slot === "att" ? (look.att || []).includes(d.id) : slot === "emblem" ? look[where === "flag" ? "fe" : "se"] === d.id : false;
     wearItem(look, d, slot === "att" || slot === "emblem" ? !worn : true, where);
   } else if (slot === "emblem") delete look[where === "flag" ? "fe" : "se"]; else delete look[slot];
   await db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(look), me.student.id).run(); return { ok: true };
 });
+// a ship from an earlier era cannot carry a later weapon, so it comes off when changing ships
+function lookForShip(lookText, ship) { const look = parseLook(lookText), w = itemOf(`weapon.${look.weapon}`), removed = !!w && w.era > ship.era; if (removed) delete look.weapon; return { look: JSON.stringify(look), removed }; }
 on("POST", "/api/kid/ship/buy", "student", async ({ db, me, body }) => {
   const s = SHIPS.find(x => x.id === body.id); if (!s || !s.price) throw bad("살 수 없는 배예요");
   const sid = me.student.id, key = `ship.${s.id}`, bal = (await balances(db, [sid]))[sid]; if (bal.gold < s.price) throw bad(`금화가 ${s.price - bal.gold}개 모자라요`);
   const r = await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, key, Date.now()).run(); if (!r.meta.changes) throw bad("이미 가지고 있어요");
-  const lg = await logStmt(db, { student_id: sid, kind: "ship", title: `새 배: ${s.name}`, gold: -s.price }).run();
-  await db.batch([db.prepare("UPDATE owned SET log_id=? WHERE student_id=? AND item=?").bind(lg.meta.last_row_id, sid, key), db.prepare("UPDATE students SET ship=? WHERE id=?").bind(s.id, sid)]);
-  return { ok: true };
+  const lg = await logStmt(db, { student_id: sid, kind: "ship", title: `새 배: ${s.name}`, gold: -s.price }).run(), fit = lookForShip(me.student.look, s);
+  await db.batch([db.prepare("UPDATE owned SET log_id=? WHERE student_id=? AND item=?").bind(lg.meta.last_row_id, sid, key), db.prepare("UPDATE students SET ship=?, look=? WHERE id=?").bind(s.id, fit.look, sid)]);
+  return { ok: true, removed: fit.removed };
 });
 on("POST", "/api/kid/ship/use", "student", async ({ db, me, body }) => {
   const s = SHIPS.find(x => x.id === body.id); if (!s) throw bad("없는 배예요");
   if (s.price && !(await db.prepare("SELECT 1 FROM owned WHERE student_id=? AND item=?").bind(me.student.id, `ship.${s.id}`).first())) throw bad("아직 없는 배예요");
-  await db.prepare("UPDATE students SET ship=? WHERE id=?").bind(s.id, me.student.id).run(); return { ok: true };
+  const fit = lookForShip(me.student.look, s);
+  await db.prepare("UPDATE students SET ship=?, look=? WHERE id=?").bind(s.id, fit.look, me.student.id).run(); return { ok: true, removed: fit.removed };
 });
 // points turn into gold one to one; there is no way back
 on("POST", "/api/kid/exchange", "student", async ({ db, me, body }) => {

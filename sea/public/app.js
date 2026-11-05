@@ -32,10 +32,13 @@ const WC = { iron: "#2B2F36", steel: "#8A949E", wood: "#7A4A28", dark: "#4B525A"
 const artCannon = (bore, x1) => `<path d="M12 23 H${x1 - 12} L${x1 - 16} 30 H12 Z" fill="${WC.wood}"/><circle cx="20" cy="30" r="4.2" fill="${WC.iron}"/><circle cx="${x1 - 22}" cy="30" r="4.2" fill="${WC.iron}"/><path d="M7 ${18 - bore} Q7 ${15 - bore} 12 ${15 - bore} L${x1} ${17 - bore / 2} Q${x1 + 3} ${17 - bore / 2} ${x1 + 3} 18 Q${x1 + 3} ${19 + bore / 2} ${x1} ${19 + bore / 2} L12 ${21 + bore} Q7 ${21 + bore} 7 ${18 - bore} Z" fill="${WC.iron}"/><rect x="22" y="${14 - bore}" width="3.5" height="${8 + bore * 2}" fill="${WC.gold}"/>`;
 const artMissile = (x, y, len, r, deg) => `<g transform="rotate(${deg} ${x} ${y})"><path d="M${x + 1} ${y - r} L${x - 3} ${y - r - 3.5} H${x + 4} L${x + 8} ${y - r} Z M${x + 1} ${y + r} L${x - 3} ${y + r + 3.5} H${x + 4} L${x + 8} ${y + r} Z" fill="${WC.dark}"/><rect x="${x}" y="${y - r}" width="${len}" height="${r * 2}" fill="#FBFBF6" stroke="${WC.dark}" stroke-width=".8"/><path d="M${x + len} ${y - r} L${x + len + r * 3} ${y} L${x + len} ${y + r} Z" fill="${WC.red}" stroke="${WC.dark}" stroke-width=".8"/></g>`;
 const WEAPON_ART = {
+  ballista: `<rect x="12" y="23" width="38" height="5" fill="${WC.wood}"/><path d="M26 28 L20 34 M38 28 L44 34" stroke="${WC.wood}" stroke-width="3"/><path d="M42 5 Q55 16 42 27" stroke="${WC.wood}" stroke-width="3.2" fill="none"/><path d="M42 5 L17 16 L42 27" stroke="${WC.dark}" stroke-width="1" fill="none"/><path d="M12 16 H60" stroke="${WC.wood}" stroke-width="2.6"/><path d="M59 12.5 L69 16 L59 19.5 Z" fill="${WC.iron}"/>`,
+  catapult: `<rect x="10" y="25" width="46" height="4.5" fill="${WC.wood}"/><circle cx="18" cy="30.5" r="3.6" fill="${WC.iron}"/><circle cx="48" cy="30.5" r="3.6" fill="${WC.iron}"/><path d="M32 25 L39 11 L46 25" stroke="${WC.wood}" stroke-width="3.2" fill="none"/><path d="M42 16 L13 8" stroke="${WC.wood}" stroke-width="3.5"/><path d="M6 5 Q4 12 13 12 L16 7 Z" fill="${WC.dark}"/><circle cx="10" cy="5" r="4" fill="${WC.steel}"/>`,
+  gatling: `<circle cx="24" cy="25" r="8.5" fill="none" stroke="${WC.wood}" stroke-width="2.6"/><circle cx="24" cy="25" r="2.4" fill="${WC.iron}"/><path d="M24 17 V33 M16 25 H32" stroke="${WC.wood}" stroke-width="1.4"/><rect x="14" y="10" width="19" height="10" rx="1" fill="${WC.steel}"/><rect x="33" y="10" width="35" height="2.3" fill="${WC.iron}"/><rect x="33" y="14" width="35" height="2.3" fill="${WC.iron}"/><rect x="33" y="18" width="35" height="2.3" fill="${WC.iron}"/><rect x="50" y="8.5" width="3" height="13" fill="${WC.gold}"/>`,
+  triple203: `<path d="M5 34 V29 H50 V34 Z" fill="${WC.dark}"/><path d="M8 29 L11 10 Q12 7 17 7 H38 L47 13 V29 Z" fill="${WC.steel}"/><rect x="46" y="11" width="25" height="3" fill="${WC.iron}"/><rect x="46" y="16.5" width="25" height="3" fill="${WC.iron}"/><rect x="46" y="22" width="25" height="3" fill="${WC.iron}"/><rect x="18" y="3" width="10" height="4" fill="${WC.iron}"/>`,
+  ciws: `<rect x="18" y="29" width="26" height="5" fill="${WC.steel}"/><rect x="24" y="23" width="14" height="6" fill="${WC.dark}"/><path d="M15 23 V12 Q15 2 28 2 Q41 2 41 12 V23 Z" fill="#FBFBF6" stroke="${WC.dark}" stroke-width=".9"/><rect x="41" y="13.5" width="28" height="1.7" fill="${WC.iron}"/><rect x="41" y="16.5" width="28" height="1.7" fill="${WC.iron}"/><rect x="41" y="19.5" width="28" height="1.7" fill="${WC.iron}"/><rect x="58" y="12.5" width="2.4" height="9.7" fill="${WC.dark}"/>`,
   swivel: `<rect x="31" y="18" width="5" height="16" fill="${WC.wood}"/><rect x="25" y="31" width="17" height="3" fill="${WC.wood}"/><path d="M12 12 L58 13 Q62 13 62 15.5 Q62 18 58 18 L12 20 Q8 16 12 12 Z" fill="${WC.iron}"/><rect x="2" y="15" width="10" height="2" fill="${WC.wood}"/>`,
-  pdr12: artCannon(0, 56),
   pdr32: artCannon(2, 66),
-  mg: `<path d="M32 18 L20 34 M32 18 L44 34 M32 18 V34" stroke="${WC.steel}" stroke-width="2.5" fill="none"/><rect x="20" y="11" width="24" height="8" rx="1" fill="${WC.iron}"/><rect x="44" y="13.5" width="26" height="3" fill="${WC.iron}"/><rect x="66" y="12.5" width="4" height="5" fill="${WC.iron}"/><rect x="24" y="19" width="10" height="7" fill="${WC.dark}"/><path d="M38 4 H43 V24 H38 Z" fill="${WC.steel}"/>`,
   ac40: `<path d="M16 34 L19 26 H45 L48 34 Z" fill="${WC.steel}"/><path d="M14 26 V13 Q14 10 18 10 H40 L46 16 V26 Z" fill="${WC.steel}"/><rect x="45" y="11" width="25" height="3.4" fill="${WC.iron}"/><rect x="45" y="18" width="25" height="3.4" fill="${WC.iron}"/><rect x="64" y="10" width="6" height="5.4" fill="${WC.iron}"/><rect x="64" y="17" width="6" height="5.4" fill="${WC.iron}"/><rect x="20" y="14" width="10" height="5" fill="${WC.iron}"/>`,
   torpedo: `<path d="M22 34 L25 28 H41 L44 34 Z" fill="${WC.steel}"/><rect x="6" y="7" width="50" height="6" rx="2" fill="${WC.dark}"/><rect x="6" y="14" width="50" height="6" rx="2" fill="${WC.dark}"/><rect x="6" y="21" width="50" height="6" rx="2" fill="${WC.dark}"/><rect x="54" y="6" width="3" height="22" fill="${WC.steel}"/><path d="M57 14.5 H64 L69 17 L64 19.5 H57 Z" fill="${WC.red}"/>`,
   gun127: `<path d="M8 34 V29 H50 V34 Z" fill="${WC.dark}"/><path d="M12 29 L15 13 Q16 10 20 10 H36 L46 17 V29 Z" fill="${WC.steel}"/><rect x="45" y="17" width="26" height="4.2" fill="${WC.iron}"/><rect x="45" y="15.5" width="6" height="7.2" fill="${WC.dark}"/><rect x="22" y="6" width="8" height="4" fill="${WC.iron}"/>`,
@@ -108,13 +111,13 @@ const GATE_FORMS = {
 /* =====================================================================
    STUDENT
    ===================================================================== */
-const K = { d: null, tab: "map", isle: null, confirm: null, slot: "ship", tryKey: null, busy: false, at: "port" };
+const K = { d: null, tab: "map", isle: null, confirm: null, slot: "ship", tryKey: null, busy: false, at: "port", map: null };
 const ISLES = {
-  port: { name: "포구 마을", x: 200, y: 450, px: 170, py: 520, r: 92, land: "#7FAE62", sub: "배를 사고 면제권을 받는 곳" },
-  cannon: { name: "포격 섬", x: 520, y: 170, px: 460, py: 300, r: 78, land: "#B98A5A", sub: "타이밍 맞춰 표적 맞히기", game: "cannon" },
-  reef: { name: "암초 해협", x: 835, y: 300, px: 490, py: 590, r: 66, land: "#8A9AA6", sub: "암초를 피해 멀리 가기", game: "reef" },
-  memory: { name: "보물 동굴", x: 180, y: 150, px: 150, py: 170, r: 72, land: "#C9A25E", sub: "그림 짝 맞히기", game: "memory" },
-  battle: { name: "대결 해협", x: 660, y: 490, px: 320, py: 790, r: 74, land: "#A8574A", sub: "친구 배와 겨뤄 금화 얻기" }
+  port: { x: 200, y: 450, px: 170, py: 520, r: 92 },
+  cannon: { x: 520, y: 170, px: 460, py: 300, r: 78, game: "cannon" },
+  reef: { x: 835, y: 300, px: 490, py: 590, r: 66, game: "reef" },
+  memory: { x: 180, y: 150, px: 150, py: 170, r: 72, game: "memory" },
+  battle: { x: 660, y: 490, px: 320, py: 790, r: 74 }
 };
 const DECO_TABS = [["ship", "배 종류"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["pattern", "돛 무늬"], ["hull", "배 색"], ["att", "부착물"], ["head", "선수상"], ["trim", "테두리"], ["wake", "물결"], ["tag", "이름표"]];
 const withItem = (look, x) => x.slot === "att" ? { ...look, att: [...new Set([...(look.att || []), x.id])] } : x.slot === "emblem" ? { ...look, se: x.id } : { ...look, [x.slot]: x.id };
@@ -122,7 +125,12 @@ const isWorn = (look, x) => x.slot === "att" ? (look.att || []).includes(x.id) :
 const coin = n => `<span class="gold num">${n}</span>`;
 const pts = n => `<span class="pt num">${n}</span>`;
 const nrg = n => `<span class="nrg num">${n}</span>`;
-async function kidLoad() { K.d = await api("/api/kid/state"); }
+async function kidLoad() { K.d = await api("/api/kid/state");
+  const open = K.d.maps.filter(seaOpen).length, mem = `hs_seas_${K.d.me.id}`, seen = Number(ls.get(mem) || 0);
+  if (K.map == null) K.map = open - 1;
+  if (K.map >= open) { K.map = open - 1; K.isle = null; K.at = "port"; }
+  if (seen && open > seen) { K.map = open - 1; K.isle = null; K.at = "port"; toast(`새 바다가 열렸어요! ${K.d.maps[open - 1].name}`); }
+  if (open > seen) ls.set(mem, open); }
 async function kidStart() {
   document.body.classList.add("kid"); await kidLoad(); kidRender();
   setInterval(async () => { if (document.hidden || K.busy || $(".game") || $(".fight")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); } catch (e) {} }, 20000);
@@ -141,23 +149,31 @@ function kidRender() {
 }
 const tallMap = () => innerWidth < 640;
 const mapSize = () => tallMap() ? { w: 640, h: 920 } : { w: 1000, h: 620 };
-const islePos = k => { const s = ISLES[k]; return tallMap() ? { x: s.px, y: s.py } : { x: s.x, y: s.y }; };
+const islePos = k => { const s = ISLES[k], m = mapSize(), x = tallMap() ? s.px : s.x, y = tallMap() ? s.py : s.y; return { x: K.map === 1 ? m.w - x : x, y }; }; // the middle sea is laid out mirrored
 const shipAt = k => { const p = islePos(k), m = mapSize(); return `left:${(p.x + 66) / m.w * 100}%;top:${(p.y + 24) / m.h * 100}%`; };
+const SEAS = [
+  { top: "#3A86BD", bot: "#123E66", land: { port: "#7FAE62", cannon: "#B98A5A", reef: "#8A9AA6", memory: "#C9A25E", battle: "#A8574A" } },
+  { top: "#5E8AA3", bot: "#1B3A50", land: { port: "#8C9178", cannon: "#8C7A66", reef: "#D5E5EE", memory: "#A39A82", battle: "#7E5148" } },
+  { top: "#2A6FA5", bot: "#0A2740", land: { port: "#7E8B94", cannon: "#6F7B85", reef: "#46525C", memory: "#8E9AA4", battle: "#5A6168" } }
+];
+const seaOpen = m => K.d.me.power >= m.power;
 function kMap() {
-  const d = K.d, me = d.me, { w, h } = mapSize(), tall = tallMap(), fs = tall ? 36 : 27;
-  const isle = (k, s) => { const { x, y } = islePos(k); return `<g class="isle ${K.isle === k ? "on" : ""}" data-act="kisle" data-v="${k}" tabindex="0" role="button" aria-label="${s.name}: ${s.sub}">
-    <ellipse cx="${x}" cy="${y + 10}" rx="${s.r + 8}" ry="${s.r * .46 + 5}" fill="#E9D5A4"/><ellipse cx="${x}" cy="${y}" rx="${s.r}" ry="${s.r * .44}" fill="${s.land}"/>${ART[k](x, y)}
-    <text x="${x}" y="${y + s.r * .44 + fs + 12}" text-anchor="middle" class="lbl" font-size="${fs}">${s.name}</text></g>`; };
+  const d = K.d, me = d.me, { w, h } = mapSize(), tall = tallMap(), fs = tall ? 36 : 27, sea = SEAS[K.map], names = d.maps[K.map].isles;
+  const isle = (k, s) => { const { x, y } = islePos(k); return `<g class="isle ${K.isle === k ? "on" : ""}" data-act="kisle" data-v="${k}" tabindex="0" role="button" aria-label="${names[k]}: ${isleSub(k)}">
+    <ellipse cx="${x}" cy="${y + 10}" rx="${s.r + 8}" ry="${s.r * .46 + 5}" fill="#E9D5A4"/><ellipse cx="${x}" cy="${y}" rx="${s.r}" ry="${s.r * .44}" fill="${sea.land[k]}"/>${(ERA_ART[K.map]?.[k] || ART[k])(x, y)}
+    <text x="${x}" y="${y + s.r * .44 + fs + 12}" text-anchor="middle" class="lbl" font-size="${fs}">${names[k]}</text></g>`; };
   const route = (a, b, bend) => { const p = islePos(a), q = islePos(b); return `M${p.x} ${p.y} Q${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2 - bend} ${q.x} ${q.y}`; };
-  return `<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p></section>
-    <div class="world"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="하이포스 제도 지도">
-      <defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A86BD"/><stop offset="1" stop-color="#123E66"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
+  const tabs = d.maps.map(m => { const open = seaOpen(m); return `<button class="seatab ${open ? "" : "locked"}" data-act="ksea" data-v="${m.id}" aria-pressed="${K.map === m.id}"><b>${esc(m.name)}</b><small>${open ? esc(m.era) : `전투력 ${m.power}부터`}</small>${open ? "" : `<i class="seabar"><i style="width:${Math.min(100, me.power / m.power * 100)}%"></i></i>`}</button>`; }).join("");
+  return `<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
+    <div class="world"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(d.maps[K.map].name)} 지도">
+      <defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sea.top}"/><stop offset="1" stop-color="${sea.bot}"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
       <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>
       <path d="${route("port", "memory", 30)} ${route("port", "cannon", 20)} ${route("cannon", "reef", 40)} ${route("reef", "battle", 30)} ${route("port", "battle", -30)}" fill="none" stroke="#fff" stroke-width="3.5" stroke-dasharray="2 13" stroke-linecap="round" opacity=".55"/>
       ${Object.entries(ISLES).map(([k, s]) => isle(k, s)).join("")}
     </svg><div class="ship mine worldship ${V.wakeClass(me.look)}" id="wship" style="--sail:${sail(me.sail)};${shipAt(K.at)}">${shipSVG(me.ship, me.look, me.sail)}</div></div>
     ${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}`;
 }
+const isleSub = k => ({ port: "배를 사고 면제권을 받는 곳", cannon: "타이밍 맞춰 표적 맞히기", reef: `${["암초를", "빙산을", "기뢰를"][K.map]} 피해 멀리 가기`, memory: "그림 짝 맞히기", battle: "친구 배와 겨뤄 금화 얻기" })[k];
 // little pictures standing on each island
 const ART = {
   port: (x, y) => `<rect x="${x - 34}" y="${y - 26}" width="26" height="22" fill="#F3E6C8"/><path d="M${x - 38} ${y - 26} L${x - 21} ${y - 42} L${x - 4} ${y - 26} Z" fill="#C2503A"/><rect x="${x + 6}" y="${y - 20}" width="22" height="18" fill="#F3E6C8"/><path d="M${x + 2} ${y - 20} L${x + 17} ${y - 34} L${x + 32} ${y - 20} Z" fill="#1F6F8B"/>`,
@@ -166,11 +182,24 @@ const ART = {
   memory: (x, y) => `<path d="M${x - 34} ${y + 6} Q${x} ${y - 52} ${x + 34} ${y + 6} Z" fill="#6B5A44"/><path d="M${x - 14} ${y + 6} Q${x} ${y - 22} ${x + 14} ${y + 6} Z" fill="#241B12"/><circle cx="${x}" cy="${y - 2}" r="4" fill="#F1C04B"/>`,
   battle: (x, y) => `<path d="M${x - 26} ${y + 6} L${x + 16} ${y - 34} M${x + 26} ${y + 6} L${x - 16} ${y - 34}" stroke="#E9EEF2" stroke-width="7" stroke-linecap="round"/><path d="M${x - 24} ${y - 14} L${x - 8} ${y + 2} M${x + 24} ${y - 14} L${x + 8} ${y + 2}" stroke="#F1C04B" stroke-width="6" stroke-linecap="round"/>`
 };
+const ERA_ART = {
+  1: {
+    port: (x, y) => `<rect x="${x - 34}" y="${y - 24}" width="34" height="20" fill="#6E5A4C"/><rect x="${x - 28}" y="${y - 42}" width="8" height="18" fill="#3A3633"/><rect x="${x - 14}" y="${y - 38}" width="8" height="14" fill="#3A3633"/><circle cx="${x - 20}" cy="${y - 50}" r="7" fill="#C9CDD1"/><circle cx="${x - 8}" cy="${y - 54}" r="5" fill="#DDE0E3"/><rect x="${x + 8}" y="${y - 18}" width="22" height="14" fill="#8A7A66"/>`,
+    cannon: (x, y) => `<path d="M${x - 36} ${y + 4} V${y - 20} H${x - 26} V${y - 12} H${x - 14} V${y - 20} H${x - 4} V${y - 12} H${x + 8} V${y - 20} H${x + 18} V${y + 4} Z" fill="#6E6A62"/><path d="M${x + 16} ${y - 8} L${x + 44} ${y - 16}" stroke="#23262B" stroke-width="7" stroke-linecap="round"/>`,
+    reef: (x, y) => `<path d="M${x - 40} ${y + 6} L${x - 18} ${y - 30} L${x - 6} ${y - 10} L${x + 10} ${y - 38} L${x + 36} ${y + 6} Z" fill="#F4FAFC"/><path d="M${x + 10} ${y - 38} L${x + 2} ${y + 6} H${x + 36} Z" fill="#BFDCE9"/>`,
+    memory: (x, y) => `<path d="M${x - 11} ${y + 4} L${x - 7} ${y - 40} H${x + 7} L${x + 11} ${y + 4} Z" fill="#FBFBF6"/><rect x="${x - 9}" y="${y - 24}" width="18" height="8" fill="#C2503A"/><rect x="${x - 8}" y="${y - 50}" width="16" height="10" fill="#F1C04B"/><path d="M${x - 10} ${y - 50} L${x} ${y - 60} L${x + 10} ${y - 50} Z" fill="#3A3633"/>`
+  },
+  2: {
+    port: (x, y) => `<rect x="${x - 36}" y="${y - 22}" width="42" height="18" fill="#B8C0C7"/><rect x="${x - 8}" y="${y - 46}" width="12" height="24" fill="#E8ECEF"/><rect x="${x - 12}" y="${y - 54}" width="20" height="8" fill="#2F6E9E"/><path d="M${x + 12} ${y - 2} H${x + 44}" stroke="#F2F2E8" stroke-width="3" stroke-dasharray="6 5"/>`,
+    reef: (x, y) => `<circle cx="${x - 18}" cy="${y - 8}" r="11" fill="#23262B"/><circle cx="${x + 16}" cy="${y - 10}" r="13" fill="#23262B"/><path d="M${x - 18} ${y - 24} V${y + 8} M${x - 34} ${y - 8} H${x - 2} M${x + 16} ${y - 28} V${y + 8} M${x - 2} ${y - 10} H${x + 34}" stroke="#23262B" stroke-width="3"/>`,
+    memory: (x, y) => `<path d="M${x - 22} ${y + 2} A22 22 0 0 1 ${x + 22} ${y + 2} Z" fill="#F2F2E8"/><path d="M${x + 8} ${y - 12} L${x + 26} ${y - 46} M${x + 18} ${y - 12} L${x + 26} ${y - 46}" stroke="#C9D3DC" stroke-width="3"/><circle cx="${x + 26}" cy="${y - 48}" r="4" fill="#D9402F"/>`
+  }
+};
 function kIsle() {
-  const d = K.d, k = K.isle, s = ISLES[k], g = s.game && d.games[s.game];
-  const head = `<div class="row between"><h2>${s.name}</h2><button class="btn ghost sm" data-act="kisle" data-v="">닫기</button></div>`;
+  const d = K.d, k = K.isle, s = ISLES[k], g = s.game && d.games[s.game], m = d.maps[K.map], nm = m.isles[k];
+  const head = `<div class="row between"><h2>${esc(nm)}</h2><button class="btn ghost sm" data-act="kisle" data-v="">닫기</button></div>`;
   if (g) { const can = d.bal.energy >= d.game.playCost;
-    return `<section class="panel" id="islePanel">${head}<p class="small muted">${s.sub}. 별을 많이 받을수록 포인트가 많고, 낮은 확률로 치장품이나 무기를 발견해요.</p>
+    return `<section class="panel" id="islePanel">${head}<p class="small muted">${isleSub(k)}. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배이고 게임이 더 빨라요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
       <div class="row small muted"><span>별 1개 ${g.stars[0]}점</span><span>· 별 2개 ${g.stars[1]}점</span><span>· 별 3개 ${g.stars[2]}점</span></div>
       <button class="btn primary lg" data-act="kplay" data-v="${s.game}" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button></section>`; }
   if (k === "port") { const p = d.pass, canPass = !p.bought && d.bal.points >= d.game.passCost;
@@ -201,7 +230,8 @@ function kDeco() {
   const buy = x => { const can = gold >= x.price; return `<button class="btn sm ${can ? "primary" : ""}" data-act="kdecoAsk" data-v="${x.key}" ${can ? "" : "disabled"}>${can ? "사기" : `${x.price - gold}개 모자라요`}</button>`; };
   const card = x => { const has = owned.has(x.key), on = isWorn(L, x);
     const pic = x.slot === "emblem" ? embTile(x.id, sail(me.sail)) : x.slot === "weapon" ? `<div class="wtile r-${x.rarity}">${weaponImg(x.id)}<b class="num">+${x.power}</b></div>` : shipBox(me.ship, withItem(L, x), me.sail, "", "tiny");
-    const ctl = x.dropOnly && !has ? `<span class="small muted">미니게임에서 발견해요</span>` : !has ? buy(x)
+    const ctl = x.dropOnly && !has ? `<span class="small muted">${esc(d.maps[x.era].name)}에서 발견해요</span>` : !has ? buy(x)
+      : x.slot === "weapon" && x.era > curShip.era ? `<span class="small muted">${esc(d.ships.find(s => s.era === x.era).name)}부터 장착해요</span>`
       : x.slot === "emblem" ? `<div class="row" style="gap:6px"><button class="btn sm" data-act="kwear" data-v="${x.key}|sail" aria-pressed="${L.se === x.id}">돛</button><button class="btn sm" data-act="kwear" data-v="${x.key}|flag" aria-pressed="${L.fe === x.id}">깃발</button></div>`
       : x.slot === "att" ? `<button class="btn sm ${on ? "" : "primary"}" data-act="kwear" data-v="${x.key}">${on ? "떼기" : "달기"}</button>`
       : on ? `<span class="pill ok">${x.slot === "weapon" ? "장착 중" : "쓰는 중"}</span>` : `<button class="btn sm ${x.slot === "weapon" ? "primary" : ""}" data-act="kwear" data-v="${x.key}">${x.slot === "weapon" ? "장착" : "쓰기"}</button>`;
@@ -212,10 +242,10 @@ function kDeco() {
   const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
   const sw = (i, act, on, label) => `<button style="--sail:${V.SAILS[i]}" data-act="${act}" data-v="${i}" aria-pressed="${on}" aria-label="${label} ${i + 1}"></button>`;
   const noSail = !curShip.sails && ["pattern", "emblem", "color"].includes(slot) ? `<p class="small muted">지금 배에는 돛이 없어서 돛 꾸미기는 안 보여요. 깃발 색과 깃발 문양은 보여요.</p>` : "";
-  const body = slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p><div class="deco-grid">${d.ships.map(shipCard).join("")}</div>`
+  const body = slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
     : slot === "color" ? `<p class="small muted">돛 색과 깃발 색은 무료예요.</p><h3>돛 색</h3><div class="sails">${V.SAILS.map((c, i) => sw(i, "ksail", me.sail === i, "돛 색")).join("")}</div>
       <h3>깃발 색</h3><div class="sails"><button class="same" data-act="kflag" data-v="-1" aria-pressed="${L.fc == null}" style="--sail:${sail(me.sail)}">돛과 같게</button>${V.SAILS.map((c, i) => sw(i, "kflag", L.fc === i, "깃발 색")).join("")}</div>`
-    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요.</p>` : slot === "weapon" ? `<p class="small muted">무기는 미니게임에서 낮은 확률로 발견해요. 장착하면 배 위에 올라가고 전투력도 올라가요. 그림을 누르면 위에서 미리 볼 수 있어요.</p>` : ""}<div class="deco-grid">${plain}${d.deco.filter(x => x.slot === slot).map(card).join("")}</div>`;
+    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => x.slot === slot).map(card).join("")}</div>`}`;
   return `<section class="panel deco-hero"><div class="row between"><h2>${esc(me.nickname)}의 ${esc((d.ships.find(s => s.id === (K.tryShip || me.ship)) || curShip).name)}</h2><span class="small">전투력 <b class="num">${me.power}</b> · ${coin(gold)}</span></div>
       <div class="deco3d" id="deco3d">${shipBox(K.tryShip || me.ship, tryItem ? withItem(L, tryItem) : L, me.sail, me.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
       ${conf ? `<div class="confirm"><span><b>${esc(conf.name)}</b>을(를) 금화 ${conf.price}개로 살까요? 남는 금화 ${gold - conf.price}</span><button class="btn sm primary" data-act="kdecoBuy" data-v="${conf.key}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
@@ -233,8 +263,8 @@ async function kDo(fn, msg) { try { const r = await fn(); if (msg) toast(msg); a
 async function playGame(kind) {
   if (K.busy) return; K.busy = true;
   try {
-    const { playId } = await api("/api/kid/play/start", { game: kind });
-    const score = await Games.run(kind);
+    const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
+    const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind] });
     if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0 }).catch(() => {}); toast("다음에 다시 도전해요"); }
     else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r); }
     await kidLoad(); kidRender();
@@ -245,7 +275,7 @@ function rewardCard(r) {
   return new Promise(done => {
     const it = r.item, m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
     m.innerHTML = `<div class="panel reward"><div class="stars" aria-label="별 ${r.stars}개">${[0, 1, 2].map(i => `<i class="${i < r.stars ? "on" : ""}"></i>`).join("")}</div><h2>${r.stars ? "잘했어요!" : "아쉬워요!"}</h2><p class="num">점수 ${r.score} · ${pts(`+${r.points}`)}</p>
-      ${it ? `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? "내 배 → 무기에서 장착할 수 있어요" : "내 배에서 쓸 수 있어요"}</small></div>` : ""}<button class="btn primary lg" data-close>확인</button></div>`;
+      ${it ? `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? (K.d.deco.find(x => x.key === it.key).era > K.d.ships.find(s => s.id === K.d.me.ship).era ? `${K.d.ships.find(s => s.era === K.d.deco.find(x => x.key === it.key).era).name}부터 장착할 수 있어요` : "내 배 → 무기에서 장착할 수 있어요") : "내 배에서 쓸 수 있어요"}</small></div>` : ""}<button class="btn primary lg" data-close>확인</button></div>`;
     document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); b.onclick = () => { m.remove(); done(); };
   });
 }
@@ -279,6 +309,7 @@ const KID_ACTS = {
   ktab: v => { K.tab = v; K.confirm = null; K.tryKey = null; K.tryShip = null; kidRender(); scrollTo(0, 0); },
   kisle: v => { K.confirm = null; if (!v) { K.isle = null; return kidRender(); } K.isle = v; const el = $("#wship"); if (el) el.style.cssText += ";" + shipAt(v); K.at = v; setTimeout(() => { kidRender(); $("#islePanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, el ? 620 : 0); },
   kplay: playGame, kfight: playFight,
+  ksea: v => { const m = K.d.maps[Number(v)]; if (!seaOpen(m)) return toast(`${m.name}는 전투력 ${m.power}부터 열려요. 지금은 ${K.d.me.power}이에요`); K.map = m.id; K.isle = null; K.at = "port"; K.confirm = null; kidRender(); },
   kpassAsk: () => { K.confirm = "pass"; kidRender(); }, kno: () => { K.confirm = null; kidRender(); },
   kpass: () => { K.confirm = null; return kDo(() => api("/api/kid/pass", {}), "숙제 면제권을 샀어요! 선생님이 챙겨 줄 거예요"); },
   kgoShips: () => { K.tab = "deco"; K.slot = "ship"; kidRender(); scrollTo(0, 0); },
@@ -291,7 +322,7 @@ const KID_ACTS = {
   kdecoBuy: v => { K.confirm = null; K.tryKey = null; return kDo(() => api("/api/kid/deco/buy", { key: v }), "새 꾸미기를 달았어요!"); },
   kshipAsk: v => { K.confirm = { ship: v }; K.tryShip = v; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
   kshipBuy: v => { K.confirm = null; K.tryShip = null; return kDo(() => api("/api/kid/ship/buy", { id: v }), "새 배가 생겼어요!"); },
-  kshipUse: v => { K.tryShip = null; return kDo(() => api("/api/kid/ship/use", { id: v })); },
+  kshipUse: v => { K.tryShip = null; return kDo(async () => { const r = await api("/api/kid/ship/use", { id: v }); if (r.removed) toast("이 배에는 달 수 없는 무기라서 내려놓았어요"); return r; }); },
   kwear: v => { const [item, where] = v.split("|"), [slot] = item.split("."); K.tryKey = null; return kDo(() => api("/api/kid/deco/wear", { slot, key: item.includes(".") ? item : null, where })); },
   ksail: v => kDo(() => api("/api/kid/sail", { sail: Number(v) })), kflag: v => kDo(() => api("/api/kid/sail", { flag: Number(v) }))
 };

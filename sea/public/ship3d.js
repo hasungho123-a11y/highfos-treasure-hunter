@@ -32,10 +32,13 @@ function weaponModel(T, M, id) {
   const cannon = s => { box(-.1 * s, .3 * s, 0, 1.3 * s, .28 * s, .72 * s, M.wood); for (const x of [-.5, .3]) for (const z of [-.42, .42]) wheel(x * s, z * s, .2 * s);
     barrel(.25 * s, .6 * s, 0, .13 * s, .21 * s, 1.9 * s, M.iron, .04); cyl(.25 * s, .6 * s, 0, .24 * s, .24 * s, .1 * s, M.gold).rotation.z = -Math.PI / 2; };
   ({
+    ballista() { box(0, .42, 0, 1.7, .12, .36, M.wood); for (const z of [-.25, .25]) box(.1, .2, z, .1, .4, .1, M.wood); box(.45, .5, 0, .12, .12, 1.9, M.wood); barrel(.2, .56, 0, .03, .03, 2, M.wood); const tip = put(new T.Mesh(new T.ConeGeometry(.07, .22, 8), M.iron), 1.3, .56, 0); tip.rotation.z = -Math.PI / 2; },
+    catapult() { box(0, .26, 0, 1.7, .14, .9, M.wood); for (const x of [-.55, .55]) for (const z of [-.5, .5]) wheel(x, z, .2); for (const z of [-.36, .36]) box(.2, .7, z, .1, .8, .1, M.wood); box(.2, 1.05, 0, .1, .1, .82, M.wood); box(-.25, .78, 0, 1.7, .09, .09, M.wood).rotation.z = -.42; put(new T.Mesh(new T.SphereGeometry(.2, 12, 8), M.steel), -.98, 1.2, 0); },
+    gatling() { for (const z of [-.42, .42]) wheel(-.2, z, .36); box(-.3, .62, 0, .7, .34, .4, M.steel); for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; barrel(.7, .68 + Math.cos(a) * .09, Math.sin(a) * .09, .03, .03, 1.4); } cyl(.9, .68, 0, .15, .15, .07, M.gold).rotation.z = -Math.PI / 2; },
+    triple203() { cyl(0, .13, 0, 1.05, 1.1, .26, M.steel); box(-.1, .78, 0, 2.1, 1, 1.7, M.steel); box(.9, .72, 0, .2, .72, 1.45, M.steel); for (const z of [-.46, 0, .46]) barrel(2.1, .84, z, .08, .12, 2.5, M.iron, .08); },
+    ciws() { cyl(0, .22, 0, .5, .58, .44, M.steel); box(0, .58, 0, .62, .32, .62, M.steel); cyl(-.05, 1.02, 0, .4, .4, .56, M.paint); put(new T.Mesh(new T.SphereGeometry(.4, 14, 10), M.paint), -.05, 1.3, 0); for (const z of [-.09, 0, .09]) barrel(.85, .82, z, .028, .028, 1.15, M.iron, .1); },
     swivel() { cyl(0, .3, 0, .07, .1, .6, M.wood); barrel(.2, .68, 0, .08, .13, 1.15); box(-.5, .68, 0, .4, .05, .05, M.wood); },
-    pdr12() { cannon(1); },
     pdr32() { cannon(1.3); barrel(.4, .78, 0, .24, .24, .12, M.gold, .04); },
-    mg() { cyl(0, .35, 0, .07, .13, .7, M.steel); box(0, .78, 0, .55, .2, .18, M.iron); barrel(.75, .8, 0, .035, .05, 1, M.iron); box(.3, .85, 0, .06, .45, .6, M.steel); box(-.1, .62, .18, .25, .18, .16, M.deck2); },
     ac40() { cyl(0, .22, 0, .6, .68, .44, M.steel); box(-.1, .72, 0, 1, .55, .95, M.steel); for (const z of [-.2, .2]) { barrel(1.05, .82, z, .05, .08, 1.5, M.iron, .08); cyl(1.78, .88, z, .08, .08, .16, M.iron).rotation.z = -Math.PI / 2; } },
     torpedo() { cyl(0, .12, 0, .55, .6, .24, M.steel); for (const z of [-.3, 0, .3]) { barrel(0, .5, z, .13, .13, 2.2, M.deck2); cyl(1.12, .5, z, .15, .15, .08, M.steel).rotation.z = -Math.PI / 2; }
       const nose = put(new T.Mesh(new T.ConeGeometry(.11, .28, 12), M.warhead), 1.3, .5, 0); nose.rotation.z = -Math.PI / 2; },

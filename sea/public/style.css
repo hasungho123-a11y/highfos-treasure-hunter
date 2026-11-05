@@ -376,3 +376,12 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 @media (max-width: 639px) { .worldship { width: 15% !important } }
 
 .found-w { width: 150px } .found-w svg { width: 100%; height: auto; display: block }
+
+.seatabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 10px }
+.seatab { display: grid; gap: 2px; align-content: start; padding: 8px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--card, #fff); color: var(--ink); text-align: left; cursor: pointer; font: inherit; min-width: 0 }
+.seatab b { font: 400 .98rem var(--display) } .seatab small { font-size: .72rem; color: var(--muted) }
+.seatab[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff } .seatab[aria-pressed="true"] small { color: rgb(255 255 255 / .85) }
+.seatab.locked { background: var(--sunk); color: var(--muted) }
+.seabar { display: block; height: 5px; margin-top: 3px; border-radius: 3px; background: rgb(0 0 0 / .1); overflow: hidden } .seabar i { display: block; height: 100%; background: var(--gold-bg) }
+.f-ball.k-bolt { width: 26px; height: 3px; margin-left: -13px; border-radius: 0 3px 3px 0; background: linear-gradient(90deg, #7A4A28 78%, #23262B 78%) }
+.f-ball.k-stone { width: 18px; height: 18px; margin-left: -9px; background: #8A8478 }
