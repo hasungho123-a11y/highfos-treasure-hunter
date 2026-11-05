@@ -170,8 +170,9 @@ async function giveEnergy(db, game, pairs) {
   return { given: pairs.length - skipped.length, skipped };
 }
 // a random item for a good mini-game; one already owned pays gold instead
-async function rollItem(db, sid, map) {
-  const r = randInt(100), rarity = r < 75 ? "보통" : r < 97 ? "희귀" : "전설", list = randInt(100) < 60 ? DECO : WEAPONS.filter(d => d.era === map), pool = list.filter(d => d.rarity === rarity), d = pool[randInt(pool.length)];
+// decorations the kid's ship cannot use yet stay out of the draw; weapons stay in, because the mini-games are the only way to get them
+async function rollItem(db, sid, map, shipId) {
+  const r = randInt(100), rarity = r < 65 ? "보통" : r < 93 ? "희귀" : "전설", list = randInt(100) < 60 ? DECO.filter(d => shipReaches(shipId, d)) : WEAPONS.filter(d => d.era === map), pool = list.filter(d => d.rarity === rarity), d = pool[randInt(pool.length)];
   const has = await db.prepare("SELECT 1 FROM owned WHERE student_id=? AND item=?").bind(sid, d.key).first();
   if (has) { const gold = DROP_GOLD[rarity]; await logStmt(db, { student_id: sid, kind: "game", title: `${d.name} (이미 있어서 금화로)`, gold }).run(); return { key: d.key, name: d.name, rarity, slot: d.slot, dup: true, gold }; }
   await db.prepare("INSERT OR IGNORE INTO owned (student_id, item, created_at) VALUES (?,?,?)").bind(sid, d.key, Date.now()).run();
@@ -295,7 +296,7 @@ on("POST", "/api/kid/play/finish/:id", "student", async ({ db, me, params, body 
   const r = await db.prepare("UPDATE plays SET finished_at=?, score=?, stars=? WHERE id=? AND finished_at IS NULL").bind(Date.now(), score, stars, p.id).run();
   if (!r.meta.changes) throw bad("이미 끝난 게임이에요");
   await logStmt(db, { student_id: sid, kind: "game", title: `${map.isles[p.game]} 별 ${stars}개`, points }).run();
-  const item = randInt(100) < STAR_DROP[stars] ? await rollItem(db, sid, map.id) : null;
+  const item = randInt(100) < STAR_DROP[stars] ? await rollItem(db, sid, map.id, me.student.ship) : null;
   return { ok: true, stars, score, points, item };
 });
 // gold shop
