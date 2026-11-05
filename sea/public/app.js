@@ -303,7 +303,7 @@ function kMap() {
     </svg>${worldShip(me)}</div>
     ${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}`;
 }
-const isleSub = k => ({ port: "배를 사고 면제권을 받는 곳", cannon: "타이밍 맞춰 표적 맞히기", reef: `${["암초를", "빙산을", "기뢰를"][K.map]} 피해 멀리 가기`, memory: "그림 짝 맞히기", battle: "친구 배와 겨뤄 금화 얻기" })[k];
+const isleSub = k => ({ port: "배를 사고 면제권을 받는 곳", cannon: ["바람을 읽고 포탄으로 표적 맞히기", "배가 갈 자리를 계산해 어뢰 맞히기", "미끼를 가려내 미사일로 격추하기"][K.map], reef: ["해류를 버티며 암초 피하기", "안개 속 빙산 피해 멀리 가기", "소나로 숨은 기뢰 찾아 피하기"][K.map], memory: ["그림 짝 맞히기", "등대 불빛 신호 외워 따라 하기", "암호표를 보고 신호 해독하기"][K.map], battle: "친구 배와 겨뤄 금화 얻기" })[k];
 // little pictures standing on each island
 const ART = {
   port: (x, y) => `<rect x="${x - 34}" y="${y - 26}" width="26" height="22" fill="#F3E6C8"/><path d="M${x - 38} ${y - 26} L${x - 21} ${y - 42} L${x - 4} ${y - 26} Z" fill="#C2503A"/><rect x="${x + 6}" y="${y - 20}" width="22" height="18" fill="#F3E6C8"/><path d="M${x + 2} ${y - 20} L${x + 17} ${y - 34} L${x + 32} ${y - 20} Z" fill="#1F6F8B"/>`,
@@ -329,7 +329,7 @@ function kIsle() {
   const d = K.d, k = K.isle, s = ISLES[k], g = s.game && d.games[s.game], m = d.maps[K.map], nm = m.isles[k];
   const head = `<div class="row between"><h2>${esc(nm)}</h2><button class="btn ghost sm" data-act="kisle" data-v="">닫기</button></div>`;
   if (g) { const can = d.bal.energy >= d.game.playCost;
-    return `<section class="panel" id="islePanel">${head}<p class="small muted">${isleSub(k)}. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배이고 게임이 더 빨라요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
+    return `<section class="panel" id="islePanel">${head}<p class="small muted">${isleSub(k)}. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배예요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
       <div class="row small muted"><span>별 1개 ${g.stars[0]}점</span><span>· 별 2개 ${g.stars[1]}점</span><span>· 별 3개 ${g.stars[2]}점</span></div>
       <button class="btn primary lg" data-act="kplay" data-v="${s.game}" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button></section>`; }
   if (k === "port") { const p = d.pass, canPass = !p.bought && d.bal.points >= d.game.passCost;

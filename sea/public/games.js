@@ -54,46 +54,56 @@ const gunBarrel = (g, w, h, kick) => { const x = w / 2, y0 = h - 16 + kick * 14;
   g.fillStyle = "#C9A24A"; g.fillRect(x - 17, y0 - 94, 34, 6); g.fillRect(x - 21, y0 - 40, 42, 5);
   const c = g.createLinearGradient(0, y0 - 18, 0, h); c.addColorStop(0, "#6B4A2C"); c.addColorStop(1, "#2C1C10"); g.fillStyle = c; g.beginPath(); g.moveTo(x - 66, h); g.lineTo(x - 50, y0 - 18); g.lineTo(x + 50, y0 - 18); g.lineTo(x + 66, h); g.fill(); };
 
-/* 포격 섬: tap when the moving target crosses your aim. 10 shots, and it speeds up. */
+const WINDS = [-1, -.65, -.35, .35, .65, 1], pickWind = () => WINDS[Math.floor(Math.random() * WINDS.length)];
+const windArrow = (g, x, y, v, label) => { const l = 16 + Math.abs(v) * 34, d = Math.sign(v) || 1; g.save(); g.translate(x, y); g.fillStyle = "rgba(6,22,40,.62)"; g.beginPath(); g.roundRect(-62, -19, 124, 38, 12); g.fill(); g.fillStyle = "#fff"; g.font = "700 12px sans-serif"; g.textAlign = "left"; g.fillText(label, -54, 4); g.translate(18, 0); g.strokeStyle = "#FFE27A"; g.fillStyle = "#FFE27A"; g.lineWidth = 4; g.lineCap = "round"; g.beginPath(); g.moveTo(-d * l / 2, 0); g.lineTo(d * l / 2 - d * 6, 0); g.stroke(); g.beginPath(); g.moveTo(d * l / 2 + d * 3, 0); g.lineTo(d * l / 2 - d * 8, -7); g.lineTo(d * l / 2 - d * 8, 7); g.fill(); g.restore(); };
+/* 범선의 바다 포격: the wind bends each shot, so the spot to wait for changes every time. 10 shots, and it speeds up. */
 function cannon({ map, title, art }) {
   return new Promise(done => {
-    const s = shell(title, "표적이 가운데 올 때 화면을 눌러 쏴요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
-    let shots = 10, hits = 0, t = 0, last = performance.now(), phase = 0, ball = null, flash = null, over = false, kick = 0, lastX = 0;
+    const s = shell(title, "바람에 포탄이 휘어요. 점선이 닿는 곳에 표적이 올 때 눌러요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    let shots = 10, hits = 0, t = 0, last = performance.now(), phase = 0, ball = null, flash = null, over = false, kick = 0, lastX = 0, wind = pickWind();
     const fire = e => { e.preventDefault(); if (ball || over || shots <= 0) return; shots--; ball = { p: 0 }; kick = 1; Sfx.shot("cannon"); fx.add(cv.w / 2, cv.h - 112, 9, () => ({ vx: (Math.random() - .5) * 50, vy: -70 - Math.random() * 120, life: .3 + Math.random() * .2, c: "#FFD27A", a: 1, r0: 7, r1: 1 })); };
     s.stage.addEventListener("pointerdown", fire);
     const end = v => { if (over) return; over = true; cv.stop(); s.el.remove(); done(v); };
     s.quit.onclick = () => end(null);
     (function tick(now) { if (over) return;
       const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; const w = cv.w, h = cv.h, speed = (1.5 + (10 - shots) * .22 + hits * .08) * PACE[map]; phase += dt * speed;
-      const tx = w / 2 + Math.sin(phase) * (w / 2 - 44), ty = h * .24;
+      const tx = w / 2 + Math.sin(phase) * (w / 2 - 44), ty = h * .24, landX = w / 2 + wind * Math.min(150, w * .3);
       sea(g, w, h, t * .3, art); const bobY = ty + Math.sin(t * 3) * 3, big = art?.target;
       if (big) sprite(g, big, tx, bobY, Math.min(190, w * .46), tx < lastX); else targetShip(g, tx, bobY, 1.5, map); lastX = tx;
-      g.strokeStyle = "rgba(255,255,255,.4)"; g.setLineDash([6, 8]); g.beginPath(); g.moveTo(w / 2, ty + 24); g.lineTo(w / 2, h - 120); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = "rgba(255,255,255,.4)"; g.setLineDash([6, 8]); g.lineWidth = 2; g.beginPath(); for (let i = 0; i <= 14; i++) { const p = i / 14; g.lineTo(w / 2 + (landX - w / 2) * p * p, h - 120 + (ty + 24 - h + 120) * p); } g.stroke(); g.setLineDash([]);
+      g.strokeStyle = "rgba(255,226,122,.8)"; g.lineWidth = 2; g.beginPath(); g.ellipse(landX, ty + 8, 30, 11, 0, 0, 7); g.stroke();
+      windArrow(g, 72, h - 34, wind, "바람");
       kick = Math.max(0, kick - dt * 5); gunBarrel(g, w, h, kick);
-      if (ball) { ball.p += dt / .42; const y = h - 112 + (ty - h + 112) * Math.min(1, ball.p), r = 9 - 5 * ball.p; g.fillStyle = "#1C1E22"; g.beginPath(); g.arc(w / 2, y, r, 0, 7); g.fill(); g.fillStyle = "rgba(255,235,180,.7)"; g.beginPath(); g.arc(w / 2 - r * .3, y - r * .3, r * .3, 0, 7); g.fill();
-        if (ball.p >= 1) { const hit = Math.abs(tx - w / 2) < 34; if (hit) { hits++; blast(fx, w / 2, ty); Sfx.boom(.8); } else { spray(fx, w / 2, ty + 6); Sfx.splash(); } flash = { hit, a: 1 }; ball = null; if (!shots) setTimeout(() => end(hits), 700); } }
+      if (ball) { ball.p += dt / .42; const p = Math.min(1, ball.p), bx = w / 2 + (landX - w / 2) * p * p, y = h - 112 + (ty - h + 112) * p, r = 9 - 5 * ball.p; g.fillStyle = "#1C1E22"; g.beginPath(); g.arc(bx, y, r, 0, 7); g.fill(); g.fillStyle = "rgba(255,235,180,.7)"; g.beginPath(); g.arc(bx - r * .3, y - r * .3, r * .3, 0, 7); g.fill();
+        if (ball.p >= 1) { const hit = Math.abs(tx - landX) < 34; if (hit) { hits++; blast(fx, landX, ty); Sfx.boom(.8); } else { spray(fx, landX, ty + 6); Sfx.splash(); } flash = { hit, a: 1 }; ball = null; wind = pickWind(); if (!shots) setTimeout(() => end(hits), 700); } }
       fx.draw(g, dt);
       if (flash) { flash.a -= dt * 2.2; if (flash.a <= 0) flash = null; else { g.fillStyle = `rgba(255,255,255,${flash.a})`; g.font = "400 34px Jua, sans-serif"; g.textAlign = "center"; g.fillText(flash.hit ? "명중!" : "빗나갔어요", w / 2, h * .5); } }
       s.hud.textContent = `명중 ${hits} · 남은 ${shots}발`;
       requestAnimationFrame(tick); })(last);
   });
 }
-/* 암초 해협: slide left and right past the rocks; it gets faster until you hit one. */
+/* 피하기: slide left and right; it gets faster until you hit one. Each sea adds its own trouble:
+   a current that pushes the ship off your finger, fog that hides what's ahead, mines seen only when the sonar passes over them. */
 function reef({ map, title, art }) {
   return new Promise(done => {
-    const s = shell(title, `손가락을 좌우로 움직여 ${["암초를", "빙산을", "기뢰를"][map]} 피해요.`), cv = canvasIn(s.stage), { g } = cv, fx = bits();
-    let x = .5, t = 0, last = performance.now(), rocks = [], spawn = 0, passed = 0, over = false, crashed = 0;
+    const s = shell(title, ["해류가 배를 옆으로 밀어요. 손가락으로 버티며 암초를 피해요.", "안개 때문에 빙산이 늦게 보여요. 침착하게 피해요.", "기뢰는 소나 파동이 지나갈 때만 보여요. 움직이는 기뢰도 있어요."][map]), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    let x = .5, t = 0, last = performance.now(), rocks = [], spawn = 0, passed = 0, over = false, crashed = 0, ping = 0;
     const move = e => { const r = s.stage.getBoundingClientRect(); x = Math.min(.95, Math.max(.05, (e.clientX - r.left) / r.width)); };
     s.stage.addEventListener("pointerdown", move); s.stage.addEventListener("pointermove", move);
     const end = v => { if (over) return; over = true; cv.stop(); s.el.remove(); done(v); };
     s.quit.onclick = () => end(null);
     (function tick(now) { if (over) return;
-      const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; const w = cv.w, h = cv.h, speed = (170 + t * 9) * PACE[map];
+      const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; const w = cv.w, h = cv.h, speed = (170 + t * 9) * [1, 1, 1.1][map];
       sea(g, w, h, t * 6, art);
-      if (!crashed) { spawn -= dt; if (spawn <= 0) { spawn = Math.max(.34, .95 - t * .012); rocks.push({ x: Math.random() * (w - 50) + 25, y: -30, r: 17 + Math.random() * 13 }); } }
-      const px = x * w, py = h - 70;
-      for (const k of rocks) { if (!crashed) k.y += speed * dt; hazard(g, k, map, t);
+      if (!crashed) { spawn -= dt; if (spawn <= 0) { spawn = Math.max(.34, .95 - t * .012); rocks.push({ x: Math.random() * (w - 50) + 25, y: -30, r: 17 + Math.random() * 13, vx: map === 2 && Math.random() < .35 ? (Math.random() < .5 ? -1 : 1) * (26 + Math.random() * 30) : 0 }); } }
+      const push = map === 0 && !crashed ? (Math.sin(t * .62 + 1) * .13 + Math.sin(t * .27) * .07) * Math.min(1.6, 1 + t * .012) : 0, px = Math.min(.96, Math.max(.04, x + push)) * w, py = h - 70;
+      if (map === 0) { windArrow(g, w - 72, 34, Math.max(-1, Math.min(1, push * 5)), "해류"); if (!crashed && Math.random() < dt * 22) fx.add(Math.random() * w, Math.random() * h, 1, () => ({ vx: push * 900, vy: speed * .5, life: .5, c: "#DDF2FF", a: .4, r0: 1.5, r1: .5 })); }
+      if (map === 2) { g.fillStyle = "rgba(3,16,28,.62)"; g.fillRect(0, 0, w, h); ping += dt; const period = 1.5; if (ping >= period && !crashed) { ping = 0; Sfx.ping(); }
+        const R = Math.min(1, ping / .9) * Math.hypot(w, h), fade = Math.max(0, 1 - ping / .9); g.strokeStyle = `rgba(110,240,190,${fade * .85})`; g.lineWidth = 3; g.beginPath(); g.arc(px, py, R, 0, 7); g.stroke(); g.lineWidth = 1; g.strokeStyle = "rgba(110,240,190,.1)"; for (let r = 90; r < h * 1.2; r += 90) { g.beginPath(); g.arc(px, py, r, 0, 7); g.stroke(); }
+        for (const k of rocks) if (Math.hypot(k.x - px, k.y - py) <= R && ping < .9) k.seen = t; }
+      for (const k of rocks) { if (!crashed) { k.y += speed * dt; if (k.vx) { k.x += k.vx * dt; if (k.x < 22 || k.x > w - 22) k.vx = -k.vx; } } if (map === 2) g.globalAlpha = crashed ? 1 : Math.max(.08, 1 - (t - (k.seen ?? -9)) / 1.05); hazard(g, k, map, t); g.globalAlpha = 1;
         if (!crashed && Math.hypot(k.x - px, k.y - py) < k.r + 15) { crashed = t; blast(fx, px, py - 6); Sfx.boom(); setTimeout(() => end(passed), 1000); } }
+      if (map === 1) { const clear = h * (.56 - Math.min(.1, t * .0016)), f = g.createLinearGradient(0, 0, 0, clear); f.addColorStop(0, "rgba(222,232,236,1)"); f.addColorStop(.62, "rgba(222,232,236,.97)"); f.addColorStop(1, "rgba(222,232,236,0)"); g.fillStyle = f; g.fillRect(0, 0, w, clear); }
       const before = rocks.length; rocks = rocks.filter(k => k.y < h + 40); if (before > rocks.length && !crashed) Sfx.tick(); passed += before - rocks.length;
       if (!crashed && Math.random() < dt * 28) fx.add(px + (Math.random() - .5) * 16, py + 20, 1, () => ({ vx: (Math.random() - .5) * 26, vy: 70 + speed * .35, life: .6, c: "#F2FAFF", a: .65, r0: 3, r1: 8 }));
       fx.draw(g, dt);
@@ -122,5 +132,110 @@ function memory({ map, title }) {
       lock = true; const a = first.b; first = null; setTimeout(() => { a.classList.remove("up"); b.classList.remove("up"); lock = false; }, 750); });
   });
 }
-window.Games = { run: (kind, opts) => ({ cannon, reef, memory })[kind](opts) };
+/* 증기의 바다 포격: a torpedo is slow, so aim where the ship will be, not where it is. 10 torpedoes; score = hits. */
+function torpedo({ map, title, art }) {
+  return new Promise(done => {
+    const s = shell(title, "어뢰는 느려요. 배가 갈 자리를 미리 계산해서 눌러요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    let shots = 10, hits = 0, t = 0, last = performance.now(), ship = null, run = null, flash = null, over = false, kick = 0;
+    const TRAVEL = 1.25, sail = w => { const dir = Math.random() < .5 ? 1 : -1; ship = { x: dir > 0 ? -90 : w + 90, dir, v: 100 + Math.random() * 45 + (10 - shots) * 8 }; };
+    const fire = e => { e.preventDefault(); if (run || over || shots <= 0) return; shots--; run = { p: 0 }; kick = 1; Sfx.shot("torpedo"); };
+    s.stage.addEventListener("pointerdown", fire);
+    const end = v => { if (over) return; over = true; cv.stop(); s.el.remove(); done(v); };
+    s.quit.onclick = () => end(null);
+    (function tick(now) { if (over) return;
+      const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; const w = cv.w, h = cv.h, ty = h * .2, y0 = h - 74; if (!ship) sail(w);
+      ship.x += ship.dir * ship.v * dt; if (ship.x < -130 || ship.x > w + 130) sail(w);
+      sea(g, w, h, t * .3, art); const bob = ty + Math.sin(t * 2.6) * 2; if (art?.target) sprite(g, art.target, ship.x, bob, Math.min(190, w * .46), ship.dir < 0); else targetShip(g, ship.x, bob, 1.5, map);
+      g.strokeStyle = "rgba(255,255,255,.35)"; g.setLineDash([4, 10]); g.lineWidth = 2; g.beginPath(); g.moveTo(w / 2, ty + 16); g.lineTo(w / 2, y0); g.stroke(); g.setLineDash([]);
+      if (run) { run.p += dt / TRAVEL; const p = Math.min(1, run.p), y = y0 + (ty - y0) * p; fx.add(w / 2 + (Math.random() - .5) * 6, y + 14, 2, () => ({ vx: (Math.random() - .5) * 18, vy: 8, life: .9, c: "#E8F6FF", a: .7, r0: 2.5, r1: 7 }));
+        g.save(); g.translate(w / 2, y); g.fillStyle = "#23272C"; g.beginPath(); g.ellipse(0, 0, 5, 16, 0, 0, 7); g.fill(); g.fillStyle = "#C9A24A"; g.fillRect(-5, -9, 10, 3); g.restore();
+        if (run.p >= 1) { const hit = Math.abs(ship.x - w / 2) < 46; if (hit) { hits++; blast(fx, w / 2, ty); Sfx.boom(); sail(w); } else { spray(fx, w / 2, ty + 6); Sfx.splash(); } flash = { hit, a: 1 }; run = null; if (!shots) setTimeout(() => end(hits), 700); } }
+      fx.draw(g, dt);
+      kick = Math.max(0, kick - dt * 5); g.save(); g.translate(w / 2, h - 18 + kick * 12); const m = g.createLinearGradient(-30, 0, 30, 0); m.addColorStop(0, "#14161A"); m.addColorStop(.45, "#59616B"); m.addColorStop(1, "#101215"); g.fillStyle = m; g.beginPath(); g.roundRect(-22, -48, 44, 70, 8); g.fill(); g.fillStyle = "#0A0B0D"; g.beginPath(); g.ellipse(0, -46, 15, 6, 0, 0, 7); g.fill(); g.fillStyle = "#7B5A36"; g.fillRect(-48, 2, 96, 30); g.restore();
+      if (flash) { flash.a -= dt * 2.2; if (flash.a <= 0) flash = null; else { g.fillStyle = `rgba(255,255,255,${flash.a})`; g.font = "400 34px Jua, sans-serif"; g.textAlign = "center"; g.fillText(flash.hit ? "명중!" : "빗나갔어요", w / 2, h * .5); } }
+      s.hud.textContent = `명중 ${hits} · 남은 ${shots}발`;
+      requestAnimationFrame(tick); })(last);
+  });
+}
+/* 현대의 바다 포격: press and hold the real warship until the lock closes; flickering contacts are decoys. 10 waves; score = kills. */
+function missile({ map, title, art }) {
+  return new Promise(done => {
+    const s = shell(title, "진짜 적함을 꾹 눌러 조준을 고정해요. 깜빡이는 표적은 미끼예요. 10번!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    const WAVES = 10, HOLD = .42;
+    let wave = 0, hits = 0, t = 0, last = performance.now(), cs = [], left = 0, lock = null, shot = null, pause = .5, msg = null, over = false;
+    const spawn = (w, h) => { wave++; const n = 2 + Math.min(2, Math.floor(wave / 4)), real = Math.floor(Math.random() * n); cs = []; left = 2.9 - wave * .11;
+      for (let i = 0; i < n; i++) { let x, y, tries = 0; do { x = 60 + Math.random() * (w - 120); y = h * .14 + Math.random() * h * .5; } while (cs.some(c => Math.hypot(c.x - x, c.y - y) < 110) && ++tries < 30); cs.push({ x, y, real: i === real, vx: (Math.random() - .5) * 26, seed: Math.random() * 9 }); } };
+    const say = (text, good) => { msg = { text, good, a: 1 }; };
+    const closeWave = () => { cs = []; lock = null; pause = .55; if (wave >= WAVES) { over = "ending"; setTimeout(() => end(hits), 800); } };
+    const at = e => { const r = s.stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+    const near = e => { const [x, y] = at(e); let best = null, bd = 62; for (const c of cs) { const d = Math.hypot(c.x - x, c.y - y); if (d < bd) { bd = d; best = c; } } return best; };
+    const down = e => { e.preventDefault(); if (shot) return; const c = near(e); if (c) { lock = { c, p: 0 }; Sfx.lock(); } };
+    const up = () => { lock = null; };
+    s.stage.addEventListener("pointerdown", down); s.stage.addEventListener("pointerup", up); s.stage.addEventListener("pointercancel", up); s.stage.addEventListener("pointerleave", up);
+    function end(v) { if (over === true) return; over = true; cv.stop(); s.el.remove(); done(v); }
+    s.quit.onclick = () => end(null);
+    (function tick(now) { if (over === true) return;
+      const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; const w = cv.w, h = cv.h;
+      sea(g, w, h, t * .3, art); g.fillStyle = "rgba(3,18,30,.55)"; g.fillRect(0, 0, w, h); g.strokeStyle = "rgba(120,230,190,.13)"; g.lineWidth = 1; for (let r = 90; r < h * 1.25; r += 90) { g.beginPath(); g.arc(w / 2, h, r, 0, 7); g.stroke(); }
+      const sweep = t * 1.3 % 6.283; g.strokeStyle = "rgba(120,230,190,.32)"; g.lineWidth = 2; g.beginPath(); g.moveTo(w / 2, h); g.lineTo(w / 2 + Math.cos(sweep) * h * 1.3, h + Math.sin(sweep) * h * 1.3); g.stroke();
+      if (!cs.length && !shot && over !== "ending" && wave < WAVES) { pause -= dt; if (pause <= 0) spawn(w, h); }
+      if (cs.length && !shot) { left -= dt; if (left <= 0) { say("놓쳤어요", false); Sfx.splash(); closeWave(); } }
+      for (const c of cs) { c.x = Math.max(44, Math.min(w - 44, c.x + c.vx * dt)); const flicker = !c.real && Math.sin(t * 17 + c.seed) > .1; g.globalAlpha = c.real ? 1 : flicker ? .3 : .95;
+        if (art?.target) sprite(g, art.target, c.x, c.y + 10, 96, c.vx < 0); else targetShip(g, c.x, c.y + 8, 1.05, map); g.globalAlpha = 1;
+        g.strokeStyle = "#FF6A52"; g.lineWidth = 2; const b = 40; for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { g.beginPath(); g.moveTo(c.x + dx * b, c.y + dy * (b - 13)); g.lineTo(c.x + dx * b, c.y + dy * b); g.lineTo(c.x + dx * (b - 13), c.y + dy * b); g.stroke(); } }
+      if (lock && !shot) { lock.p += dt / HOLD; g.strokeStyle = "#FFE27A"; g.lineWidth = 5; g.beginPath(); g.arc(lock.c.x, lock.c.y, 50, -1.57, -1.57 + Math.min(1, lock.p) * 6.283); g.stroke(); if (lock.p >= 1) { shot = { c: lock.c, p: 0 }; lock = null; Sfx.shot("missile"); } }
+      if (shot) { shot.p += dt / .55; const p = Math.min(1, shot.p), mx = w / 2 + (shot.c.x - w / 2) * p, my = h - 20 + (shot.c.y - h + 20) * p * p; fx.add(mx, my + 8, 3, () => ({ vx: (Math.random() - .5) * 22, vy: 24, life: .55, c: "#F3F5F7", a: .7, r0: 3, r1: 10 })); g.fillStyle = "#EDEFF2"; g.beginPath(); g.ellipse(mx, my, 4, 12, Math.atan2(shot.c.x - w / 2, h) * .8, 0, 7); g.fill();
+        if (shot.p >= 1) { if (shot.c.real) { hits++; blast(fx, shot.c.x, shot.c.y); Sfx.boom(); say("격추!", true); } else { spray(fx, shot.c.x, shot.c.y); Sfx.wrong(); say("미끼였어요", false); } shot = null; closeWave(); } }
+      fx.draw(g, dt);
+      if (cs.length) { g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(0, 0, w, 5); g.fillStyle = "#FF6A52"; g.fillRect(0, 0, w * Math.max(0, left) / (2.9 - wave * .11), 5); }
+      if (msg) { msg.a -= dt * 1.7; if (msg.a <= 0) msg = null; else { g.fillStyle = `rgba(255,255,255,${msg.a})`; g.font = "400 34px Jua, sans-serif"; g.textAlign = "center"; g.fillText(msg.text, w / 2, h * .82); } }
+      s.hud.textContent = `격추 ${hits} · 표적 ${Math.min(wave, WAVES)}/${WAVES}`;
+      requestAnimationFrame(tick); })(last);
+  });
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+/* 암호 등대: repeat the lamp signal, one lamp longer each round. Score = correct lamps in a row, each counted once; two lives. */
+function lighthouse({ map, title }) {
+  return new Promise(done => {
+    const s = shell(title, "등대 불빛 순서를 외워서 똑같이 눌러요. 라운드마다 길어져요. 두 번 틀리면 끝!"), MAX = 24;
+    s.el.classList.add("g-mem", `era-${map}`); s.stage.style.setProperty("--pic", `url(/maps/sea${map + 1}.webp)`);
+    s.stage.innerHTML = `<div class="sig"><p class="sig-say" aria-live="polite"></p><div class="lamps">${["red", "amber", "green", "blue"].map((c, i) => `<button type="button" class="lamp l-${c}" data-i="${i}" aria-label="${["빨강", "노랑", "초록", "파랑"][i]} 등"></button>`).join("")}</div></div>`;
+    const say = s.stage.querySelector(".sig-say"), lamps = [...s.stage.querySelectorAll(".lamp")];
+    const seq = [], pick = () => seq.push(Math.floor(Math.random() * 4));
+    let pos = 0, best = 0, score = 0, lives = 2, lock = true, over = false; for (let i = 0; i < 3; i++) pick();
+    const end = v => { if (over) return; over = true; s.el.remove(); done(v); };
+    const hud = () => s.hud.textContent = `점수 ${score} · 기회 ${lives}`; s.quit.onclick = () => end(null);
+    const flash = async (i, ms) => { lamps[i].classList.add("lit"); Sfx.lamp(i); await wait(ms); lamps[i].classList.remove("lit"); };
+    const show = async () => { lock = true; pos = 0; say.textContent = `신호 ${seq.length}개를 잘 보세요`; await wait(650); const ms = Math.max(240, 480 - seq.length * 25); for (const i of seq) { if (over) return; await flash(i, ms); await wait(130); } if (over) return; say.textContent = "이제 똑같이 눌러요"; lock = false; };
+    s.stage.addEventListener("click", async e => { const b = e.target.closest(".lamp"); if (!b || lock || over) return; const i = Number(b.dataset.i); flash(i, 170);
+      if (i !== seq[pos]) { lock = true; lives--; hud(); Sfx.wrong(); say.textContent = lives ? "틀렸어요! 같은 신호를 다시 보여 줘요" : "신호를 놓쳤어요"; await wait(900); if (!lives) return end(score); return show(); }
+      pos++; if (pos > best) { best = pos; score++; hud(); }
+      if (score >= MAX) { lock = true; await wait(350); return end(score); }
+      if (pos === seq.length) { lock = true; Sfx.match(); say.textContent = "수신 완료!"; best = 0; pick(); await wait(650); show(); } });
+    hud(); show();
+  });
+}
+/* 통신 기지: read the code table and key in the digit for each incoming symbol. The table changes every 6 right answers. Score = right answers. */
+function codebreak({ map, title }) {
+  return new Promise(done => {
+    const s = shell(title, "암호표를 보고 들어온 기호의 숫자를 눌러요. 틀리면 3초가 줄어요."), ids = ["star", "anchor", "compass", "moon", "flame", "shell"], MAX = 24, TOTAL = 40;
+    s.el.classList.add("g-mem", `era-${map}`); s.stage.style.setProperty("--pic", `url(/maps/sea${map + 1}.webp)`);
+    const icon = (id, ink = "#BDF5DC") => `<svg viewBox="0 0 100 100" aria-hidden="true">${V.embSVG(id, 50, 50, 82, ink, "#0B2233")}</svg>`;
+    s.stage.innerHTML = `<div class="cipher"><div class="code-table"></div><div class="code-in"><span class="code-sym"></span><i class="code-time"><i></i></i><p class="sig-say" aria-live="polite"></p></div><div class="code-keys">${[1, 2, 3, 4, 5, 6].map(n => `<button type="button" data-n="${n}" class="num">${n}</button>`).join("")}</div></div>`;
+    const table = s.stage.querySelector(".code-table"), sym = s.stage.querySelector(".code-sym"), bar = s.stage.querySelector(".code-time i"), say = s.stage.querySelector(".sig-say");
+    let map2 = {}, cur = null, score = 0, left = TOTAL, over = false, lastT = performance.now();
+    const shuffle = () => { const digits = [1, 2, 3, 4, 5, 6].sort(() => Math.random() - .5); ids.forEach((id, i) => map2[id] = digits[i]); table.innerHTML = ids.map(id => `<div>${icon(id)}<b class="num">${map2[id]}</b></div>`).join(""); table.classList.remove("new"); table.offsetWidth; table.classList.add("new"); };
+    const next = () => { let id; do { id = ids[Math.floor(Math.random() * ids.length)]; } while (id === cur); cur = id; sym.innerHTML = icon(id, "#FFFFFF"); };
+    const end = v => { if (over) return; over = true; clearInterval(tm); s.el.remove(); done(v); };
+    const hud = () => s.hud.textContent = `해독 ${score} · ${Math.ceil(left)}초`;
+    const tm = setInterval(() => { const n = performance.now(); left -= (n - lastT) / 1000; lastT = n; bar.style.width = Math.max(0, left / TOTAL * 100) + "%"; hud(); if (left <= 0) end(score); }, 100);
+    s.quit.onclick = () => end(null);
+    s.stage.addEventListener("click", e => { const b = e.target.closest("[data-n]"); if (!b || over) return;
+      if (Number(b.dataset.n) === map2[cur]) { score++; Sfx.match(); say.textContent = ""; if (score >= MAX) return end(score); if (score % 6 === 0) { shuffle(); Sfx.ping(); say.textContent = "암호표가 바뀌었어요!"; } next(); }
+      else { left -= 3; Sfx.wrong(); say.textContent = "틀렸어요! 3초 감소"; } hud(); });
+    shuffle(); next(); hud();
+  });
+}
+// every sea plays its own game on each island; the score scale of each island stays the same, so the server's stars and rewards still fit
+window.Games = { run: (kind, opts) => ({ cannon: [cannon, torpedo, missile], reef: [reef, reef, reef], memory: [memory, lighthouse, codebreak] })[kind][opts.map || 0](opts) };
 })();
