@@ -285,6 +285,8 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .deco-sea.big .ship .nmtag { font-size: max(12px, 3.6cqw) }
 .deco-sea.tiny { aspect-ratio: 1.7 }
 .deco-sea.tiny .ship { width: 44%; top: 78% }
+.deco-sea.art { background: var(--pic) 50% 82% / 380% auto, #123E66 } .deco-sea.art::after { display: none }
+.deco-sea.tiny .ship.s3 { display: block; left: 50%; top: 50%; width: 90%; height: 88%; transform: translate(-50%, -50%) } .deco-sea .ship.s3 img { display: block; width: 100%; height: 100%; object-fit: contain; -webkit-user-drag: none }
 /* 3D ship: the flat picture shows until the 3D stage is ready (or if 3D cannot load) */
 .deco3d, .s3d-host { position: relative; border-radius: 14px; overflow: hidden; background: linear-gradient(180deg, #2A2C63, #E99A62 60%, #28506F 61%, #123E66) }
 .deco3d { aspect-ratio: 4 / 3; max-height: 420px; width: 100% }

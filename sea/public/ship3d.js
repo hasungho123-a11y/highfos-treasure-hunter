@@ -3,7 +3,7 @@
    viewer.mount(el) puts the 3D stage into el; viewer.setLook(look, sailHex) dresses the ship (look ids come from DECO in worker.js). */
 (() => {
 const THREE_URL = "https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js";
-let loading = null, viewer = null;
+let loading = null, viewer = null, thumbViewer = null;
 
 function loadThree() {
   if (window.THREE) return Promise.resolve();
@@ -505,6 +505,9 @@ function build() {
       const box = new T.Box3(), part = new T.Box3();
       const visit = o => { if (!o.visible || o.isPoints) return; if (o.geometry) { if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); part.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); box.union(part); } o.children.forEach(visit); };
       visit(ship); box.min.y = Math.max(0, box.min.y);
+      // coloured funnel smoke, as a few still puffs
+      const puffCols = !shipSpec.sailed && V.SMOKE[look.smoke], puffs = [];
+      if (puffCols) { box.max.y += 2 * shipK; box.min.x -= 1.4 * shipK; for (const p of stacks) for (let i = 0; i < 12; i++) { const n = i % 6, sp = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: puffCols[n % puffCols.length], transparent: true, opacity: 1 - n * .1, depthWrite: false, fog: false, toneMapped: false })); sp.position.set(p.x - n * .34 * shipK, p.y + n * .36 * shipK, p.z); sp.scale.setScalar((.7 + n * .22) * shipK); scene.add(sp); puffs.push(sp); } }
       // three-quarter view from ahead, so the sails face the viewer; then zoom until the ship just fills the picture
       const c = box.getCenter(new T.Vector3()), r0 = box.getSize(new T.Vector3()).length() / 2 * 1.08, fov = 14, th = angle.th ?? .68, ph = angle.ph ?? 1.0, dist = r0 / Math.tan(fov / 2 * Math.PI / 180);
       camera.fov = fov; camera.aspect = 1; camera.zoom = 1; camera.updateProjectionMatrix();
@@ -517,6 +520,7 @@ function build() {
       renderer.setPixelRatio(1); renderer.setSize(size, size, false);
       renderer.render(scene, camera);
       const url = renderer.domElement.toDataURL("image/webp", .9);
+      puffs.forEach(sp => { scene.remove(sp); sp.material.dispose(); });
       snapShadow.visible = snapFoam.visible = false; renderer.clippingPlanes = [];
       hide.forEach((o, i) => o.visible = shown[i]); time = oldTime; applyTime();
       [scene.fog.near, scene.fog.far] = oldFog; camera.zoom = 1; camera.fov = oldFov; camera.aspect = oldAspect; camera.updateProjectionMatrix();
@@ -673,6 +677,12 @@ window.Ship3D = {
     if (viewer) return Promise.resolve(viewer);
     if (!webglOK()) return Promise.reject(new Error("이 기기에서는 3D를 볼 수 없어요"));
     return loadThree().then(() => viewer || (viewer = build()));
+  },
+  // a second, never-shown viewer for the small pictures in the shop lists, so taking them can't disturb the big live 3D ship
+  thumbs() {
+    if (thumbViewer) return Promise.resolve(thumbViewer);
+    if (!webglOK()) return Promise.reject(new Error("이 기기에서는 3D를 볼 수 없어요"));
+    return loadThree().then(() => thumbViewer || (thumbViewer = build()));
   }
 };
 })();
