@@ -24,6 +24,22 @@ const keepInputs = root => [...root.querySelectorAll("input[id], select[id], tex
 const restoreInputs = list => { for (const [id, v] of list) { const el = document.getElementById(id); if (el) el.value = v; } };
 if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
 
+/* ---------- install as an app ---------- */
+let installEvt = null;
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const inAppBrowser = () => /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent); // these cannot add to the home screen
+function installCard() {
+  if (standalone() || ls.get("hs_install_hide")) return "";
+  const how = inAppBrowser() ? (isIOS() ? "이 화면에서는 안 돼요. 메뉴에서 Safari로 열어 주세요" : "이 화면에서는 안 돼요. 메뉴에서 다른 브라우저로 열어 주세요")
+    : installEvt ? "한 번만 설치하면 앱처럼 바로 열려요"
+    : isIOS() ? "Safari 공유 버튼 → 홈 화면에 추가" : "브라우저 메뉴 → 홈 화면에 추가 또는 앱 설치";
+  return `<div class="install"><img src="${LOGO}" alt=""><div style="flex:1;min-width:0"><b>바탕화면에 앱으로 추가하기</b><span>${how}</span></div>${installEvt ? `<button class="btn primary sm" data-act="install">설치</button>` : ""}<button class="btn ghost sm" data-act="installHide" aria-label="닫기">✕</button></div>`;
+}
+function installRefresh() { if (ROLE === "student") { if (K.d) kidRender(); } else if (!ROLE && G.shown) renderGate(); }
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; installRefresh(); });
+addEventListener("appinstalled", () => { installEvt = null; ls.set("hs_install_hide", "1"); installRefresh(); });
+
 /* ---------- ship pictures: the galleon comes from voyage.js, the other classes are drawn here ---------- */
 const HULLS = { red: "#8E2A22", navy: "#1F3A63", mint: "#2F8C78", pink: "#D97A9A", lavender: "#9A84C9", sky: "#6FA8D6", lemon: "#E8C85A", ebony: "#2A221D", white: "#E8DFC9", gold: "url(#dk-gold)" };
 const flagSVG = (x, y, look, sailIdx) => { const c = look.fc != null ? sail(look.fc) : sail(sailIdx); return `<path d="M${x} ${y} h7 v4.6 h-7 Z" fill="${c}"/>${V.embSVG(look.fe, x + 3.5, y + 2.3, 4, V.inkFor(c), c)}`; };
@@ -83,7 +99,7 @@ function gate(needSetup) {
 }
 async function loadClass(code) { try { G.cls = await api("/api/class", { code }); G.code = code.toUpperCase(); ls.set("hs_class", G.code); G.mode = "name"; G.err = ""; } catch (e) { G.err = e.message; G.mode = "code"; } renderGate(); }
 function renderGate() {
-  let body = "";
+  G.shown = true; let body = "";
   if (G.mode === "setup") body = `<h2>처음 설정</h2><p class="muted small">선생님 계정을 만들어요. 설정 코드는 배포할 때 정한 값이에요.</p>
     <form data-form="setup" class="stack" style="gap:10px"><label class="f">설정 코드<input type="password" id="s-code" autocomplete="off"></label><label class="f">선생님 아이디<input type="text" id="s-user"></label><label class="f">비밀번호 (4자 이상)<input type="password" id="s-pw" autocomplete="new-password"></label><button class="btn primary lg">만들기</button></form>`;
   else if (G.mode === "code") body = `<h2>반 코드를 넣어 주세요</h2><p class="muted small">선생님이 알려 준 5글자 코드예요.</p>
@@ -94,7 +110,7 @@ function renderGate() {
     <p class="muted small">비밀번호 숫자 4개를 눌러요.</p><div class="pindots">${[0, 1, 2, 3].map(i => `<i class="${i < G.pin.length ? "on" : ""}"></i>`).join("")}</div>
     <div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-act="pin" data-v="${n}">${n}</button>`).join("")}<button data-act="pin" data-v="clr" style="font-size:1rem">지우기</button><button data-act="pin" data-v="0">0</button><button data-act="pin" data-v="back" aria-label="한 칸 지우기">←</button></div>`;
   else body = `<h2>선생님 로그인</h2><form data-form="teacher" class="stack" style="gap:10px"><label class="f">아이디<input type="text" id="g-user" autocomplete="username"></label><label class="f">비밀번호<input type="password" id="g-pw" autocomplete="current-password"></label><button class="btn primary lg">로그인</button></form><button class="btn ghost sm" data-act="gmode" data-v="code">학생 화면으로</button>`;
-  app.innerHTML = `<div class="gate"><div class="card"><div class="logo"><img src="${LOGO}" alt=""><div><h1>하이포스 제도</h1><small>숙제로 떠나는 섬 모험</small></div></div>${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${body}</div></div>`;
+  app.innerHTML = `<div class="gate"><div class="card"><div class="logo"><img src="${LOGO}" alt=""><div><h1>하이포스 제도</h1><small>숙제로 떠나는 섬 모험</small></div></div>${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${G.mode === "setup" || G.mode === "teacher" ? "" : installCard()}${body}</div></div>`;
 }
 const GATE_ACTS = {
   gmode: v => { G.mode = v; G.err = ""; G.pin = ""; renderGate(); },
@@ -164,7 +180,7 @@ function kMap() {
     <text x="${x}" y="${y + s.r * .44 + fs + 12}" text-anchor="middle" class="lbl" font-size="${fs}">${names[k]}</text></g>`; };
   const route = (a, b, bend) => { const p = islePos(a), q = islePos(b); return `M${p.x} ${p.y} Q${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2 - bend} ${q.x} ${q.y}`; };
   const tabs = d.maps.map(m => { const open = seaOpen(m); return `<button class="seatab ${open ? "" : "locked"}" data-act="ksea" data-v="${m.id}" aria-pressed="${K.map === m.id}"><b>${esc(m.name)}</b><small>${open ? esc(m.era) : `전투력 ${m.power}부터`}</small>${open ? "" : `<i class="seabar"><i style="width:${Math.min(100, me.power / m.power * 100)}%"></i></i>`}</button>`; }).join("");
-  return `<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
+  return `${installCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
     <div class="world"><svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(d.maps[K.map].name)} 지도">
       <defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sea.top}"/><stop offset="1" stop-color="${sea.bot}"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
       <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>
@@ -421,7 +437,7 @@ const T_FORMS = {
 
 /* ---------- wiring ---------- */
 let ROLE = null;
-const COMMON = { logout: async () => { try { await api("/api/logout", {}); } catch (e) {} location.replace("/"); } };
+const COMMON = { install: async () => { if (!installEvt) return; const e = installEvt; e.prompt(); try { await e.userChoice; } catch (err) {} installEvt = null; installRefresh(); }, installHide: () => { ls.set("hs_install_hide", "1"); installRefresh(); }, logout: async () => { try { await api("/api/logout", {}); } catch (e) {} location.replace("/"); } };
 document.addEventListener("click", e => {
   const b = e.target.closest("[data-act]"); if (!b || b.disabled) return;
   const a = b.dataset.act, f = COMMON[a] || (ROLE === "teacher" ? T_ACTS[a] : ROLE === "student" ? KID_ACTS[a] : GATE_ACTS[a]);
