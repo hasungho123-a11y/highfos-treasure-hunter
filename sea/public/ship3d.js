@@ -246,24 +246,101 @@ function build() {
   grp("cannon"); for (const side of [1, -1]) for (const u of [.28, .38, .48, .58]) { const p = sideP(u, .72, side);
     const port = add(new T.Mesh(new T.BoxGeometry(.34, .3, .06), M.iron), A.cannon); port.position.copy(p); port.lookAt(p.clone().add(new T.Vector3(0, 0, side)));
     const c = add(new T.Mesh(new T.CylinderGeometry(.08, .11, .62, 10), M.iron), A.cannon); c.rotation.x = Math.PI / 2; c.position.copy(p).add(new T.Vector3(0, 0, side * .2)); }
-  /* ----- figureheads on the bow (ids match "head" items in DECO): one at a time ----- */
+  /* ----- small modelling helpers for the hand-built figures and crew ----- */
+  const solid = (c, rough = .62, metal = 0) => new T.MeshStandardMaterial({ color: new T.Color(c).convertSRGBToLinear(), roughness: rough, metalness: metal }); // true to the hex: unconverted, these colours wash out pale
+  const ball = (r, m, parent, x, y, z, sx = 1, sy = 1, sz = 1) => { const o = add(new T.Mesh(new T.SphereGeometry(r, 16, 12), m), parent); o.position.set(x, y, z); o.scale.set(sx, sy, sz); return o; };
+  const lathe = (pts, m, parent) => add(new T.Mesh(new T.LatheGeometry(new T.SplineCurve(pts.map(([a, b]) => new T.Vector2(a, b))).getPoints(22), 20), m), parent);
+  // a tube whose radius changes along its length: rf(t) with t from 0 to 1
+  const sweep = (pts, rf, m, parent, seg = 22, sides = 10) => { const curve = new T.CatmullRomCurve3(pts.map(p => new T.Vector3(...p))), fr = curve.computeFrenetFrames(seg, false), pos = [], idx = [];
+    for (let j = 0; j <= seg; j++) { const p = curve.getPointAt(j / seg), r = rf(j / seg), N = fr.normals[j], B = fr.binormals[j];
+      for (let i = 0; i < sides; i++) { const a = i / sides * Math.PI * 2, c = -Math.cos(a) * r, s = Math.sin(a) * r; pos.push(p.x + c * N.x + s * B.x, p.y + c * N.y + s * B.y, p.z + c * N.z + s * B.z); }
+      if (j < seg) for (let i = 0; i < sides; i++) { const a = j * sides + i, b = (j + 1) * sides + i, c = (j + 1) * sides + (i + 1) % sides, d = j * sides + (i + 1) % sides; idx.push(a, b, d, b, c, d); } }
+    const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return add(new T.Mesh(g, m), parent); };
+  // many copies of one shape, drawn at once; each copy is a matrix from place() or shingle()
+  const place = (x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) => new T.Matrix4().compose(new T.Vector3(x, y, z), new T.Quaternion().setFromEuler(new T.Euler(rx, ry, rz)), new T.Vector3(sx, sy, sz));
+  const many = (geo, m, parent, list) => { const o = new T.InstancedMesh(geo, m, list.length); list.forEach((x, i) => o.setMatrixAt(i, x)); o.castShadow = o.receiveShadow = true; o.frustumCulled = false; parent.add(o); return o; };
+  // the way the hull runs at one spot: X points aft, tipped up by "tilt", N points away from the hull
+  const hullFrame = (u, drop, s, tilt = 0) => { const P = sideP(u, drop, s), aft = sideP(u - .012, drop, s).sub(sideP(u + .012, drop, s)).normalize(), down = sideP(u, drop + .05, s).sub(sideP(u, drop - .05, s)).normalize(), N = aft.clone().cross(down).normalize(); if (N.z * s < 0) N.negate();
+    const X = aft.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(down, -Math.sin(tilt)), Y = N.clone().cross(X).normalize(); return { P, X, Y, N }; };
+  const shingle = (u, drop, s, len, wid, lift, tilt, thick = wid * .24) => { const { P, X, Y, N } = hullFrame(u, drop, s, tilt), o = P.clone().addScaledVector(N, lift).addScaledVector(X, len * .5); return new T.Matrix4().makeBasis(X.clone().multiplyScalar(len), Y.clone().multiplyScalar(wid), N.clone().multiplyScalar(thick)).setPosition(o); };
+  const unitBall = new T.SphereGeometry(.5, 12, 9);
+
+  /* ----- figureheads on the bow (ids match "head" items in DECO): one at a time.
+     Both reach out under the bowsprit from the stem, and fold wings back along the hull. Figure coordinates: x forward, y up, origin on the stem. ----- */
   const H = {}; const hgrp = k => (H[k] = new T.Group(), ship.add(H[k]), H[k]);
-  const bowBase = new T.Vector3(xAt(1) + .05, sheer(1) - .35, 0), at = (x, y, z = 0) => bowBase.clone().add(new T.Vector3(x, y, z));
-  hgrp("dragon"); {
-    const neck = add(new T.Mesh(new T.CylinderGeometry(.16, .24, 1.3, 10), M.gold), H.dragon); neck.position.copy(at(.45, .4)); neck.rotation.z = -.95;
-    const head = add(new T.Mesh(new T.ConeGeometry(.24, .85, 10), M.gold), H.dragon); head.position.copy(at(1.2, .9)); head.rotation.z = -1.75;
-    add(new T.Mesh(new T.SphereGeometry(.27, 12, 10), M.gold), H.dragon).position.copy(at(.95, .92));
-    const eyeM = new T.MeshStandardMaterial({ color: 0xD9402F, emissive: 0xD9402F, emissiveIntensity: .8 });
-    for (const z of [-.14, .14]) { const horn = add(new T.Mesh(new T.ConeGeometry(.06, .45, 8), M.gold), H.dragon); horn.position.copy(at(.82, 1.25, z)); horn.rotation.z = .6;
-      add(new T.Mesh(new T.SphereGeometry(.05, 8, 6), eyeM), H.dragon).position.copy(at(1.08, 1.0, z * 1.15)); } }
-  hgrp("swan"); { const white = new T.MeshStandardMaterial({ color: 0xFFFFFF, roughness: .35, metalness: .1 });
-    const neck = new T.CatmullRomCurve3([at(0, 0), at(.55, .25), at(.95, .85), at(.85, 1.45), at(1.05, 1.75)]);
-    add(new T.Mesh(new T.TubeGeometry(neck, 24, .13, 10, false), white), H.swan);
-    add(new T.Mesh(new T.SphereGeometry(.2, 14, 12), white), H.swan).position.copy(at(1.1, 1.78));
-    const beak = add(new T.Mesh(new T.ConeGeometry(.07, .32, 10), new T.MeshStandardMaterial({ color: 0xF28A2E, roughness: .5 })), H.swan); beak.position.copy(at(1.38, 1.72)); beak.rotation.z = -Math.PI / 2 - .2;
-    for (const z of [-.11, .11]) add(new T.Mesh(new T.SphereGeometry(.035, 8, 6), M.iron), H.swan).position.copy(at(1.2, 1.84, z));
-    const wingM = new T.MeshStandardMaterial({ color: 0xF4EFE6, roughness: .4 });
-    for (const z of [-.42, .42]) { const wg = add(new T.Mesh(new T.SphereGeometry(.45, 14, 10), wingM), H.swan); wg.scale.set(1.1, .45, .25); wg.position.copy(at(.25, .1, z)); wg.rotation.z = .35; } }
+  const headK = .6 + (L - 5.2) / 5.8 * .4;
+  const figure = g => { const f = new T.Group(); f.position.set(xAt(1) + .05, sheer(1) - .35, 0); f.scale.setScalar(headK); g.add(f); return f; };
+  hgrp("dragon"); { const d = figure(H.dragon);
+    const hide = solid(0x17694F, .42, .3), hideDark = solid(0x0D4636, .55, .2), gilt = solid(0xEDB93C, .32, .55), ivory = solid(0xF3E6C4, .45), maw = solid(0x6E1420, .75), web = solid(0xB3261E, .6), ink = solid(0x0E0B08, .3);
+    web.side = T.DoubleSide;
+    const eyeM = new T.MeshStandardMaterial({ color: 0xFFC22E, emissive: 0xFF8A12, emissiveIntensity: 1.5, roughness: .25 });
+    // the neck dips out of the stem and rises in an S, thinning towards the head
+    const spine = [[-.2, -.5, 0], [.14, -.68, 0], [.5, -.52, 0], [.68, -.18, 0], [.72, .06, 0], [.92, .16, 0]], neckR = t => .27 - .13 * t;
+    sweep(spine, neckR, hide, d, 30, 14);
+    const neck = new T.CatmullRomCurve3(spine.map(p => new T.Vector3(...p))), plates = [], studs = [], fins = [];
+    for (let i = 0; i <= 15; i++) { const t = .06 + i / 15 * .9, p = neck.getPointAt(t), g = neck.getTangentAt(t), r = neckR(t), a = Math.atan2(g.y, g.x), nx = -g.y, ny = g.x;
+      plates.push(place(p.x - nx * r * .74, p.y - ny * r * .74, 0, 0, 0, a, r * 1.05, r * .36, r * 1.5));
+      for (const s of [-1, 1]) for (const q of [.2, .75]) studs.push(place(p.x + nx * r * q * .7, p.y + ny * r * q * .7, s * r * .93, 0, 0, a, .05, .05, .022));
+      if (i % 2 === 0 && i < 15) fins.push(place(p.x + nx * r * 1.12, p.y + ny * r * 1.12, 0, 0, 0, a + .55, 1 - i * .022, 1 - i * .022, .2)); }
+    many(unitBall, gilt, d, plates); many(new T.SphereGeometry(1, 8, 6), hideDark, d, studs); many(new T.ConeGeometry(.1, .3, 10), web, d, fins);
+    // the head: open jaw, teeth, swept horns, cheek fins and whiskers
+    const h = new T.Group(); d.add(h); h.position.set(1.02, .16, 0); h.rotation.z = -.1;
+    ball(.2, hide, h, 0, 0, 0, 1.2, .9, .95); ball(.13, hide, h, .27, .025, 0, 1.75, .6, .85); ball(.095, hide, h, .47, .035, 0, 1, .72, 1.08);
+    const jaw = new T.Group(); h.add(jaw); jaw.position.set(-.02, -.07, 0); jaw.rotation.z = -.3;
+    ball(.1, hide, jaw, .24, -.025, 0, 2.15, .42, .78); ball(.092, gilt, jaw, .23, -.058, 0, 2.1, .2, .62); ball(.1, maw, jaw, .22, .012, 0, 1.85, .16, .6);
+    sweep([[.02, .03, 0], [.2, .045, 0], [.36, .07, 0], [.43, .11, .012]], t => .026 * (1 - t * .75), solid(0xD93C4C, .5), jaw, 10, 6);
+    ball(.11, maw, h, .22, -.048, 0, 1.9, .24, .66); // the roof of the mouth
+    const toothUp = [], toothDn = [];
+    for (const s of [-1, 1]) { for (let i = 0; i < 6; i++) { const x = .13 + i * .068, z = s * (.095 - i * .004), big = i === 4 ? 1.75 : 1; toothUp.push(place(x, -.062 - .022 * big, z, Math.PI, 0, 0, big)); toothDn.push(place(x + .02, .036, s * (.07 - i * .006), 0, 0, 0, i === 3 ? 1.5 : .85)); }
+      ball(.08, hide, h, .08, .135, s * .135, 1.65, .5, .62).rotation.z = -.28; ball(.03, gilt, h, .185, .115, s * .13, 1.6, .55, .7).rotation.z = -.28; // the heavy brow
+      ball(.048, eyeM, h, .135, .088, s * .158, 1.1, .9, .75); ball(.017, ink, h, .15, .088, s * .19, .55, 1.9, .45);
+      ball(.016, ink, h, .54, .085, s * .05); ball(.026, gilt, h, .515, .1, s * .055, 1.3, .7, .9);
+      sweep([[-.02, .13, s * .1], [-.26, .28, s * .15], [-.5, .35, s * .17], [-.72, .47, s * .15]], t => .058 * (1 - t) + .004, gilt, h, 16, 8);
+      sweep([[-.1, .02, s * .17], [-.26, .03, s * .27], [-.42, .12, s * .31]], t => .036 * (1 - t) + .003, ivory, h, 10, 6);
+      sweep([[.47, .0, s * .085], [.56, -.06, s * .19], [.46, -.14, s * .33], [.3, -.08, s * .43], [.2, -.14, s * .47]], t => .014 * (1 - t * .7), gilt, h, 18, 5);
+      [[-.08, -.02, .2, .28], [-.15, -.09, .2, .5], [-.14, -.17, .12, .78]].forEach(([x, y, q, rot]) => { const fin = add(new T.Mesh(new T.ConeGeometry(.075, .34, 10), web), h); fin.position.set(x, y, s * q); fin.rotation.set(s * .35, 0, Math.PI / 2 + rot * .5); fin.scale.z = .2; }); }
+    many(new T.ConeGeometry(.02, .056, 7), ivory, h, toothUp); many(new T.ConeGeometry(.02, .056, 7), ivory, jaw, toothDn);
+    ball(.07, hide, h, -.02, .165, 0, 1.8, .5, .7);
+    [[-.17, .17, .92], [-.27, .13, .78], [-.34, .07, .64]].forEach(([x, y, q]) => { const fin = add(new T.Mesh(new T.ConeGeometry(.08, .3, 10), web), h); fin.position.set(x, y, 0); fin.rotation.z = .8; fin.scale.set(q, q, .2); });
+    // bat wings folded along the hull: gilt ribs with red webs between them, hugging the planks
+    for (const s of [1, -1]) { const k = headK, S = 7, ribs = [[.885, -.34 * k], [.862, .08 * k], [.872, .52 * k], [.905, .9 * k]].map(([u1, d1]) => { const row = []; for (let i = 0; i <= S; i++) { const t = i / S, u = .972 + (u1 - .972) * t, dr = .5 * k + (d1 - .5 * k) * t - Math.sin(t * Math.PI) * .08 * k, { P, N } = hullFrame(u, dr, s); row.push(P.addScaledVector(N, .055)); } return row; });
+      ribs.forEach(row => sweep(row.map(p => [p.x, p.y, p.z]), t => .05 * k * (1 - t * .8), gilt, H.dragon, 18, 7));
+      const pos = [], idx = []; for (let a = 0; a < ribs.length - 1; a++) { const base = pos.length / 3; for (let i = 0; i <= S; i++) { const end = i === S, L0 = ribs[a][i], L1 = ribs[a + 1][i]; for (const p of end ? [L0, L1, L0.clone().lerp(L1, .5).lerp(ribs[a][S - 2].clone().lerp(ribs[a + 1][S - 2], .5), .75)] : [L0, L1]) pos.push(p.x, p.y, p.z); }
+        for (let i = 0; i < S; i++) { const p = base + i * 2; if (i < S - 1) idx.push(p, p + 2, p + 1, p + 1, p + 2, p + 3); else idx.push(p, p + 2, p + 4, p + 1, p + 4, p + 3, p, p + 4, p + 1); } }
+      const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); add(new T.Mesh(g, web), H.dragon); } }
+  hgrp("swan"); { const f = figure(H.swan);
+    const white = solid(0xFFFDF7, .5), pearl = solid(0xEFE6D6, .55), bill = solid(0xF0701E, .42), ink = solid(0x14110E, .35), gilt = solid(0xF0BE3F, .3, .55), rose = solid(0xEE7E9F, .55), roseDeep = solid(0xC9406F, .55), leaf = solid(0x5F9A55, .6), ruby = solid(0xD41B3E, .2, .1), pearlBead = solid(0xFFF6EA, .22, .1);
+    // a full breast against the stem, then the long S of the neck, thinning towards the head
+    const body = lathe([[.001, -.56], [.2, -.44], [.31, -.12], [.29, .24], [.17, .5], [.001, .62]], white, f); body.rotation.z = -Math.PI / 2 + .16; body.position.set(.02, -.44, 0); body.scale.z = .74;
+    sweep([[.28, -.42, 0], [.6, -.28, 0], [.72, -.02, 0], [.64, .2, 0], [.68, .38, 0], [.92, .46, 0], [1.04, .44, 0]], t => .155 - .085 * Math.pow(t, .8), white, f, 34, 14);
+    const collar = add(new T.Mesh(new T.TorusGeometry(.15, .018, 8, 24), gilt), f); collar.position.set(.67, -.14, 0); collar.rotation.set(Math.PI / 2, .24, 0); collar.scale.y = .98;
+    const h = new T.Group(); f.add(h); h.position.set(1.06, .44, 0); h.rotation.z = -.14; h.scale.setScalar(1.18);
+    ball(.125, white, h, 0, 0, 0, 1.2, .94, .9);
+    ball(.052, ink, h, .135, .01, 0, 1.1, .85, .9); // the black knob where the bill meets the face
+    const billTop = lathe([[.001, 0], [.058, .012], [.062, .08], [.046, .15], [.02, .2], [.001, .215]], bill, h); billTop.rotation.z = -Math.PI / 2 - .1; billTop.position.set(.13, -.006, 0); billTop.scale.z = .9; billTop.scale.x = .74;
+    ball(.016, ink, h, .335, -.03, 0, 1.2, .55, 1);
+    for (const s of [-1, 1]) { ball(.022, ink, h, .1, .012, s * .083, 1.5, .55, .5); ball(.0165, ink, h, .068, .03, s * .1); ball(.0055, pearlBead, h, .075, .036, s * .113); }
+    // a small gold crown set a little back on the head
+    const crown = new T.Group(); h.add(crown); crown.position.set(-.01, .112, 0); crown.rotation.z = .1;
+    const band = add(new T.Mesh(new T.CylinderGeometry(.085, .072, .05, 18, 1, true), gilt), crown); band.material = gilt.clone(); band.material.side = T.DoubleSide;
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, tip = add(new T.Mesh(new T.ConeGeometry(.024, .075, 6), gilt), crown); tip.position.set(Math.cos(a) * .086, .055, Math.sin(a) * .086); tip.rotation.set(Math.sin(a) * .25, 0, -Math.cos(a) * .25); ball(.012, pearlBead, crown, Math.cos(a) * .093, .096, Math.sin(a) * .093); }
+    ball(.019, ruby, crown, .079, -.003, 0, .5, 1, 1);
+    // a garland of roses around the foot of the neck
+    const heart = solid(0xF9D9E2, .5), neckBase = new T.Vector3(.615, -.215, 0), across = new T.Vector3(.94, -.34, 0), sideways = new T.Vector3(0, 0, 1), facing = new T.Vector3(0, 0, 1);
+    for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2, out = across.clone().multiplyScalar(Math.cos(a)).addScaledVector(sideways, Math.sin(a)), o = new T.Group(); f.add(o); o.position.copy(neckBase).addScaledVector(out, .172); o.quaternion.setFromUnitVectors(facing, out); o.scale.setScalar(1 + (i % 2) * .16);
+      ball(.054, i % 3 === 1 ? roseDeep : rose, o, 0, 0, 0, 1, 1, .72); ball(.033, i % 3 === 1 ? rose : roseDeep, o, 0, 0, .026, 1, 1, .7); ball(.014, heart, o, 0, 0, .05);
+      ball(.042, leaf, o, .05, -.03, -.012, 1.25, .5, .3).rotation.z = -.5; }
+    // a folded wing on each side: rows of overlapping feathers laid on the planks, the tips rising past the rail
+    const feather = new T.SphereGeometry(.5, 14, 9); { const p = feather.attributes.position; for (let i = 0; i < p.count; i++) p.setY(i, p.getY(i) * (1.3 - 1.1 * (p.getX(i) + .5))); feather.computeVertexNormals(); } // broad at the root, narrow at the tip
+    for (const s of [1, -1]) { const k = headK, under = [], rows = [[], []], rise = Math.atan(.62 * k / (.135 * L));
+      for (let i = 0; i < 8; i++) { const v = i / 7; under.push(shingle(.978 - v * .12, k * (.52 - .62 * v), s, k * .5, k * (.72 - .42 * v), .03, rise, .05)); } // a solid wing under the feathers, so no planks show through
+      many(unitBall, pearl, H.swan, under);
+      for (let r = 0; r < 5; r++) for (let i = 0; i < 12; i++) { const v = i / 11, u = .978 - v * .135 + (r % 2) * .005, base = k * (.53 - .68 * v), gap = k * .135 * (1 - .55 * v), long = r > 2 ? .1 : 0;
+        rows[(r + i) % 2].push(shingle(u, base + (r - 2) * gap, s, k * (.24 + .3 * v + long), k * .2 * (1 - .3 * v), .075 + (4 - r) * .004, rise + (2 - r) * .1 * (1 - v * .5))); }
+      many(feather, white, H.swan, rows[0]); many(feather, pearl, H.swan, rows[1]); }
+    // short breast feathers, overlapping downwards, so the body isn't one smooth egg
+    { const down = []; for (let r = 0; r < 6; r++) for (let i = 0; i < 20; i++) { const a = (i + (r % 2) * .5) / 20 * Math.PI * 2, x = -.1 + r * .115, rr = .29 * Math.sqrt(Math.max(.05, 1 - Math.pow((x - .02) / .62, 2))), y = -.44 + (x - .02) * .16 + Math.cos(a) * rr * .98, z = Math.sin(a) * rr * .74;
+        down.push(place(x, y, z, a - Math.PI / 2, 0, 0, .19, .14, .028)); } many(unitBall, white, f, down); } }
   grp("nest"); { const y = deckY(mainM.u) + mainM.h * .68, x = xAt(mainM.u);
     add(new T.Mesh(new T.CylinderGeometry(.55, .45, .42, 16, 1, true), M.wood), A.nest).position.set(x, y, 0);
     add(new T.Mesh(new T.CylinderGeometry(.45, .45, .06, 16), M.wood), A.nest).position.set(x, y - .2, 0);
@@ -277,10 +354,6 @@ function build() {
     const pl = new T.PointLight(0xFFB347, 1.2, 6, 2); pl.position.y = .35; lamp.add(pl); lamps.push(pl); }
   // the parrot perches on the rail beside the main mast
   grp("parrot"); const bird = new T.Group(); A.parrot.add(bird); bird.position.copy(sideP(.5, 0, 1)).add(new T.Vector3(0, .26, -.08)); bird.scale.setScalar(1.5);
-  // small modelling helpers for the two animal crew
-  const solid = c => new T.MeshStandardMaterial({ color: new T.Color(c).convertSRGBToLinear(), roughness: .62 }); // true to the hex: unconverted, these colours wash out pale
-  const ball = (r, m, parent, x, y, z, sx = 1, sy = 1, sz = 1) => { const o = add(new T.Mesh(new T.SphereGeometry(r, 16, 12), m), parent); o.position.set(x, y, z); o.scale.set(sx, sy, sz); return o; };
-  const lathe = (pts, m, parent) => add(new T.Mesh(new T.LatheGeometry(new T.SplineCurve(pts.map(([a, b]) => new T.Vector2(a, b))).getPoints(22), 20), m), parent);
   { // a scarlet macaw in profile: leaning forward, wings folded in bands of red, yellow and blue
     const red = solid(0xD7261E), yel = solid(0xF7C51E), blue = solid(0x1E5FC8), teal = solid(0x1F8F7A), white = solid(0xFBF7EE), ink = solid(0x17130F), horn = solid(0xD8C49A), grey = solid(0x6B6660);
     const body = lathe([[.001, -.22], [.1, -.17], [.16, -.04], [.15, .08], [.1, .18], [.001, .22]], red, bird); body.rotation.z = -.3; body.scale.z = .85;
@@ -298,17 +371,68 @@ function build() {
     const hook = add(new T.Mesh(new T.ConeGeometry(.05, .11, 12), horn), bird); hook.position.set(.238, .245, 0); hook.rotation.z = Math.PI + .4;
     ball(.038, ink, bird, .195, .228, 0, 1, .8, .8);
     [[0, red], [-.05, blue], [.05, blue]].forEach(([z, m]) => { const f = ball(.04, m, bird, -.136 + Math.abs(z) * .25, -.44 + Math.abs(z) * .5, z, 1, 6, .35); f.rotation.z = -.3; f.rotation.x = z * 1.4; }); }
-  grp("treasure"); { const x = xAt(.56), y = deckY(.56);
-    add(new T.Mesh(new T.BoxGeometry(.7, .42, .5), new T.MeshStandardMaterial({ color: 0x8A5328, roughness: .7 })), A.treasure).position.set(x, y + .21, .7);
-    const lid = add(new T.Mesh(new T.CylinderGeometry(.25, .25, .7, 12, 1, false, 0, Math.PI), new T.MeshStandardMaterial({ color: 0xA9652F, roughness: .7 })), A.treasure); lid.rotation.z = Math.PI / 2; lid.position.set(x, y + .42, .7);
-    add(new T.Mesh(new T.BoxGeometry(.72, .06, .52), M.gold), A.treasure).position.set(x, y + .32, .7);
-    for (let i = 0; i < 26; i++) { const c = add(new T.Mesh(new T.CylinderGeometry(.09, .09, .03, 12), M.gold), A.treasure); const a = i * 2.4, r = (i % 7) / 7 * .55;
-      c.position.set(x - .55 + Math.cos(a) * r * .6, y + .03 + (i % 5) * .035, .7 + Math.sin(a) * r); c.rotation.set(i, i * .7, i * 1.3); } }
-  grp("anchor"); { const a = new T.Group(); A.anchor.add(a); a.position.copy(sideP(.88, .2, 1)).add(new T.Vector3(0, -.35, .12));
-    add(new T.Mesh(new T.CylinderGeometry(.05, .05, 1.1, 8), M.iron), a);
-    const arm = add(new T.Mesh(new T.TorusGeometry(.38, .05, 8, 20, Math.PI), M.iron), a); arm.rotation.z = Math.PI; arm.position.y = -.38;
-    add(new T.Mesh(new T.TorusGeometry(.12, .03, 6, 16), M.iron), a).position.y = .62;
-    const stock = add(new T.Mesh(new T.CylinderGeometry(.04, .04, .6, 8), M.iron), a); stock.rotation.z = Math.PI / 2; stock.position.y = .4; }
+  grp("treasure"); { const tk = Math.min(1, .6 + W * .22), g = new T.Group(); A.treasure.add(g); g.position.set(xAt(.56), deckY(.56), W * .42); g.rotation.y = .4; g.scale.setScalar(tk);
+    const wood = solid(0x6B3B1C, .72), woodDark = solid(0x3A1E0E, .85), strap = solid(0x2E3036, .42, .6), gilt = solid(0xF0BE3F, .3, .55), velvet = solid(0x8E1830, .9), pearlBead = solid(0xFFF6EA, .22, .1);
+    const w = .86, d = .54, h = .4, box = (sx, sy, sz, m, x, y, z) => { const o = add(new T.Mesh(new T.BoxGeometry(sx, sy, sz), m), g); o.position.set(x, y, z); return o; };
+    // the chest: planks, iron straps, gold corners and a lock plate
+    box(w, h, d, wood, 0, h / 2 + .03, 0);
+    for (const y of [.14, .25, .36]) box(w + .006, .012, d + .006, woodDark, 0, y, 0);
+    for (const x of [-.27, .27]) { box(.055, h + .012, d + .022, strap, x, h / 2 + .03, 0); for (const y of [.09, .2, .32]) for (const s of [-1, 1]) ball(.013, gilt, g, x, y, s * (d / 2 + .013)); }
+    for (const x of [-1, 1]) for (const z of [-1, 1]) { box(.05, h + .022, .05, gilt, x * (w / 2 - .012), h / 2 + .03, z * (d / 2 - .012)); box(.09, .05, .09, woodDark, x * (w / 2 - .05), .02, z * (d / 2 - .05)); }
+    box(w + .02, .035, d + .02, gilt, 0, h + .03, 0);
+    box(.13, .15, .016, gilt, 0, h - .045, d / 2 + .012); ball(.018, woodDark, g, 0, h - .03, d / 2 + .022, 1, 1, .4); box(.013, .042, .006, woodDark, 0, h - .067, d / 2 + .021);
+    // the lid stands open, hinged at the back and lined with red velvet
+    const lid = new T.Group(); g.add(lid); lid.position.set(0, h + .045, -d / 2); lid.rotation.x = -1.28;
+    const dome = (m, r, side) => { const o = add(new T.Mesh(new T.CylinderGeometry(r, r, w, 20, 1, false, 0, Math.PI), m), lid); if (side) { o.material = m.clone(); o.material.side = side; } o.rotation.z = Math.PI / 2; o.position.z = d / 2; return o; };
+    dome(wood, d / 2 + .004, T.DoubleSide); dome(velvet, d / 2 - .012, T.BackSide);
+    for (const x of [-.27, .27]) { const s = add(new T.Mesh(new T.CylinderGeometry(d / 2 + .018, d / 2 + .018, .055, 20, 1, true, 0, Math.PI), strap), lid); s.rotation.z = Math.PI / 2; s.position.set(x, 0, d / 2); }
+    for (const x of [-w / 2 + .01, w / 2 - .01]) { const s = add(new T.Mesh(new T.CylinderGeometry(d / 2 + .02, d / 2 + .02, .03, 20, 1, true, 0, Math.PI), gilt), lid); s.rotation.z = Math.PI / 2; s.position.set(x, 0, d / 2); }
+    // the heap: mounds of gold under a loose layer of coins, inside the chest and spilling over the front onto the deck
+    ball(.42, gilt, g, 0, h + .02, .02, .98, .42, .58); ball(.5, gilt, g, .04, .01, d / 2 + .22, 1, .2, .62);
+    const seeded = n => { const x = Math.sin(n * 127.1) * 43758.5453; return x - Math.floor(x); }, coins = [];
+    for (let i = 0; i < 95; i++) { const a = i * 2.39996, r = Math.sqrt((i + .5) / 95), x = Math.cos(a) * r, z = Math.sin(a) * r, up = Math.sqrt(Math.max(0, 1 - r * r)); coins.push(place(x * .41, h + .025 + up * .165, .02 + z * .24, seeded(i) * 1.1 - .55, seeded(i + 40) * 6, seeded(i + 80) * 1.1 - .55)); }
+    for (let i = 0; i < 90; i++) { const a = i * 2.39996, r = Math.sqrt((i + .5) / 90), x = Math.cos(a) * r, z = Math.sin(a) * r, up = Math.sqrt(Math.max(0, 1 - r * r)); coins.push(place(.04 + x * .5, .018 + up * .09, d / 2 + .22 + z * .31, seeded(i + 5) * .9 - .45, seeded(i + 15) * 6, seeded(i + 25) * .9 - .45)); }
+    for (let i = 0; i < 30; i++) { const a = seeded(i + 200) * 6.283, r = .62 + seeded(i + 300) * .3; coins.push(place(.04 + Math.cos(a) * r * .9, .014, d / 2 + .2 + Math.sin(a) * r * .5 + .06, 0, a, 0)); } // a few loose coins further out
+    for (let i = 0; i < 14; i++) coins.push(place(-.2 + seeded(i + 11) * .4, h * (.26 + (i % 8) * .09), d / 2 + .03, Math.PI / 2 + seeded(i) * .5 - .25, 0, seeded(i + 60) * .5)); // running down the front of the chest
+    const coinMesh = many(new T.CylinderGeometry(.052, .052, .012, 14), solid(0xFFD35A, .34, .5), g, coins);
+    const shades = [new T.Color(1, 1, 1), new T.Color(1, .9, .68), new T.Color(.86, .68, .4)]; coins.forEach((m, i) => coinMesh.setColorAt(i, shades[i % 3]));
+    // jewels: cut stones on the heap, a crown, a goblet, gold bars and a string of pearls with a pendant
+    const stone = (c, glow = .3) => { const m = solid(c, .14, .15); m.emissive = new T.Color(c).convertSRGBToLinear(); m.emissiveIntensity = glow; m.flatShading = true; return m; };
+    const ruby = stone(0xE0173F), sapphire = stone(0x1E5BE8), emerald = stone(0x11B26B), amethyst = stone(0xA33BE0), pink = stone(0xFF6FB0, .4);
+    [[ruby, .15, h + .17, .13, .05], [sapphire, -.17, h + .15, .1, .042], [emerald, -.04, h + .19, -.03, .042], [amethyst, .28, h + .1, .02, .036], [pink, -.29, h + .1, .01, .04], [sapphire, .3, .1, d / 2 + .22, .038], [ruby, -.2, .08, d / 2 + .26, .036], [emerald, .13, .13, d / 2 + .16, .034], [pink, -.03, .11, d / 2 + .37, .034], [amethyst, .4, .05, d / 2 + .38, .03]].forEach(([m, x, y, z, r], i) => { const o = add(new T.Mesh(new T.OctahedronGeometry(r, 0), m), g); o.position.set(x, y, z); o.rotation.set(i, i * 1.3, i * .7); o.scale.y = 1.25; });
+    const crown = new T.Group(); g.add(crown); crown.position.set(-.09, h + .2, -.08); crown.rotation.set(.24, .3, -.2); crown.scale.setScalar(1.15);
+    const band = add(new T.Mesh(new T.CylinderGeometry(.115, .1, .07, 20, 1, true), gilt.clone()), crown); band.material.side = T.DoubleSide;
+    add(new T.Mesh(new T.TorusGeometry(.102, .012, 6, 22), velvet), crown).rotation.x = Math.PI / 2;
+    for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2, tip = add(new T.Mesh(new T.ConeGeometry(.028, .1, 6), gilt), crown); tip.position.set(Math.cos(a) * .117, .08, Math.sin(a) * .117); tip.rotation.set(Math.sin(a) * .2, 0, -Math.cos(a) * .2); ball(.013, pearlBead, crown, Math.cos(a) * .127, .135, Math.sin(a) * .127); add(new T.Mesh(new T.OctahedronGeometry(.016, 0), [ruby, sapphire, emerald][i % 3]), crown).position.set(Math.cos(a) * .111, 0, Math.sin(a) * .111); }
+    const cup = lathe([[.001, 0], [.075, .004], [.07, .02], [.016, .05], [.014, .12], [.03, .15], [.075, .2], [.08, .28], [.072, .28], [.06, .21], [.001, .18]], gilt, g); cup.position.set(.33, h + .05, -.1); cup.rotation.set(-.14, 0, -.2);
+    for (let i = 0; i < 4; i++) add(new T.Mesh(new T.OctahedronGeometry(.012, 0), [ruby, emerald][i % 2]), cup).position.set(Math.cos(i * 1.57) * .071, .24, Math.sin(i * 1.57) * .071);
+    const bar = new T.CylinderGeometry(.075, .105, .05, 4); bar.rotateY(Math.PI / 4); bar.scale(1.55, 1, .8); many(bar, solid(0xF4C445, .28, .6), g, [place(w / 2 + .23, .028, .08, 0, .12), place(w / 2 + .24, .028, -.1, 0, -.05), place(w / 2 + .235, .08, -.01, 0, .5)]);
+    const strand = new T.CatmullRomCurve3([[-.3, h + .15, .04], [-.33, h + .1, .18], [-.34, h + .04, d / 2 + .02], [-.32, h - .1, d / 2 + .03], [-.26, h - .2, d / 2 + .035], [-.2, h - .14, d / 2 + .03], [-.16, h - .02, d / 2 + .025], [-.12, h + .08, .19], [-.07, h + .15, .08]].map(p => new T.Vector3(...p))), beads = [];
+    for (let i = 0; i <= 34; i++) { const p = strand.getPointAt(i / 34); beads.push(place(p.x, p.y, p.z)); } many(new T.SphereGeometry(.0125, 8, 6), pearlBead, g, beads);
+    const drop = add(new T.Mesh(new T.OctahedronGeometry(.036, 0), pink), g); drop.position.set(-.26, h - .245, d / 2 + .04); drop.scale.y = 1.35; }
+  grp("anchor"); { const k = headK * .9, iron = solid(0x4A5059, .4, .55), ironDark = solid(0x2A2D33, .46, .55), oak = solid(0x7A4B26, .75), hemp = solid(0xC9A66B, .9), tilt = .85;
+    const palm = new T.Shape(); palm.moveTo(0, .17); palm.quadraticCurveTo(.1, .1, .105, -.03); palm.quadraticCurveTo(.05, -.03, 0, -.1); palm.quadraticCurveTo(-.05, -.03, -.105, -.03); palm.quadraticCurveTo(-.1, .1, 0, .17);
+    const palmGeo = new T.ExtrudeGeometry(palm, { depth: .022, bevelEnabled: true, bevelSize: .007, bevelThickness: .007, bevelSegments: 1, curveSegments: 6 }); palmGeo.translate(0, 0, -.011);
+    const linkGeo = new T.TorusGeometry(.038, .012, 6, 12);
+    // one a side, stowed as a real ship carries it: hung from a timber at the rail and lying back along the planks, clear of the water
+    for (const s of [1, -1]) { const { P, X, N } = hullFrame(.78, .2 * k + .02, s), a = new T.Group(); A.anchor.add(a); a.scale.setScalar(k);
+      a.rotation.set(s * .05, Math.atan2(X.z, -X.x), -tilt, "YXZ"); const ring = new T.Vector3(0, .6 * k, 0).applyEuler(a.rotation); a.position.copy(P).addScaledVector(N, .17 * k).sub(ring);
+      add(new T.Mesh(new T.CylinderGeometry(.04, .068, 1.04, 12), iron), a);
+      ball(.085, iron, a, 0, -.52, 0, 1, .82, .85);
+      for (const q of [-1, 1]) { sweep([[0, -.52, 0], [q * .16, -.545, 0], [q * .32, -.47, 0], [q * .43, -.3, 0], [q * .47, -.1, 0]], t => .06 - .034 * t, iron, a, 16, 8);
+        const f = add(new T.Mesh(palmGeo, iron), a); f.position.set(q * .442, -.235, 0); f.rotation.z = -q * .22; const bill = add(new T.Mesh(new T.ConeGeometry(.024, .13, 8), iron), a); bill.position.set(q * .475, -.045, 0); bill.rotation.z = -q * .1; }
+      // the wooden stock with two iron bands, and the ring at the top
+      const stock = add(new T.Mesh(new T.CylinderGeometry(.058, .036, .42, 4), oak), a); stock.position.set(-.21, .4, 0); stock.rotation.set(Math.PI / 4, 0, Math.PI / 2, "ZXY");
+      const stock2 = add(new T.Mesh(new T.CylinderGeometry(.058, .036, .42, 4), oak), a); stock2.position.set(.21, .4, 0); stock2.rotation.set(Math.PI / 4, 0, -Math.PI / 2, "ZXY");
+      for (const q of [-1, 1]) { const b = add(new T.Mesh(new T.CylinderGeometry(.05, .05, .018, 10), ironDark), a); b.position.set(q * .1, .4, 0); b.rotation.z = Math.PI / 2; }
+      add(new T.Mesh(new T.CylinderGeometry(.064, .064, .06, 10), ironDark), a).position.y = .4;
+      const eye = add(new T.Mesh(new T.TorusGeometry(.09, .018, 8, 22), iron), a); eye.position.y = .59;
+      for (let i = 0; i < 4; i++) { const w = add(new T.Mesh(new T.TorusGeometry(.024, .012, 6, 10), hemp), a); w.position.set(Math.sin(i * .35 - .5) * .09, .59 - Math.cos(i * .35 - .5) * .09, 0); w.rotation.y = Math.PI / 2; w.rotation.z = -(i * .35 - .5); }
+      // the chain up from the ring to a timber jutting out over the rail
+      const top = sideP(.78, -.1 * k, s).addScaledVector(N, .17 * k), from = P.clone().addScaledVector(N, .17 * k), links = [], dir = top.clone().sub(from), n = 5;
+      for (let i = 0; i < n; i++) { const c = from.clone().addScaledVector(dir, (i + .5) / n), q = new T.Quaternion().setFromUnitVectors(new T.Vector3(1, 0, 0), dir.clone().normalize()); if (i % 2) q.multiply(new T.Quaternion().setFromAxisAngle(new T.Vector3(1, 0, 0), Math.PI / 2)); links.push(new T.Matrix4().compose(c, q, new T.Vector3(k * 1.15, k * .72, k))); }
+      many(linkGeo, ironDark, A.anchor, links);
+      const beam = add(new T.Mesh(new T.BoxGeometry(.13 * k, .12 * k, (.5 + .17) * k), oak), A.anchor); beam.position.copy(sideP(.78, -.06 * k, s)).addScaledVector(N, -.09 * k); beam.position.y = top.y; beam.rotation.y = Math.atan2(N.x, N.z); const bcap = add(new T.Mesh(new T.BoxGeometry(.15 * k, .14 * k, .03 * k), ironDark), A.anchor); bcap.position.copy(beam.position).addScaledVector(N, .335 * k); bcap.rotation.y = beam.rotation.y; } }
   const PASTEL = [0xF7A8C4, 0xFFD3A8, 0xFFF1A8, 0xA8E6CF, 0xA8D8F7, 0xC9B6F2];
   const mat = c => new T.MeshStandardMaterial({ color: c, roughness: .55 });
   grp("flowers"); { const leaf = mat(0x6FAE5A), cols = [0xF7A8C4, 0xFFFFFF, 0xFFE27A, 0xC9B6F2].map(mat);
