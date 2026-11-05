@@ -1,6 +1,6 @@
 ﻿// keeps the app shell available offline; data (/api) always comes from the network
-const CACHE = "hs-v12";
-const SHELL = ["/", "/style.css", "/voyage.js", "/ship3d.js", "/games.js", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png"];
+const CACHE = "hs-v13";
+const SHELL = ["/", "/style.css", "/sound.js", "/voyage.js", "/ship3d.js", "/games.js", "/app.js", "/manifest.webmanifest", "/icons/icon-192.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener("fetch", e => {

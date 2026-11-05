@@ -5,7 +5,15 @@ const SESSION_DAYS = { teacher: 14, student: 60 };
 const PBKDF2_ITER = 60000, MAX_FAILED = 5, LOCK_MS = 10 * 60 * 1000;
 const SAILS = 16; // free sail/flag colours, see SAILS in public/voyage.js
 const SUBJECTS = ["영어", "수학", "공통"], KINDS = ["daily", "weekly", "challenge"];
-const DEFAULT_GAME = { energyMax: 20, playCost: 1, passCost: 200, battlesPerDay: 3, win: 30, lose: 10, defend: 10, startGold: 100, hourFrom: 0, hourTo: 0 };
+const DEFAULT_GAME = { energyMax: 20, playCost: 1, passCost: 200, battlesPerDay: 3, win: 30, lose: 10, defend: 10, startGold: 100, hourFrom: 0, hourTo: 0, bossHp: 60, bossGold: 100 }; // bossHp is per student; 0 switches the boss off
+// the class boss, in the order they arrive. look uses the same names as a kid's ship; sail is a plain colour, darker than any a kid can pick.
+const BOSSES = [
+  { name: "검은 돛 해적선", ship: "galleon", look: { hull: "ebony", se: "skull", fe: "skull" }, sail: "#23262B" },
+  { name: "붉은 철갑 해적선", ship: "ironclad", look: { hull: "red", smoke: "white" }, sail: "#8E2A22" },
+  { name: "유령 구축함", ship: "destroyer", look: { camo: "stealth", smoke: "white" }, sail: "#3A4148" },
+  { name: "해적왕의 항공모함", ship: "carrier", look: { camo: "splinter", att: ["fighter", "heli"] }, sail: "#8E2A22" }
+];
+const BOSS_QUEST_DMG = 10, BOSS_STAR_DMG = 2, BOSS_TEACHER_DMG = 20, BOSS_IDLE_SHARE = .3, BOSS_LAST_HIT_GOLD = 50; // a kid who took no part gets 30% of the reward
 
 // mini-games: the score needed for 1, 2 and 3 stars, the highest believable score, and the shortest believable play
 const GAMES = {
@@ -158,17 +166,67 @@ async function questBlocked(db, sid, q) {
   if (await db.prepare("SELECT 1 FROM logs WHERE student_id=? AND kind='quest' AND quest_id=? AND date>=? LIMIT 1").bind(sid, q.id, since).first()) return q.kind === "daily" ? "오늘은 이미 완료한 미션이에요" : "이번 주에 이미 완료한 미션이에요";
   return null;
 }
+/* ---------- the class boss ---------- */
+// a class meets this week's boss the first time anyone looks; its hp is fixed then, so settings changed later apply to next week's
+async function currentBoss(db, classId, game) {
+  if (!game.bossHp) return null;
+  const find = () => db.prepare("SELECT * FROM bosses WHERE class_id=? AND week=?").bind(classId, kstWeekStart()).first();
+  const b = await find(); if (b) return b;
+  const n = (await db.prepare("SELECT COUNT(*) AS n FROM students WHERE class_id=? AND active=1").bind(classId).first()).n; if (!n) return null;
+  const made = (await db.prepare("SELECT COUNT(*) AS n FROM bosses WHERE class_id=?").bind(classId).first()).n;
+  await db.prepare("INSERT OR IGNORE INTO bosses (class_id, week, kind, hp, gold, created_at) VALUES (?,?,?,?,?,?)").bind(classId, kstWeekStart(), made % BOSSES.length, n * game.bossHp, game.bossGold, Date.now()).run();
+  return find();
+}
+const bossLeft = async (db, b) => Math.max(0, b.hp - (await db.prepare("SELECT COALESCE(SUM(dmg), 0) AS n FROM boss_hits WHERE boss_id=?").bind(b.id).first()).n);
+// pays the whole class once; the update only succeeds for the first caller, so two last hits at once can't pay twice
+async function defeatBoss(db, b, finisher) {
+  const r = await db.prepare("UPDATE bosses SET defeated_at=?, finisher=? WHERE id=? AND defeated_at=0").bind(Date.now(), finisher, b.id).run(); if (!r.meta.changes) return;
+  const kids = (await db.prepare("SELECT id FROM students WHERE class_id=? AND active=1").bind(b.class_id).all()).results;
+  const joined = new Set((await db.prepare("SELECT DISTINCT student_id AS id FROM boss_hits WHERE boss_id=?").bind(b.id).all()).results.map(x => x.id)), name = BOSSES[b.kind].name, ops = [];
+  for (const k of kids) { const gold = bossGoldFor(b, joined.has(k.id), k.id === finisher); if (gold) ops.push(logStmt(db, { student_id: k.id, kind: "boss", title: `${name} 격파 보상`, gold })); }
+  for (let i = 0; i < ops.length; i += 90) await db.batch(ops.slice(i, i + 90));
+}
+const bossGoldFor = (b, joined, last) => (joined ? b.gold : Math.round(b.gold * BOSS_IDLE_SHARE)) + (last ? BOSS_LAST_HIT_GOLD : 0);
+// hits: [{ sid, cls, dmg, src }]; several classes at once when a teacher approves a pile of missions. Returns each class's boss after the hits.
+async function hitBosses(db, game, hits) {
+  const out = {};
+  for (const cls of new Set(hits.map(h => h.cls))) {
+    const mine = hits.filter(h => h.cls === cls && h.dmg > 0); if (!mine.length) continue;
+    const b = await currentBoss(db, cls, game); if (!b || b.defeated_at) continue;
+    const ops = mine.map(h => db.prepare("INSERT INTO boss_hits (boss_id, student_id, dmg, src, at) VALUES (?,?,?,?,?)").bind(b.id, h.sid, h.dmg, h.src, Date.now()));
+    for (let i = 0; i < ops.length; i += 90) await db.batch(ops.slice(i, i + 90));
+    const left = await bossLeft(db, b); if (!left) await defeatBoss(db, b, mine[mine.length - 1].sid);
+    out[cls] = { name: BOSSES[b.kind].name, left, hp: b.hp, down: !left };
+  }
+  return out;
+}
+// what a kid sees: this week's boss, and the last win if it is recent enough to still celebrate
+async function bossView(db, st, game, mates) {
+  const b = await currentBoss(db, st.class_id, game), nameOf = id => mates.find(m => m.id === id)?.nickname || "";
+  const lastWin = await db.prepare("SELECT * FROM bosses WHERE class_id=? AND defeated_at>? ORDER BY id DESC LIMIT 1").bind(st.class_id, Date.now() - 8 * 864e5).first();
+  let win = null;
+  if (lastWin) { const joined = !!(await db.prepare("SELECT 1 FROM boss_hits WHERE boss_id=? AND student_id=? LIMIT 1").bind(lastWin.id, st.id).first());
+    win = { id: lastWin.id, name: BOSSES[lastWin.kind].name, art: BOSSES[lastWin.kind], gold: bossGoldFor(lastWin, joined, lastWin.finisher === st.id), last: lastWin.finisher === st.id, finisher: nameOf(lastWin.finisher), joined }; }
+  if (!b) return { off: true, win };
+  const tot = (await db.prepare("SELECT student_id AS id, SUM(dmg) AS dmg FROM boss_hits WHERE boss_id=? GROUP BY student_id").bind(b.id).all()).results, sum = tot.reduce((n, x) => n + x.dmg, 0);
+  const feed = (await db.prepare("SELECT student_id AS id, dmg, src FROM boss_hits WHERE boss_id=? ORDER BY id DESC LIMIT 4").bind(b.id).all()).results.map(x => ({ who: x.id ? nameOf(x.id) : "선생님", dmg: x.dmg, src: x.src })).filter(x => x.who);
+  return { id: b.id, name: BOSSES[b.kind].name, art: BOSSES[b.kind], hp: b.hp, left: Math.max(0, b.hp - sum), down: !!b.defeated_at, gold: b.gold, mine: tot.find(x => x.id === st.id)?.dmg || 0, joined: tot.filter(x => x.id).length, crew: mates.length, feed, questDmg: BOSS_QUEST_DMG, starDmg: BOSS_STAR_DMG, win };
+}
 // energy from homework, stopping at the cap
 async function giveEnergy(db, game, pairs) {
   const bal = await balances(db, [...new Set(pairs.map(p => p.sid))]), ops = [], skipped = [];
   for (const p of pairs) {
     const why = await questBlocked(db, p.sid, p.quest);
-    if (why) { skipped.push({ studentId: p.sid, why }); if (p.requestId) ops.push(db.prepare("UPDATE requests SET status='rejected', decided_at=? WHERE id=?").bind(Date.now(), p.requestId)); continue; }
+    if (why) { p.blocked = true; skipped.push({ studentId: p.sid, why }); if (p.requestId) ops.push(db.prepare("UPDATE requests SET status='rejected', decided_at=? WHERE id=?").bind(Date.now(), p.requestId)); continue; }
     const give = Math.max(0, Math.min(p.quest.energy, game.energyMax - bal[p.sid].energy)); bal[p.sid].energy += give;
     ops.push(logStmt(db, { student_id: p.sid, kind: "quest", title: p.quest.title, quest_id: p.quest.id, energy: give }));
     ops.push(db.prepare("UPDATE requests SET status='approved', decided_at=? WHERE student_id=? AND quest_id=? AND status='pending'").bind(Date.now(), p.sid, p.quest.id));
   }
   for (let i = 0; i < ops.length; i += 90) await db.batch(ops.slice(i, i + 90));
+  // every mission the teacher accepted is a shot at the class boss, even when the kid's energy is already full
+  const shot = pairs.filter(p => !p.blocked), ids = [...new Set(shot.map(p => p.sid))], classOf = {};
+  for (let i = 0; i < ids.length; i += 80) { const part = ids.slice(i, i + 80); for (const r of (await db.prepare(`SELECT id, class_id FROM students WHERE id IN (${part.map(() => "?").join(",")})`).bind(...part).all()).results) classOf[r.id] = r.class_id; }
+  await hitBosses(db, game, shot.filter(p => classOf[p.sid]).map(p => ({ sid: p.sid, cls: classOf[p.sid], dmg: BOSS_QUEST_DMG, src: "quest" })));
   return { given: pairs.length - skipped.length, skipped };
 }
 // a random item for a good mini-game; one already owned pays gold instead
@@ -271,7 +329,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
     upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
     bal, game, quests, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
-    battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders };
+    battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates) };
 });
 on("POST", "/api/kid/request", "student", async ({ db, me, body }) => {
   const q = await db.prepare("SELECT * FROM quests WHERE id=? AND active=1 AND deleted=0").bind(int(body.questId, 1)).first(); if (!q) throw bad("없는 미션이에요");
@@ -302,7 +360,9 @@ on("POST", "/api/kid/play/finish/:id", "student", async ({ db, me, params, body 
   if (!r.meta.changes) throw bad("이미 끝난 게임이에요");
   await logStmt(db, { student_id: sid, kind: "game", title: `${map.isles[p.game]} 별 ${stars}개`, points }).run();
   const item = randInt(100) < STAR_DROP[stars] ? await rollItem(db, sid, map.id, me.student.ship) : null;
-  return { ok: true, stars, score, points, item };
+  // a game played to the end always scratches the boss; a game left at once does nothing
+  const dmg = body.quit || fast ? 0 : Math.max(1, stars * BOSS_STAR_DMG), cls = me.student.class_id, hit = (await hitBosses(db, await getGame(db), [{ sid, cls, dmg, src: "game" }]))[cls];
+  return { ok: true, stars, score, points, item, boss: hit ? { ...hit, dmg } : null };
 });
 // gold shop
 on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
@@ -461,7 +521,16 @@ on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   const logs = (await db.prepare("SELECT id, student_id, kind, title, energy, points, gold, at FROM logs WHERE date=? ORDER BY id DESC LIMIT 80").bind(today).all()).results;
   const battles = (await db.prepare("SELECT b.id, b.winner, b.attacker, b.delta, b.at, a.nickname AS a_name, d.nickname AS d_name FROM battles b JOIN students a ON a.id=b.attacker JOIN students d ON d.id=b.defender WHERE b.date=? ORDER BY b.id DESC LIMIT 60").bind(today).all()).results;
   const photos = (await db.prepare("SELECT p.id, p.student_id, p.created_at FROM photos p JOIN students s ON s.id=p.student_id WHERE p.status='pending' AND s.active=1 ORDER BY p.id").all()).results;
-  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, logs, battles, ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
+  const bosses = [];
+  for (const c of classes) { const b = await currentBoss(db, c.id, game); if (!b) continue;
+    const tot = (await db.prepare("SELECT student_id AS id, SUM(dmg) AS dmg FROM boss_hits WHERE boss_id=? GROUP BY student_id").bind(b.id).all()).results;
+    bosses.push({ classId: c.id, name: BOSSES[b.kind].name, hp: b.hp, left: Math.max(0, b.hp - tot.reduce((n, x) => n + x.dmg, 0)), down: !!b.defeated_at, gold: b.gold, hits: tot.filter(x => x.id).sort((x, y) => y.dmg - x.dmg) }); }
+  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, logs, battles, bosses, teacherDmg: BOSS_TEACHER_DMG, ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
+});
+// the teacher's own shot, for a class that did well in the lesson or a boss set too strong
+on("POST", "/api/t/classes/:id/bossfire", "teacher", async ({ db, params }) => {
+  const cls = Number(params.id), hit = (await hitBosses(db, await getGame(db), [{ sid: 0, cls, dmg: BOSS_TEACHER_DMG, src: "teacher" }]))[cls];
+  if (!hit) throw bad("이번 주 보스가 없거나 이미 격파했어요"); return { ok: true, ...hit };
 });
 on("POST", "/api/t/grant", "teacher", async ({ db, body }) => {
   const q = await db.prepare("SELECT * FROM quests WHERE id=? AND deleted=0").bind(int(body.questId, 1)).first(); if (!q) throw bad("미션을 골라 주세요");
@@ -483,6 +552,8 @@ on("POST", "/api/t/logs/:id/undo", "teacher", async ({ db, params }) => {
   if (l.kind === "exempt") throw bad("면제권은 '건네줄 것'에서 취소해 주세요");
   if (l.kind === "photo") throw bad("사진 돛은 '사진 승인'에서 처리해 주세요");
   const ops = [db.prepare("DELETE FROM logs WHERE id=?").bind(l.id)];
+  // a mission or game taken back also takes back its shot, unless the boss has already gone down
+  if (l.kind === "quest" || (l.kind === "game" && /별 \d개$/.test(l.title))) ops.push(db.prepare("DELETE FROM boss_hits WHERE id=(SELECT h.id FROM boss_hits h JOIN bosses b ON b.id=h.boss_id WHERE h.student_id=? AND h.src=? AND b.defeated_at=0 ORDER BY h.id DESC LIMIT 1)").bind(l.student_id, l.kind));
   if (l.kind === "deco" || l.kind === "ship" || l.kind === "upgrade" || l.kind === "box") { const o = await db.prepare("SELECT item FROM owned WHERE log_id=?").bind(l.id).first(), st = await db.prepare("SELECT look, ship FROM students WHERE id=?").bind(l.student_id).first();
     if (o && st) { ops.push(db.prepare("DELETE FROM owned WHERE log_id=?").bind(l.id));
       if (l.kind === "deco" || l.kind === "box") { const d = itemOf(o.item); if (d) ops.push(db.prepare("UPDATE students SET look=? WHERE id=?").bind(JSON.stringify(wearItem(parseLook(st.look), d, false, "both")), l.student_id)); }
@@ -528,7 +599,7 @@ on("POST", "/api/t/quests/:id/toggle", "teacher", async ({ db, params }) => { aw
 on("POST", "/api/t/quests/:id/delete", "teacher", async ({ db, params }) => { await db.batch([db.prepare("UPDATE quests SET deleted=1, active=0 WHERE id=?").bind(params.id), db.prepare("UPDATE requests SET status='canceled' WHERE quest_id=? AND status='pending'").bind(params.id)]); return { ok: true }; });
 on("POST", "/api/t/game", "teacher", async ({ db, body }) => {
   const cur = await getGame(db), n = (k, lo, hi) => int(body[k] ?? cur[k], lo, hi);
-  const next = { ...cur, energyMax: n("energyMax", 1, 200), playCost: n("playCost", 0, 20), passCost: n("passCost", 1, 100000), battlesPerDay: n("battlesPerDay", 0, 20), win: n("win", 0, 10000), lose: n("lose", 0, 10000), defend: n("defend", 0, 10000), hourFrom: n("hourFrom", 0, 24), hourTo: n("hourTo", 0, 24) };
+  const next = { ...cur, energyMax: n("energyMax", 1, 200), playCost: n("playCost", 0, 20), passCost: n("passCost", 1, 100000), battlesPerDay: n("battlesPerDay", 0, 20), win: n("win", 0, 10000), lose: n("lose", 0, 10000), defend: n("defend", 0, 10000), hourFrom: n("hourFrom", 0, 24), hourTo: n("hourTo", 0, 24), bossHp: n("bossHp", 0, 1000), bossGold: n("bossGold", 0, 10000) };
   await db.prepare("INSERT INTO settings (key, value) VALUES ('game', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(next)).run(); return { ok: true };
 });
 on("POST", "/api/t/password", "teacher", async ({ db, me, body }) => {

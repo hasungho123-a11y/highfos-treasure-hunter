@@ -59,7 +59,7 @@ function cannon({ map, title, art }) {
   return new Promise(done => {
     const s = shell(title, "표적이 가운데 올 때 화면을 눌러 쏴요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
     let shots = 10, hits = 0, t = 0, last = performance.now(), phase = 0, ball = null, flash = null, over = false, kick = 0, lastX = 0;
-    const fire = e => { e.preventDefault(); if (ball || over || shots <= 0) return; shots--; ball = { p: 0 }; kick = 1; fx.add(cv.w / 2, cv.h - 112, 9, () => ({ vx: (Math.random() - .5) * 50, vy: -70 - Math.random() * 120, life: .3 + Math.random() * .2, c: "#FFD27A", a: 1, r0: 7, r1: 1 })); };
+    const fire = e => { e.preventDefault(); if (ball || over || shots <= 0) return; shots--; ball = { p: 0 }; kick = 1; Sfx.shot("cannon"); fx.add(cv.w / 2, cv.h - 112, 9, () => ({ vx: (Math.random() - .5) * 50, vy: -70 - Math.random() * 120, life: .3 + Math.random() * .2, c: "#FFD27A", a: 1, r0: 7, r1: 1 })); };
     s.stage.addEventListener("pointerdown", fire);
     const end = v => { if (over) return; over = true; cv.stop(); s.el.remove(); done(v); };
     s.quit.onclick = () => end(null);
@@ -71,7 +71,7 @@ function cannon({ map, title, art }) {
       g.strokeStyle = "rgba(255,255,255,.4)"; g.setLineDash([6, 8]); g.beginPath(); g.moveTo(w / 2, ty + 24); g.lineTo(w / 2, h - 120); g.stroke(); g.setLineDash([]);
       kick = Math.max(0, kick - dt * 5); gunBarrel(g, w, h, kick);
       if (ball) { ball.p += dt / .42; const y = h - 112 + (ty - h + 112) * Math.min(1, ball.p), r = 9 - 5 * ball.p; g.fillStyle = "#1C1E22"; g.beginPath(); g.arc(w / 2, y, r, 0, 7); g.fill(); g.fillStyle = "rgba(255,235,180,.7)"; g.beginPath(); g.arc(w / 2 - r * .3, y - r * .3, r * .3, 0, 7); g.fill();
-        if (ball.p >= 1) { const hit = Math.abs(tx - w / 2) < 34; if (hit) { hits++; blast(fx, w / 2, ty); } else spray(fx, w / 2, ty + 6); flash = { hit, a: 1 }; ball = null; if (!shots) setTimeout(() => end(hits), 700); } }
+        if (ball.p >= 1) { const hit = Math.abs(tx - w / 2) < 34; if (hit) { hits++; blast(fx, w / 2, ty); Sfx.boom(.8); } else { spray(fx, w / 2, ty + 6); Sfx.splash(); } flash = { hit, a: 1 }; ball = null; if (!shots) setTimeout(() => end(hits), 700); } }
       fx.draw(g, dt);
       if (flash) { flash.a -= dt * 2.2; if (flash.a <= 0) flash = null; else { g.fillStyle = `rgba(255,255,255,${flash.a})`; g.font = "400 34px Jua, sans-serif"; g.textAlign = "center"; g.fillText(flash.hit ? "명중!" : "빗나갔어요", w / 2, h * .5); } }
       s.hud.textContent = `명중 ${hits} · 남은 ${shots}발`;
@@ -93,8 +93,8 @@ function reef({ map, title, art }) {
       if (!crashed) { spawn -= dt; if (spawn <= 0) { spawn = Math.max(.34, .95 - t * .012); rocks.push({ x: Math.random() * (w - 50) + 25, y: -30, r: 17 + Math.random() * 13 }); } }
       const px = x * w, py = h - 70;
       for (const k of rocks) { if (!crashed) k.y += speed * dt; hazard(g, k, map, t);
-        if (!crashed && Math.hypot(k.x - px, k.y - py) < k.r + 15) { crashed = t; blast(fx, px, py - 6); setTimeout(() => end(passed), 1000); } }
-      const before = rocks.length; rocks = rocks.filter(k => k.y < h + 40); passed += before - rocks.length;
+        if (!crashed && Math.hypot(k.x - px, k.y - py) < k.r + 15) { crashed = t; blast(fx, px, py - 6); Sfx.boom(); setTimeout(() => end(passed), 1000); } }
+      const before = rocks.length; rocks = rocks.filter(k => k.y < h + 40); if (before > rocks.length && !crashed) Sfx.tick(); passed += before - rocks.length;
       if (!crashed && Math.random() < dt * 28) fx.add(px + (Math.random() - .5) * 16, py + 20, 1, () => ({ vx: (Math.random() - .5) * 26, vy: 70 + speed * .35, life: .6, c: "#F2FAFF", a: .65, r0: 3, r1: 8 }));
       fx.draw(g, dt);
       if (art?.me) sprite(g, art.me, px, py + (crashed ? 6 : 0), 124); else boat(g, px, py, 1.4);
@@ -115,10 +115,10 @@ function memory({ map, title }) {
     const show = () => s.hud.textContent = `뒤집기 ${turns} · ${left}초`;
     const tm = setInterval(() => { left--; show(); if (left <= 0) end(pairs); }, 1000); show();
     s.quit.onclick = () => end(null);
-    s.stage.addEventListener("click", e => { const b = e.target.closest(".mem-c"); if (!b || lock || b.classList.contains("up")) return; const c = deck[b.dataset.i]; b.classList.add("up");
+    s.stage.addEventListener("click", e => { const b = e.target.closest(".mem-c"); if (!b || lock || b.classList.contains("up")) return; const c = deck[b.dataset.i]; b.classList.add("up"); Sfx.flip();
       if (!first) { first = { b, c }; return; }
       turns++; show();
-      if (first.c.id === c.id) { pairs++; first = null; if (pairs === ids.length) { const score = Math.max(0, 30 - turns); setTimeout(() => end(score), 500); } return; }
+      if (first.c.id === c.id) { pairs++; first = null; Sfx.match(); if (pairs === ids.length) { const score = Math.max(0, 30 - turns); setTimeout(() => end(score), 500); } return; }
       lock = true; const a = first.b; first = null; setTimeout(() => { a.classList.remove("up"); b.classList.remove("up"); lock = false; }, 750); });
   });
 }

@@ -199,20 +199,50 @@ async function kidLoad() { K.d = await api("/api/kid/state");
   if (seen && open > seen) { K.map = open - 1; K.isle = null; K.at = "port"; toast(`새 바다가 열렸어요! ${K.d.maps[open - 1].name}`); }
   if (open > seen) ls.set(mem, open); }
 async function kidStart() {
-  document.body.classList.add("kid"); await kidLoad(); kidRender();
-  setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); } catch (e) {} }, 20000);
+  document.body.classList.add("kid"); await kidLoad(); kidRender(); bossWin();
+  setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight") || $(".modal")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); bossWin(); } catch (e) {} }, 20000);
 }
+/* ---------- the class boss ---------- */
+// a still of the 3D ship, kept between visits; until it is ready (or where 3D can't run) the flat drawing stands in
+const bossMem = art => `hs_boss_pic_${art.ship}_${art.sail.slice(1)}`;
+function bossShip(art) { const pic = ls.get(bossMem(art));
+  if (!pic) wantBossPic(art);
+  return pic ? `<img src="${pic}" alt="">` : shipSVG(art.ship, art.look, 0); }
+async function wantBossPic(art) { const mem = bossMem(art); if (K.bossPicBusy === mem || K.bossPicFail || !window.Ship3D?.available()) return; K.bossPicBusy = mem;
+  try { const v = await Ship3D.thumbs(), url = await trimPic((await v.snapshot(art.look, art.sail, art.sail, art.ship, 384, { th: 2.45, ph: 1.2 })).url); try { ls.set(mem, url); } catch (e) {}
+    document.querySelectorAll(`[data-boss-ship="${mem}"]`).forEach(el => el.innerHTML = `<img src="${url}" alt="">`);
+  } catch (e) { K.bossPicFail = true; }
+  K.bossPicBusy = null; }
+function bossCard() { const b = K.d.boss; if (!b || b.off) return "";
+  const pct = b.left / b.hp * 100, feed = b.feed.slice(0, 3).map(f => `<li><b>${esc(f.who)}</b> ${{ quest: "미션", game: "미니게임", teacher: "포격" }[f.src]} <span class="num">-${f.dmg}</span></li>`).join("");
+  return `<section class="panel boss ${b.down ? "down" : ""}" id="bossCard"><div class="boss-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)"><div class="boss-ship" data-boss-ship="${bossMem(b.art)}">${bossShip(b.art)}</div><span class="boss-pop" hidden></span></div>
+    <div class="boss-body"><span class="small muted">이번 주 우리 반 보스</span><h2>${esc(b.name)}</h2>
+      <div class="boss-hp" role="progressbar" aria-label="보스 체력" aria-valuemin="0" aria-valuemax="${b.hp}" aria-valuenow="${b.left}"><i id="bossBar" style="width:${pct}%"></i><b class="num">${b.left} / ${b.hp}</b></div>
+      ${b.down ? `<p class="small"><b>우리 반이 격파했어요!</b> 다음 보스는 월요일에 나타나요.</p>` : `<p class="small">미션 확인 1개 <b class="num">-${b.questDmg}</b><br>미니게임 별 1개 <b class="num">-${b.starDmg}</b><br>일요일까지 잡으면 공격한 친구 모두 금화 <b class="num">${b.gold}</b>개!</p>`}
+      <p class="small muted">내 공격 <b class="num">${b.mine}</b> · 함께한 친구 <b class="num">${b.joined}</b>/${b.crew}명</p>
+      ${feed ? `<ul class="boss-feed small">${feed}</ul>` : ""}</div></section>`; }
+// the bar remembers what this kid last saw, so damage done by anyone since then plays out on arrival
+function bossAnim() { const b = K.d.boss, bar = $("#bossBar"); if (!b || b.off || !bar) return; const mem = `hs_boss_left_${b.id}`, seen = Number(ls.get(mem) ?? b.hp); ls.set(mem, b.left);
+  if (seen <= b.left) return; bar.style.transition = "none"; bar.style.width = seen / b.hp * 100 + "%"; bar.offsetWidth;
+  setTimeout(() => { if (!bar.isConnected) return; bar.style.transition = ""; bar.style.width = b.left / b.hp * 100 + "%"; const card = $("#bossCard"), pop = card.querySelector(".boss-pop"); card.classList.add("hit"); pop.hidden = false; pop.textContent = `-${seen - b.left}`; Sfx.bossHit(); setTimeout(() => { card.classList.remove("hit"); pop.hidden = true; }, 1300); }, 450); }
+function bossWin() { const w = K.d.boss?.win, mem = `hs_boss_win_${K.d.me.id}`; if (!w || K.d.me.mustChange || $(".modal") || w.id <= Number(ls.get(mem) || 0)) return; ls.set(mem, w.id); const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+  m.innerHTML = `<div class="panel reward boss-win"><div class="boss-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)"><div class="boss-ship sink" data-boss-ship="${bossMem(w.art)}">${bossShip(w.art)}</div></div><h2>보스 격파!</h2><p><b>${esc(w.name)}</b>을(를) 우리 반이 함께 쓰러뜨렸어요.</p>
+    ${w.finisher ? `<p class="small">${w.last ? "마지막 일격은 바로 나! 금화를 더 받았어요." : `마지막 일격: <b>${esc(w.finisher)}</b>`}</p>` : `<p class="small">마지막 일격은 선생님의 포격이었어요.</p>`}<p class="found">${coin(`+${w.gold}`)}</p>${w.joined ? "" : `<p class="small muted">다음 보스 때 함께 공격하면 금화를 훨씬 많이 받아요.</p>`}<button class="btn primary lg" data-close>확인</button></div>`;
+  document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); Sfx.bossDown(); b.onclick = () => { m.remove(); kidRender(); }; }
+const sndIcon = () => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 9v6h4l5 4V5L8 9z"/>${Sfx.on ? `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/>` : `<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="m16 10 5 5m0-5-5 5"/>`}</svg>`;
+const sndBtn = () => `<button type="button" class="snd" data-act="ksnd" aria-pressed="${Sfx.on}" aria-label="소리 ${Sfx.on ? "끄기" : "켜기"}" title="소리 ${Sfx.on ? "끄기" : "켜기"}">${sndIcon()}</button>`;
 function kidRender() {
   const d = K.d, me = d.me, keep = keepInputs(app);
   const tabs = [["map", "제도 지도"], ["missions", "미션"], ["deco", "내 배"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
   app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 제도</h1><small>${esc(me.className)} · 전투력 ${me.power}</small></div></div>
       <div class="hright wallet"><span title="행동력">${nrg(d.bal.energy)}</span><span title="포인트">${pts(d.bal.points)}</span><span title="금화">${coin(d.bal.gold)}</span></div></div>
-      <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "missions" && openQ ? `<span class="cnt">${openQ}</span>` : ""}</button>`).join("")}</nav></header>
+      <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "missions" && openQ ? `<span class="cnt">${openQ}</span>` : ""}</button>`).join("")}${sndBtn()}</nav></header>
     <main>${({ map: kMap, missions: kMissions, deco: kDeco, log: kLog })[K.tab]()}</main>
     ${me.mustChange ? `<div class="modal" role="dialog" aria-modal="true"><div class="panel"><h2>나만의 비밀번호 정하기</h2><p class="small muted">임시 비밀번호 대신 나만 아는 숫자 4개로 바꿔요.</p>
       <form data-form="kpin" class="stack" style="gap:10px"><input type="password" id="kp1" inputmode="numeric" maxlength="4" placeholder="숫자 4개" data-keep="no" required><input type="password" id="kp2" inputmode="numeric" maxlength="4" placeholder="한 번 더" data-keep="no" required><button class="btn primary">정하기</button></form></div></div>` : ""}`;
   restoreInputs(keep);
   if (K.tab === "deco") { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey), base = draftLook(me.look); show3D($("#deco3d"), x ? previewItem(base, x) : base, me.sail, K.tryShip || me.ship); if (K.crop) drawCrop(); thumbScan(); }
+  if (K.tab === "map") bossAnim();
 }
 const tallMap = () => innerWidth < 640;
 const mapSize = () => tallMap() ? { w: 640, h: mapArt() ? 800 : 920 } : { w: 1000, h: 620 };
@@ -264,7 +294,7 @@ function kMap() {
   const artImg = () => { const [cx, cy, cw] = artCrop(art), ch = cw * h / w; return `<img class="wart" src="${art.src}" alt="" style="width:${art.size / cw * 100}%;left:${-cx / cw * 100}%;top:${-cy / ch * 100}%"><div class="wfx" aria-hidden="true"><i class="wglint"></i><i class="wcloud"></i><i class="wcloud c2"></i><i class="wcloud c3"></i></div>`; };
   const route = (a, b, bend) => { const p = (art ? dockPos : islePos)(a), q = (art ? dockPos : islePos)(b); return `M${p.x} ${p.y} Q${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2 - bend} ${q.x} ${q.y}`; };
   const tabs = d.maps.map(m => { const open = seaOpen(m); return `<button class="seatab ${open ? "" : "locked"}" data-act="ksea" data-v="${m.id}" aria-pressed="${K.map === m.id}"><b>${esc(m.name)}</b><small>${open ? esc(m.era) : `전투력 ${m.power}부터`}</small>${open ? "" : `<i class="seabar"><i style="width:${Math.min(100, me.power / m.power * 100)}%"></i></i>`}</button>`; }).join("");
-  return `${installCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
+  return `${installCard()}${bossCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
     <div class="world ${art ? "art" : ""}">${art ? artImg() : ""}<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(d.maps[K.map].name)} 지도">
       ${art ? "" : `<defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sea.top}"/><stop offset="1" stop-color="${sea.bot}"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
       <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>`}
@@ -319,7 +349,7 @@ function kIsle() {
 function kMissions() {
   const qs = K.d.quests;
   const btn = q => q.status === "done" ? `<span class="pill ok">${q.kind === "daily" ? "오늘 완료" : "이번 주 완료"}</span>` : q.status === "pending" ? `<div class="row" style="justify-content:flex-end"><span class="pill wait">확인 기다리는 중</span><button class="btn ghost sm" data-act="kcancel" data-v="${q.requestId}">취소</button></div>` : `<button class="btn primary" data-act="krequest" data-v="${q.id}">다 했어요</button>`;
-  return `<section class="panel"><h2>오늘의 미션</h2><p class="small muted">미션을 끝냈으면 "다 했어요"를 눌러요. 선생님이 확인하면 행동력이 생겨요.</p>
+  return `<section class="panel"><h2>오늘의 미션</h2><p class="small muted">미션을 끝냈으면 "다 했어요"를 눌러요. 선생님이 확인하면 행동력이 생겨요.${K.d.boss && !K.d.boss.off && !K.d.boss.down ? ` 보스에게도 <b class="num">${K.d.boss.questDmg}</b> 피해를 줘요.` : ""}</p>
     ${SUBJECTS.map(sub => { const list = qs.filter(q => q.subject === sub); return list.length ? `<h3>${sub}</h3><div class="mlist">${list.map(q => `<div class="mitem s-${esc(q.subject)}"><span class="bar"></span><span><span class="t">${esc(q.title)}</span><br><span class="tag kind">${KINDS[q.kind]}</span> <span class="small">행동력 +${q.energy}</span></span>${btn(q)}</div>`).join("")}</div>` : ""; }).join("") || `<p class="muted">아직 미션이 없어요.</p>`}</section>`;
 }
 const embTile = (id, cloth) => `<svg class="emb-tile" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="14" fill="${cloth}"/>${V.embSVG(id, 50, 50, 74, V.inkFor(cloth), cloth)}</svg>`;
@@ -426,9 +456,9 @@ async function playGame(kind) {
     const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
     const art = await Promise.race([gameArt(kind), sleep(1800).then(() => null)]); // never make a child wait long for pictures: the plain drawings are the fallback
     const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], art });
-    if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0 }).catch(() => {}); toast("다음에 다시 도전해요"); }
+    if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0, quit: true }).catch(() => {}); toast("다음에 다시 도전해요"); }
     else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r); }
-    await kidLoad(); kidRender();
+    await kidLoad(); kidRender(); bossWin();
   } catch (e) { toast(e.message); }
   K.busy = false;
 }
@@ -448,8 +478,8 @@ function rewardCard(r) {
   return new Promise(done => {
     const it = r.item, m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
     m.innerHTML = `<div class="panel reward"><div class="stars" aria-label="별 ${r.stars}개">${[0, 1, 2].map(i => `<i class="${i < r.stars ? "on" : ""}"></i>`).join("")}</div><h2>${r.stars ? "잘했어요!" : "아쉬워요!"}</h2><p class="num">점수 ${r.score} · ${pts(`+${r.points}`)}</p>
-      ${it ? foundHTML(it) : ""}<button class="btn primary lg" data-close>확인</button></div>`;
-    document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); b.onclick = () => { m.remove(); done(); };
+      ${r.boss ? `<p class="small">${r.boss.down ? `<b>${esc(r.boss.name)}</b>을(를) 쓰러뜨렸어요!` : `<b>${esc(r.boss.name)}</b>에게 <b class="num">${r.boss.dmg}</b> 피해! 남은 체력 <span class="num">${r.boss.left}</span>`}</p>` : ""}${it ? foundHTML(it) : ""}<button class="btn primary lg" data-close>확인</button></div>`;
+    document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); Sfx.stars(r.stars); if (it) setTimeout(Sfx.coin, 560); b.onclick = () => { m.remove(); done(); };
   });
 }
 // a battle already decided by the server, played out shot by shot
@@ -464,18 +494,19 @@ async function playFight() {
   if (window.Ship3D?.available()) try { v3d = await Promise.race([Ship3D.get(), sleep(6000)]); } catch (e) {}
   if (v3d) { const side3 = p => ({ look: p.look, sailHex: sail(p.sail), flagHex: p.look.fc != null ? sail(p.look.fc) : sail(p.sail), ship: p.ship });
     const side = (p, cls, tag) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">${tag} · 전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
-    m.className = "fight f3"; m.innerHTML = `<div class="f-view"></div><i class="f-hurt"></i><div class="f-top">${side(r.me, "a", "내 배")}<span class="f-vs">VS</span>${side(r.opp, "d", "상대")}</div><span class="f-dmg" hidden></span><div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button></div>`;
+    m.className = "fight f3"; m.innerHTML = `<div class="f-view"></div><i class="f-hurt"></i><div class="f-top">${side(r.me, "a", "내 배")}<span class="f-vs">VS</span>${side(r.opp, "d", "상대")}</div><span class="f-dmg" hidden></span><div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button>${sndBtn()}</div>`;
     try { fx = await v3d.fight(m.querySelector(".f-view"), side3(r.me), side3(r.opp)); } catch (e) { fx = null; } }
   if (fx) { let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
     const dmgEl = m.querySelector(".f-dmg"), hurt = m.querySelector(".f-hurt"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i");
     fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); };
     if (!fast) await fx.intro();
     for (const s of r.rounds) { const fromA = s.by === "a";
-      if (!fast) { await fx.fire(s.by, s.dmg, kindOf(fromA ? r.me : r.opp));
+      if (!fast) { Sfx.shot(kindOf(fromA ? r.me : r.opp)); await fx.fire(s.by, s.dmg, kindOf(fromA ? r.me : r.opp));
+        if (!s.dmg) Sfx.splash(); else if (fromA) Sfx.boom(); else Sfx.hurt();
         dmgEl.className = `f-dmg pop ${fromA ? "to-d" : "to-a"} ${s.dmg ? "" : "miss"}`; dmgEl.hidden = false; dmgEl.textContent = s.dmg ? `-${s.dmg}` : "빗나감"; }
       hpA.style.width = s.hp.a + "%"; hpD.style.width = s.hp.d + "%";
       if (!fast) { await sleep(s.dmg ? 720 : 560); dmgEl.hidden = true; } }
-    dmgEl.hidden = true; m.querySelector("[data-skip]").hidden = true; await fx.finish(r.won, fast);
+    dmgEl.hidden = true; m.querySelector("[data-skip]").hidden = true; await fx.finish(r.won, fast); Sfx[r.won ? "win" : "lose"]();
     m.querySelector(".f-bottom").innerHTML = `<div class="f-result ${r.won ? "win" : "lose"}"><h2>${r.won ? "승리!" : "패배"}</h2><p>${r.delta ? `금화 ${r.delta > 0 ? "+" : ""}${r.delta}개` : "잃은 금화는 없어요"}</p><p class="small">오늘 남은 전투 ${r.left}번</p><button class="btn primary lg" data-close>확인</button></div>`;
     await new Promise(res => { const b = m.querySelector("[data-close]"); b.focus(); b.onclick = res; });
     fx.close(); m.remove(); await kidLoad(); kidRender(); K.busy = false; return; }
@@ -483,23 +514,24 @@ async function playFight() {
   const side = (p, cls) => `<div class="f-side ${cls}"><b>${esc(p.nickname)}</b><span class="small num">전투력 ${p.power}</span><div class="hpbar"><i style="width:100%"></i></div></div>`;
   m.innerHTML = `<div class="f-top">${side(r.me, "a")}<span class="f-vs">VS</span>${side(r.opp, "d")}</div>
     <div class="f-sea"><div class="f-ship a" style="--sail:${sail(r.me.sail)}">${shipSVG(r.me.ship, r.me.look, r.me.sail)}</div><div class="f-ship d" style="--sail:${sail(r.opp.sail)}">${shipSVG(r.opp.ship, r.opp.look, r.opp.sail)}</div><i class="f-ball" hidden></i><span class="f-dmg" hidden></span></div>
-    <div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button></div>`;
+    <div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button>${sndBtn()}</div>`;
   let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
   const ball =m.querySelector(".f-ball"), dmgEl = m.querySelector(".f-dmg"), hpA = m.querySelector(".f-side.a .hpbar i"), hpD = m.querySelector(".f-side.d .hpbar i"), shipA = m.querySelector(".f-ship.a"), shipD = m.querySelector(".f-ship.d");
   await sleep(350);
   for (const s of r.rounds) {
-    if (!fast) { const fromA = s.by === "a"; ball.className = `f-ball k-${kindOf(fromA ? r.me : r.opp)}${fromA ? "" : " rev"}`; ball.hidden = false; ball.style.transition = "none"; ball.style.left = fromA ? "26%" : "74%"; ball.offsetWidth; ball.style.transition = "left .42s linear"; ball.style.left = fromA ? "74%" : "26%"; await sleep(430); ball.hidden = true;
+    if (!fast) { const fromA = s.by === "a"; Sfx.shot(kindOf(fromA ? r.me : r.opp)); ball.className = `f-ball k-${kindOf(fromA ? r.me : r.opp)}${fromA ? "" : " rev"}`; ball.hidden = false; ball.style.transition = "none"; ball.style.left = fromA ? "26%" : "74%"; ball.offsetWidth; ball.style.transition = "left .42s linear"; ball.style.left = fromA ? "74%" : "26%"; await sleep(430); ball.hidden = true; if (!s.dmg) Sfx.splash(); else if (fromA) Sfx.boom(); else Sfx.hurt();
       const hit = fromA ? shipD : shipA; dmgEl.hidden = false; dmgEl.textContent = s.dmg ? `-${s.dmg}` : "빗나감"; dmgEl.style.left = fromA ? "74%" : "26%"; if (s.dmg) { hit.classList.add("hit"); setTimeout(() => hit.classList.remove("hit"), 260); } }
     hpA.style.width = s.hp.a + "%"; hpD.style.width = s.hp.d + "%";
     if (!fast) { await sleep(420); dmgEl.hidden = true; }
   }
   (r.won ? shipD : shipA).classList.add("sunk");
-  await sleep(fast ? 100 : 500);
+  await sleep(fast ? 100 : 500); Sfx[r.won ? "win" : "lose"]();
   m.querySelector(".f-bottom").innerHTML = `<div class="f-result ${r.won ? "win" : "lose"}"><h2>${r.won ? "승리!" : "패배"}</h2><p>${r.delta ? `금화 ${r.delta > 0 ? "+" : ""}${r.delta}개` : "잃은 금화는 없어요"}</p><p class="small">오늘 남은 전투 ${r.left}번</p><button class="btn primary lg" data-close>확인</button></div>`;
   await new Promise(res => { const b = m.querySelector("[data-close]"); b.focus(); b.onclick = res; });
   m.remove(); await kidLoad(); kidRender(); K.busy = false;
 }
 const KID_ACTS = {
+  ksnd: () => { Sfx.toggle(); document.querySelectorAll(".snd").forEach(el => el.outerHTML = sndBtn()); },
   ktab: v => { K.tab = v; K.confirm = null; K.tryKey = null; K.tryShip = null; K.crop = null; K.photoDraft = null; kidRender(); scrollTo(0, 0); },
   kisle: v => { K.confirm = null; if (!v) { K.isle = null; return kidRender(); } K.isle = v; const el = $("#wship"); if (el) el.style.cssText += ";" + shipAt(v); K.at = v; setTimeout(() => { kidRender(); $("#islePanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, el ? 620 : 0); },
   kplay: playGame, kfight: playFight,
@@ -523,9 +555,9 @@ const KID_ACTS = {
   ktry: v => { K.tryKey = v && K.tryKey !== v ? v : null; kidRender(); },
   ktryShip: v => { K.tryShip = K.tryShip === v ? null : v; kidRender(); },
   kdecoAsk: v => { K.confirm = { key: v }; K.tryKey = v; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
-  kdecoBuy: v => { K.confirm = null; K.tryKey = null; return kDo(() => api("/api/kid/deco/buy", { key: v }), "새 꾸미기를 달았어요!"); },
+  kdecoBuy: v => { K.confirm = null; K.tryKey = null; Sfx.coin(); return kDo(() => api("/api/kid/deco/buy", { key: v }), "새 꾸미기를 달았어요!"); },
   kshipAsk: v => { K.confirm = { ship: v }; K.tryShip = v; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
-  kshipBuy: v => { K.confirm = null; K.tryShip = null; return kDo(() => api("/api/kid/ship/buy", { id: v }), "새 배가 생겼어요!"); },
+  kshipBuy: v => { K.confirm = null; K.tryShip = null; Sfx.coin(); return kDo(() => api("/api/kid/ship/buy", { id: v }), "새 배가 생겼어요!"); },
   kshipUse: v => { K.tryShip = null; return kDo(async () => { const r = await api("/api/kid/ship/use", { id: v }); if (r.removed) toast("이 배에는 달 수 없는 무기라서 내려놓았어요"); return r; }); },
   kwear: v => { const [item, where] = v.split("|"), [slot] = item.split("."); K.tryKey = null; return kDo(() => api("/api/kid/deco/wear", { slot, key: item.includes(".") ? item : null, where })); },
   ksail: v => kDo(() => api("/api/kid/sail", { sail: Number(v) })), kflag: v => kDo(() => api("/api/kid/sail", { flag: Number(v) }))
@@ -595,8 +627,10 @@ function tGive() {
 }
 function tBattle() {
   const d = T.d, g = d.game, n = (id, label, v, max = 100000) => `<label class="f">${label}<input type="number" id="${id}" min="0" max="${max}" value="${v}" data-keep="no"></label>`;
-  return `<section class="panel"><h2>게임 설정</h2><form class="row" data-form="saveGame">${n("g-max", "행동력 최대", g.energyMax, 200)}${n("g-cost", "한 판 행동력", g.playCost, 20)}${n("g-pass", "면제권 포인트", g.passCost)}${n("g-bat", "하루 전투 횟수", g.battlesPerDay, 20)}${n("g-win", "승리 금화", g.win)}${n("g-lose", "패배 시 잃는 금화", g.lose)}${n("g-def", "방어 성공 금화", g.defend)}${n("g-from", "전투 시작 시각", g.hourFrom, 24)}${n("g-to", "전투 끝 시각", g.hourTo, 24)}<button class="btn primary" style="align-self:end">저장</button></form>
-      <p class="small muted">시작과 끝 시각이 같으면 언제든 전투할 수 있어요. 반별로 끄려면 '반·선원'에서 눌러요. 저장하면 바로 적용돼요.</p></section>
+  const bossRow = b => `<div class="t-boss"><div class="row between"><span><b>${esc(cname(b.classId))}</b> · ${esc(b.name)}</span>${b.down ? `<span class="pill ok">격파</span>` : `<button class="btn sm" data-act="tbossfire" data-v="${b.classId}">선생님 포격 -${d.teacherDmg}</button>`}</div><div class="boss-hp"><i style="width:${b.left / b.hp * 100}%"></i><b class="num">${b.left} / ${b.hp}</b></div><p class="small muted">공격한 학생 ${b.hits.length}명 / ${d.students.filter(s => s.class_id === b.classId).length}명${b.hits.length ? ` · ${b.hits.slice(0, 8).map(h => `${esc(sname(h.id))} ${h.dmg}`).join(", ")}` : ""}</p></div>`;
+  return `<section class="panel"><h2>이번 주 반 보스</h2><p class="small muted">승인한 미션 1개당 10, 미니게임 별 1개당 2씩 체력이 줄어요. 격파하면 공격한 학생은 보상 금화 전부, 공격하지 않은 학생은 30%를 받고, 마지막 일격을 넣은 학생은 50개를 더 받아요. 일요일까지 못 잡으면 보상 없이 다음 보스로 바뀌어요.</p>${d.bosses.length ? d.bosses.map(bossRow).join("") : `<p class="muted small">진행 중인 보스가 없어요.</p>`}</section>
+    <section class="panel"><h2>게임 설정</h2><form class="row" data-form="saveGame">${n("g-max", "행동력 최대", g.energyMax, 200)}${n("g-cost", "한 판 행동력", g.playCost, 20)}${n("g-pass", "면제권 포인트", g.passCost)}${n("g-bat", "하루 전투 횟수", g.battlesPerDay, 20)}${n("g-win", "승리 금화", g.win)}${n("g-lose", "패배 시 잃는 금화", g.lose)}${n("g-def", "방어 성공 금화", g.defend)}${n("g-from", "전투 시작 시각", g.hourFrom, 24)}${n("g-to", "전투 끝 시각", g.hourTo, 24)}${n("g-bosshp", "보스 체력(학생 1명당)", g.bossHp, 1000)}${n("g-bossgold", "보스 보상 금화", g.bossGold)}<button class="btn primary" style="align-self:end">저장</button></form>
+      <p class="small muted">시작과 끝 시각이 같으면 언제든 전투할 수 있어요. 반별로 끄려면 '반·선원'에서 눌러요. 저장하면 바로 적용돼요. 보스 체력과 보상은 다음 주 보스부터 적용되고, 체력을 0으로 하면 보스가 바로 꺼져요.</p></section>
     <section class="panel"><h2>오늘 전투</h2>${d.battles.length ? `<div class="plist">${d.battles.map(b => `<div class="prow"><span>${esc(b.a_name)} → ${esc(b.d_name)} <span class="small muted">${fmtTime(b.at)}</span></span><span class="pill ${b.winner === b.attacker ? "ok" : ""}">${b.winner === b.attacker ? "공격 승" : "방어 승"}</span><span class="small num">${b.delta > 0 ? "+" : ""}${b.delta}금화</span></div>`).join("")}</div>` : `<p class="muted small">오늘 전투가 아직 없어요.</p>`}</section>
     <section class="panel"><h3>내 비밀번호 바꾸기</h3><form class="row" data-form="tpw"><input type="password" id="tpw" autocomplete="new-password" placeholder="4자 이상" data-keep="no"><button class="btn">바꾸기</button></form></section>`;
 }
@@ -606,6 +640,7 @@ function tLog() {
 }
 async function tDo(fn, msg) { try { const r = await fn(); if (msg) toast(msg); await tLoad(); tRender(); return r; } catch (e) { toast(e.message); } }
 const T_ACTS = {
+  tbossfire: v => tDo(() => api(`/api/t/classes/${v}/bossfire`, {}), "포격했어요! 아이들 화면에서 체력이 줄어요"),
   tphotoOk: v => tDo(() => api(`/api/t/photos/${v}/approve`, {}), "승인했어요. 아이의 배에 달렸어요"),
   tphotoNo: v => tDo(() => api(`/api/t/photos/${v}/reject`, {}), "반려했어요. 사진을 지우고 금화를 돌려줬어요"),
   tphotoOff: v => { if (T.photoArm !== v) { T.photoArm = v; return toast("한 번 더 누르면 사진을 내리고 지워요"); } T.photoArm = null; return tDo(() => api(`/api/t/photos/${v}/remove`, {}), "사진을 내렸어요"); },
@@ -629,7 +664,7 @@ const T_FORMS = {
   addStudents: async () => { const r = await tDo(() => api("/api/t/students", { classId: Number(val("ns-class")), names: $("#ns-names").value })); if (r) { T.created = r.created; $("#ns-names").value = ""; tRender(); scrollTo(0, 0); } },
   adjust: () => tDo(() => api("/api/t/adjust", { studentId: T.detail, type: val("adj-type"), amount: Number(val("adj-amt")), title: val("adj-why") || "선생님 조정" }), "반영했어요"),
   saveQuest: () => { const id = T.editQ; T.editQ = null; return tDo(() => api("/api/t/quests", { id, title: val("q-title"), subject: val("q-subj"), kind: val("q-kind"), energy: Number(val("q-en")) }), "미션을 저장했어요"); },
-  saveGame: () => tDo(() => api("/api/t/game", { energyMax: val("g-max"), playCost: val("g-cost"), passCost: val("g-pass"), battlesPerDay: val("g-bat"), win: val("g-win"), lose: val("g-lose"), defend: val("g-def"), hourFrom: val("g-from"), hourTo: val("g-to") }), "저장했어요"),
+  saveGame: () => tDo(() => api("/api/t/game", { energyMax: val("g-max"), playCost: val("g-cost"), passCost: val("g-pass"), battlesPerDay: val("g-bat"), win: val("g-win"), lose: val("g-lose"), defend: val("g-def"), hourFrom: val("g-from"), hourTo: val("g-to"), bossHp: val("g-bosshp"), bossGold: val("g-bossgold") }), "저장했어요"),
   tpw: () => tDo(() => api("/api/t/password", { password: $("#tpw").value }), "비밀번호를 바꿨어요")
 };
 
