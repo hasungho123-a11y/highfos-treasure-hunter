@@ -55,6 +55,8 @@ const fromName = d => SHIPS.find(s => s.id === d.from).name;
 // upgrades are the gold sink with no end in sight: dearer each level, the same small power gain, kept when changing ships
 const UPGRADES = [["engine", "기관 강화", "엔진을 손봐서 힘을 키워요"], ["armor", "장갑 강화", "선체를 더 튼튼하게 덧대요"], ["gunnery", "포술 훈련", "선원들의 사격 솜씨를 키워요"]].map(([id, name, desc]) => ({ id, name, desc }));
 const UP_MAX = 10, UP_POWER = 10, upPrice = level => level * 100;
+// camouflage, smoke and aircraft are mostly for looks: a small flat gain, unlike older decorations (price / 5)
+const STEEL_ITEM_POWER = 5;
 // Weapons only come from mini-games. One is mounted at a time and adds to battle power; kind picks the shot seen in battle.
 const WEAPONS = [
   ["ballista", "대형 쇠뇌", "보통", 5, "bolt", 0], ["catapult", "투석기", "보통", 7, "stone", 0], ["swivel", "선회포", "희귀", 12, "cannon", 0], ["pdr32", "32파운드 함포", "전설", 18, "cannon", 0],
@@ -144,7 +146,7 @@ async function powers(db, rows) {
   const out = {}, sum = {}, ups = {}; if (!rows.length) return out;
   for (let i = 0; i < rows.length; i += 80) { const part = rows.slice(i, i + 80).map(r => r.id);
     const r = await db.prepare(`SELECT student_id AS id, item FROM owned WHERE student_id IN (${part.map(() => "?").join(",")})`).bind(...part).all();
-    for (const x of r.results) { const d = itemOf(x.item); if (d) sum[x.id] = (sum[x.id] || 0) + d.price; else if (x.item.startsWith("up.")) ups[x.id] = (ups[x.id] || 0) + UP_POWER; } }
+    for (const x of r.results) { const d = itemOf(x.item); if (d && d.from) ups[x.id] = (ups[x.id] || 0) + STEEL_ITEM_POWER; else if (d) sum[x.id] = (sum[x.id] || 0) + d.price; else if (x.item.startsWith("up.")) ups[x.id] = (ups[x.id] || 0) + UP_POWER; } }
   for (const r of rows) { const w = itemOf(`weapon.${parseLook(r.look).weapon}`); out[r.id] = 20 + shipOf(r.ship).power + Math.floor((sum[r.id] || 0) / 5) + (ups[r.id] || 0) + (w ? w.power : 0); }
   return out;
 }
