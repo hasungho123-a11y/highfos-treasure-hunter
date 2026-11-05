@@ -486,7 +486,7 @@ async function gameArt(kind) {
 async function playGame(kind) {
   if (K.busy) return; K.busy = true;
   try { // a game seen for the first time explains itself before any energy is spent
-    const seen = `hs_intro3_${kind}_${K.map}`; // "3": raise it when a game's rules change, so everyone sees the new rules once if (!ls.get(seen)) { const go = await Games.intro(kind, K.map, K.d.maps[K.map].isles[kind], K.d.games[kind].stars, true); if (!go) { K.busy = false; return; } ls.set(seen, "1"); }
+    const seen = `hs_intro4_${kind}_${K.map}`; // "3": raise it when a game's rules change, so everyone sees the new rules once if (!ls.get(seen)) { const go = await Games.intro(kind, K.map, K.d.maps[K.map].isles[kind], K.d.games[kind].stars, true); if (!go) { K.busy = false; return; } ls.set(seen, "1"); }
     const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
     const art = await Promise.race([gameArt(kind), sleep(1800).then(() => null)]); // never make a child wait long for pictures: the plain drawings are the fallback
     const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], art });

@@ -100,6 +100,52 @@ const levels = [
 ];
 const cipher = level => levels[Math.min(level, levels.length - 1)]();
 
+/* ----- 암호 등대: five numbers of a series are sent; the player continues it for three more. Each round's rule is harder. ----- */
+const build = (first, next, n = 8) => { const out = [first]; while (out.length < n) out.push(next(out[out.length - 1], out)); return out; };
+const tenth = v => String(v / 10);
+const RULES = [
+  [
+    () => { const d = ri(3, 12); return { nums: build(ri(1, 20), x => x + d), rule: `${d}씩 커져요` }; },
+    () => { const d = ri(3, 9); return { nums: build(d * 7 + ri(3, 20), x => x - d), rule: `${d}씩 작아져요` }; },
+    () => ({ nums: build(ri(1, 5), x => x * 2), rule: "2배씩 커져요" })
+  ],
+  [
+    () => { const inc = ri(1, 3); let gap = ri(1, 4) - inc; return { nums: build(ri(1, 10), x => { gap += inc; return x + gap; }), rule: `늘어나는 수가 ${inc}씩 커져요` }; },
+    () => { const up = ri(4, 9), dn = ri(1, up - 1); return { nums: build(ri(dn, 15), (x, all) => all.length % 2 ? x + up : x - dn), rule: `${up} 더하기와 ${dn} 빼기를 번갈아 해요` }; },
+    () => { const s = ri(1, 4); return { nums: Array.from({ length: 8 }, (_, i) => (s + i) * (s + i)), rule: "같은 수를 두 번 곱한 수예요" }; },
+    () => { const a = ri(1, 5), b = ri(a, 6); return { nums: build(a, (x, all) => all.length === 1 ? b : x + all[all.length - 2]), rule: "앞의 두 수를 더해요" }; },
+    () => ({ nums: build(1, x => x * 3), rule: "3배씩 커져요" }),
+    () => ({ nums: build(128 * ri(1, 3), x => x / 2), rule: "절반씩 작아져요" })
+  ],
+  [
+    () => { const d = pick([2, 3, 4, 5, 6]), a = ri(1, 9); return { labels: Array.from({ length: 8 }, (_, i) => tenth(a + d * i)), dec: true, rule: `${tenth(d)}씩 커져요` }; },
+    () => { const d = pick([1, 2]), D = d === 2 ? pick([15, 20]) : pick([10, 12, 15, 20]); return { labels: Array.from({ length: 8 }, (_, i) => frac(1 + d * i, D)), rule: `분모는 그대로, 분자가 ${d}씩 커져요` }; },
+    () => { const s = ri(1, 3); return { labels: Array.from({ length: 8 }, (_, i) => frac(s + i, s + i + 1)), rule: "분자와 분모가 1씩 커져요" }; },
+    () => { const D = pick([2, 3]); return { labels: Array.from({ length: 8 }, (_, i) => frac(1, D * 2 ** i)), rule: "분모가 2배씩 커져요" }; },
+    () => ({ nums: build(ri(1, 4), x => x * 2 + 1), rule: "2배 하고 1을 더해요" }),
+    () => ({ nums: build(ri(2, 5), x => x * 2 - 1), rule: "2배 하고 1을 빼요" })
+  ]
+];
+const fakesOf = (label, dec) => { const f = label.match(/^(\d+)\/(\d+)$/);
+  if (f) { const n = +f[1], d = +f[2]; return [[n + 1, d], [n - 1, d], [n + 2, d], [n, d + 1], [n, d - 1], [n + 1, d + 1], [n - 1, d - 1], [n, d + 2]].filter(([a, b]) => a >= 1 && b >= 2 && a * d !== n * b).map(([a, b]) => frac(a, b)); }
+  if (dec) { const v = Math.round(label * 10); return [1, 2, 3, 5, 10, -1, -2, -3, -5].map(k => v + k).filter(x => x > 0).map(tenth); }
+  const x = +label; return [1, 2, 3, 5, 10, -1, -2, -3, -5, -10].map(k => x + k).filter(y => y > 0).map(String); };
+// round runs from 0 to 7
+function series(round) { const made = pick(RULES[round < 2 ? 0 : round < 5 ? 1 : 2])(), labels = made.labels || made.nums.map(String);
+  return { shown: labels.slice(0, 5), rule: made.rule, asks: labels.slice(5).map(real => ({ real, opts: shuffle([real, ...differentValues(fakesOf(real, made.dec), real)]) })) }; }
+const valueOf = l => { const f = l.match(/^(\d+)\/(\d+)$/); return f ? f[1] / f[2] : +l; };
+// three wrong numbers, no two worth the same: 7/7 and 8/8 on two lamps would give the game away
+const differentValues = (fakes, real) => { const seen = [valueOf(real)], out = []; for (const x of shuffle(fakes)) { const v = valueOf(x); if (out.length < 3 && !seen.some(y => Math.abs(y - v) < 1e-9)) { seen.push(v); out.push(x); } } return out; };
+
+/* ----- 포대 요새: while the torpedo runs, the ship keeps sailing. How far away must it be when the torpedo is fired? distance = speed × time ----- */
+function speed(wave) { const level = wave <= 3 ? 0 : wave <= 6 ? 1 : 2;
+  for (;;) { const S = pick([10, 20, 30, 40, 50, 60]), k = ri(2, 6), D = S * k, T = ri(2, 6), v = D / T; if (v % 5 || v > 80) continue;
+    let shipText = `적함: 1초에 ${v}m 가요`, first = "";
+    if (level) { if (Math.random() < .3) { shipText = `적함: 1분에 ${v * 60}m 가요`; first = `${v * 60}÷60=${v}, `; } else { const n = ri(2, 5); shipText = `적함: ${n}초에 ${v * n}m 가요`; first = `${v * n}÷${n}=${v}, `; } }
+    let torpText = `어뢰: ${T}초 뒤에 도착해요`, second = "";
+    if (level === 2) { const u = pick([10, 20, 25, 40, 50]); torpText = `어뢰: 1초에 ${u}m, 만나는 곳까지 ${u * T}m`; second = `${u * T}÷${u}=${T}, `; }
+    return { shipText, torpText, S, k, D, why: `${first}${second}${v}×${T}=${D}` }; } }
+
 const html = label => String(label).replace(/(\d+)\/(\d+)/g, '<span class="frac"><i>$1</i><i>$2</i></span>');
-window.MathQ = { pairs, order, cipher, grid, html, shuffle };
+window.MathQ = { pairs, order, cipher, grid, series, speed, html, shuffle };
 })();
