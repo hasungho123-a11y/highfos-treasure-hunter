@@ -544,8 +544,14 @@ nav.tabs .snd { margin-left: auto; flex: none; width: 36px; padding: 0; border: 
 
 /* live duels */
 .duel-panel { width: min(100%, 440px); display: grid; gap: 8px; justify-items: center } .duel-panel:empty { display: none }
-.duel-msg { margin: 0; font-weight: 600; text-shadow: 0 1px 4px rgb(0 0 0 / .8) } .duel-panel .aim-bar { height: 40px } .duel-panel [data-aim] { width: 100%; min-height: 60px; font-size: 1.15rem }
-.duel-time { width: 100%; height: 5px; border-radius: 3px; background: rgb(255 255 255 / .2); overflow: hidden } .duel-time i { display: block; height: 100%; background: #FFE27A }
+.duel-msg { margin: 0; font-weight: 600; text-align: center; text-shadow: 0 1px 4px rgb(0 0 0 / .8) } .duel-answer { display: inline-flex; align-items: center; gap: 4px; font-size: 1.15rem }
+.duel-time { width: 100%; height: 6px; border-radius: 3px; background: rgb(255 255 255 / .2); overflow: hidden } .duel-time i { display: block; height: 100%; background: #FFE27A; transition: width .15s linear } .duel-time i.low { background: #FF8A73 }
+.duel-q { width: 100%; display: grid; gap: 8px; padding: 12px; border-radius: 14px; background: rgb(8 16 34 / .88) }
+.duel-head { margin: 0; display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-weight: 600 } .duel-head span { font-size: .85rem; text-align: center; opacity: .85 } .duel-head .num { font-size: 1.2rem; color: #FFE27A }
+.duel-ask { margin: 0; font-size: .9rem; opacity: .85; text-align: center }
+.duel-expr { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px; min-height: 52px; font-size: 1.75rem; font-weight: 700; text-align: center }
+.duel-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px } .f-bottom .btn.duel-opt { min-height: 58px; padding: 6px; font-size: 1.25rem; font-weight: 700; color: var(--ink) }
+.f-result .miss { color: var(--ink); background: var(--surface); text-shadow: none } .f-result .miss-none { color: inherit; opacity: .85 }
 .duel-note { margin: 0; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft) }
 .on-dot { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; background: #2FB56A; vertical-align: 1px }
 

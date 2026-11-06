@@ -182,7 +182,7 @@ CREATE TABLE IF NOT EXISTS duels (
   hp_b INTEGER NOT NULL DEFAULT 100,
   pa INTEGER NOT NULL DEFAULT 0,      -- battle power, fixed when the duel starts
   pb INTEGER NOT NULL DEFAULT 0,
-  aim_a INTEGER,                      -- this round's shot: 0 miss, 1 near, 2 perfect; NULL until sent
+  aim_a INTEGER,                      -- this round's answer: 0 wrong, otherwise ms taken; NULL until sent
   aim_b INTEGER,
   miss_a INTEGER NOT NULL DEFAULT 0,  -- rounds in a row with no answer at all
   miss_b INTEGER NOT NULL DEFAULT 0,

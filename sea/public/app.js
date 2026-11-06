@@ -629,7 +629,7 @@ async function duelPoll() { if (document.hidden || !K.d || K.d.me.mustChange || 
   if (before !== now.join() && K.tab === "crew" && !$(".modal")) kidRender();
   if (r.invite && !$(".modal")) duelInvite(r.invite); }
 function duelInvite(inv) { const who = K.d.mates.find(m => m.id === inv.from), m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); K.inviteEl = m; K.inviteId = inv.id;
-  m.innerHTML = `<div class="panel reward">${who ? shipBox(who.ship, who.look, who.sail, "", "tiny") : ""}<h2>${esc(who?.nickname || "친구")}의 대결 신청!</h2><p class="small muted">지금 바로 실시간으로 겨뤄요. 금화 보상은 없어요.</p><div class="row"><button class="btn primary lg" data-yes>수락</button><button class="btn" data-no>거절</button></div></div>`; document.body.appendChild(m); thumbScan(); Sfx.lock(); m.querySelector("[data-yes]").focus();
+  m.innerHTML = `<div class="panel reward">${who ? shipBox(who.ship, who.look, who.sail, "", "tiny") : ""}<h2>${esc(who?.nickname || "친구")}의 대결 신청!</h2><p class="small muted">같은 수학 문제를 30초 안에 풀어요. 맞혀야 공격할 수 있고, 먼저 맞히면 먼저 쏴요. 금화 보상은 없어요.</p><div class="row"><button class="btn primary lg" data-yes>수락</button><button class="btn" data-no>거절</button></div></div>`; document.body.appendChild(m); thumbScan(); Sfx.lock(); m.querySelector("[data-yes]").focus();
   const close = () => { m.remove(); K.inviteEl = null; K.inviteId = null; };
   m.querySelector("[data-no]").onclick = () => { close(); api(`/api/kid/duel/${inv.id}/answer`, { accept: false }).catch(() => {}); };
   m.querySelector("[data-yes]").onclick = async () => { close(); try { await api(`/api/kid/duel/${inv.id}/answer`, { accept: true }); playDuel(inv.id); } catch (e) { toast(e.message); } }; }
@@ -648,29 +648,36 @@ async function duelStage(me, opp) { const m = document.createElement("div"); m.c
   if (fx) { fx.onHurt = () => { hurt.classList.remove("on"); hurt.offsetWidth; hurt.classList.add("on"); }; fx.onSortie = () => Sfx.jet(); fx.onStrafe = () => Sfx.shot("gun"); fx.onBlast = k => Sfx.boom(k); }
   const hp = (a, d) => { hpA.style.width = a + "%"; hpD.style.width = d + "%"; };
   return { m, panel: m.querySelector(".duel-panel"), hp, intro: () => fx ? fx.intro() : sleep(350), close() { fx?.close(); m.remove(); },
+    // a wrong answer fires nothing
+    async noShot(fromMe) { Sfx.wrong(); dmgEl.className = `f-dmg pop ${fromMe ? "to-a" : "to-d"} miss`; dmgEl.hidden = false; dmgEl.textContent = "공격 실패"; if (!fx) dmgEl.style.left = fromMe ? "26%" : "74%"; await sleep(800); dmgEl.hidden = true; },
     async shot(fromMe, dmg, a, d) { const p = fromMe ? me : opp, kind = kindOf(p); Sfx.shot(kind);
       if (fx) await fx.fire(fromMe ? "a" : "b", dmg, kind); else { ball.className = `f-ball k-${kind}${fromMe ? "" : " rev"}`; ball.hidden = false; ball.style.transition = "none"; ball.style.left = fromMe ? "26%" : "74%"; ball.offsetWidth; ball.style.transition = "left .42s linear"; ball.style.left = fromMe ? "74%" : "26%"; await sleep(430); ball.hidden = true; }
       if (!dmg) Sfx.splash(); else if (fromMe) Sfx.boom(); else Sfx.hurt();
       dmgEl.className = `f-dmg pop ${fromMe ? "to-d" : "to-a"} ${dmg ? "" : "miss"}`; dmgEl.hidden = false; dmgEl.textContent = dmg ? `-${dmg}` : "빗나감"; if (!fx) dmgEl.style.left = fromMe ? "74%" : "26%"; hp(a, d); await sleep(dmg ? 720 : 560); dmgEl.hidden = true; },
     async end(won) { if (fx) await fx.finish(won, false); else { if (won != null) m.querySelector(won ? ".f-ship.d" : ".f-ship.a").classList.add("sunk"); await sleep(500); } } }; }
-// one press on the sliding gauge: 2 perfect, 1 near, 0 miss. Five seconds, then it counts as a miss.
-const duelGauge = (panel, round) => new Promise(done => { panel.innerHTML = `<p class="duel-msg"><b>${round}라운드</b> 초록 칸에 맞춰 눌러요!</p><div class="aim-bar"><i class="aim-zone"><b></b></i><i class="aim-needle"></i></div><div class="duel-time"><i></i></div><button type="button" class="btn primary lg" data-aim>발사!</button>`;
-  const zone = panel.querySelector(".aim-zone"), needle = panel.querySelector(".aim-needle"), bar = panel.querySelector(".duel-time i"), center = 18 + Math.random() * 64, began = performance.now(); let t = Math.random() * 6, last = began, live = true; zone.style.left = center + "%"; Sfx.lock();
-  const pick = v => { if (!live) return; live = false; done(v); }; panel.querySelector("[data-aim]").onclick = () => { const off = Math.abs(50 - Math.cos(t) * 50 - center); pick(off <= 5 ? 2 : off <= 12 ? 1 : 0); };
-  (function tick(now) { if (!live) return; const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt * Math.min(5, 2.6 + round * .25); needle.style.left = 50 - Math.cos(t) * 50 + "%"; const left = 1 - (now - began) / 5000; bar.style.width = Math.max(0, left) * 100 + "%"; if (left <= 0) return pick(0); requestAnimationFrame(tick); })(began);
-  setTimeout(() => pick(0), 5400); }); // the animation stops in a hidden tab; this one doesn't
+// one question, one try, 30 seconds. Resolves with the choice (-1 when time runs out), or null when the round ended without an answer: the friend left, or the server's time ran out.
+const duelQuiz = (panel, id, v, name) => new Promise(done => { const span = Math.min(30000, Math.max(0, v.left - 300)), began = Date.now();
+  panel.innerHTML = `<div class="duel-q"><p class="duel-head"><b>${v.round}라운드</b><span data-opp>${esc(name)}도 푸는 중</span><b class="num" data-sec>${Math.ceil(span / 1000)}</b></p><div class="duel-time"><i></i></div><p class="duel-ask">${esc(v.q.ask)}</p><div class="duel-expr num">${MathQ.html(esc(v.q.text))}</div><div class="duel-opts">${v.q.opts.map((o, i) => `<button type="button" class="btn duel-opt num" data-pick="${i}">${MathQ.html(esc(o))}</button>`).join("")}</div></div>`; Sfx.lock();
+  const bar = panel.querySelector(".duel-time i"), sec = panel.querySelector("[data-sec]"), who = panel.querySelector("[data-opp]"); let live = true, last = 0;
+  const end = x => { if (!live) return; live = false; clearInterval(clock); clearInterval(watch); done(x); };
+  panel.querySelectorAll("[data-pick]").forEach(b => b.onclick = () => end(Number(b.dataset.pick)));
+  const clock = setInterval(() => { const left = span - (Date.now() - began), s = Math.ceil(left / 1000); bar.style.width = Math.max(0, left / 30000) * 100 + "%"; bar.classList.toggle("low", left < 8000); if (s !== last) { sec.textContent = Math.max(0, s); if (s > 0 && s <= 5) Sfx.tick(); last = s; } if (left <= 0) end(-1); }, 150);
+  const watch = setInterval(async () => { let n; try { n = await api(`/api/kid/duel/${id}`); } catch (e) { return; } if (!live) return; if (n.status !== "live" || n.round !== v.round) return end(null); if (n.oppDone) who.textContent = `${name}이(가) 답을 냈어요!`; }, 1300); });
 async function playDuel(id) { if (K.duelOn) return; K.duelOn = true; K.busy = true; let st = null;
   try { const first = await api(`/api/kid/duel/${id}`), opp = K.d.mates.find(x => x.id === first.oppId); if (!opp) throw new Error("친구를 찾을 수 없어요"); const mine = first.mine;
     st = await duelStage({ ...K.d.me }, opp); const hpOf = h => [h[mine], h[mine === "a" ? "b" : "a"]]; st.hp(...hpOf(first.hp)); st.panel.innerHTML = `<p class="duel-msg">곧 시작해요!</p>`;
     let sure = false, giveUp = false; st.m.querySelector("[data-giveup]").onclick = async e => { if (!sure) { sure = true; e.target.textContent = "정말 기권할까요?"; setTimeout(() => { sure = false; if (e.target.isConnected) e.target.textContent = "기권"; }, 3000); return; } giveUp = true; e.target.disabled = true; try { await api(`/api/kid/duel/${id}/quit`, {}); } catch (err) {} };
-    await st.intro(); let played = first.log.length, aimed = 0, fails = 0, v;
+    await st.intro(); let played = first.log.length, aimed = 0, fails = 0, v, wrong = false; const miss = [];
     for (;;) { try { v = await api(`/api/kid/duel/${id}`); fails = 0; } catch (e) { if (++fails > 15) { toast("연결이 끊겼어요"); v = null; break; } await sleep(1000); continue; }
-      if (played < v.log.length) { st.panel.innerHTML = ""; for (; played < v.log.length; played++) for (const s of v.log[played]) { const [a, d] = hpOf(s.hp); await st.shot(s.by === mine, s.dmg, a, d); } continue; }
+      if (played < v.log.length) { const say = text => st.panel.innerHTML = `<p class="duel-msg">${text}</p>`, answer = v.prev ? `<span class="num duel-answer">${MathQ.html(esc(v.prev.text))} = ${MathQ.html(esc(v.prev.real))}</span>` : "";
+        if (wrong && v.prev) miss.push({ tag: "대결 문제", lines: [v.prev.text], answer: v.prev.real }); wrong = false; say(answer);
+        for (; played < v.log.length; played++) for (const s of v.log[played]) { const fromMe = s.by === mine, [a, d] = hpOf(s.hp); if (s.first) say(`${answer}<br>${fromMe ? "내가" : `${esc(opp.nickname)}이(가)`} 먼저 맞혔어요!`); if (s.dmg) await st.shot(fromMe, s.dmg, a, d); else await st.noShot(fromMe); } continue; }
       if (v.status !== "live") break;
-      if (!v.iAimed && v.round > aimed && !giveUp) { aimed = v.round; const aim = await duelGauge(st.panel, v.round); st.panel.innerHTML = `<p class="duel-msg">${["빗나갔어요", "괜찮아요", "정확해요!"][aim]} ${esc(opp.nickname)}을(를) 기다려요…</p>`; try { await api(`/api/kid/duel/${id}/aim`, { round: v.round, aim }); } catch (e) {} continue; }
+      if (!v.iAimed && v.round > aimed && !giveUp) { aimed = v.round; const pick = await duelQuiz(st.panel, id, v, opp.nickname); wrong = true; if (pick === null) continue; st.panel.innerHTML = `<p class="duel-msg">답을 보내는 중…</p>`; let res = null; try { res = await api(`/api/kid/duel/${id}/aim`, { round: v.round, pick }); } catch (e) {} if (res?.right) { wrong = false; Sfx.match(); } else Sfx.wrong();
+        st.panel.innerHTML = `<p class="duel-msg">${res?.right ? "맞혔어요! 공격 준비 완료." : pick < 0 ? "시간이 다 됐어요. 이번에는 공격하지 못해요." : "틀렸어요. 이번에는 공격하지 못해요."} ${esc(opp.nickname)}을(를) 기다려요…</p>`; continue; }
       await sleep(700); }
     if (v) { st.m.querySelector("[data-giveup]").hidden = true; st.panel.innerHTML = ""; const won = v.winner ? v.winner === K.d.me.id : null; st.hp(...hpOf(v.hp)); await st.end(won); if (won != null) Sfx[won ? "win" : "lose"](); await kidLoad();
-      st.panel.innerHTML = `<div class="f-result ${won ? "win" : won === false ? "lose" : ""}"><h2>${won ? "승리!" : won === false ? "패배" : "무승부"}</h2>${v.forfeit ? `<p>${won ? "친구가 대결을 나갔어요" : "대결을 나왔어요"}</p>` : ""}<p class="small">친선 대결이라 금화는 오가지 않아요 · 오늘 남은 대결 ${K.d.battle.duelLeft}번</p><button class="btn primary lg" data-close>확인</button></div>`;
+      st.panel.innerHTML = `<div class="f-result ${won ? "win" : won === false ? "lose" : ""}"><h2>${won ? "승리!" : won === false ? "패배" : "무승부"}</h2>${v.forfeit ? `<p>${won ? "친구가 대결을 나갔어요" : "대결을 나왔어요"}</p>` : ""}<p class="small">친선 대결이라 금화는 오가지 않아요 · 오늘 남은 대결 ${K.d.battle.duelLeft}번</p>${missHTML(miss)}<button class="btn primary lg" data-close>확인</button></div>`;
       await new Promise(res => { const b = st.panel.querySelector("[data-close]"); b.focus(); b.onclick = res; }); }
   } catch (e) { toast(e.message); }
   st?.close(); K.duelOn = false; K.busy = false; try { await kidLoad(); kidRender(); } catch (e) {} kidNotices(); }
