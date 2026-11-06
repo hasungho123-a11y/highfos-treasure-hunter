@@ -215,8 +215,9 @@ async function bossView(db, st, game, mates) {
   if (prev) { const left = await bossLeft(db, prev); if (left < prev.hp) missed = { id: prev.id, name: BOSSES[prev.kind].name, art: BOSSES[prev.kind], left, hp: prev.hp }; }
   const lastWin = await db.prepare("SELECT * FROM bosses WHERE class_id=? AND defeated_at>? ORDER BY id DESC LIMIT 1").bind(st.class_id, Date.now() - 8 * 864e5).first();
   let win = null;
-  if (lastWin) { const joined = !!(await db.prepare("SELECT 1 FROM boss_hits WHERE boss_id=? AND student_id=? LIMIT 1").bind(lastWin.id, st.id).first());
-    win = { id: lastWin.id, name: BOSSES[lastWin.kind].name, art: BOSSES[lastWin.kind], gold: bossGoldFor(lastWin, joined, lastWin.finisher === st.id), last: lastWin.finisher === st.id, finisher: nameOf(lastWin.finisher), joined }; }
+  if (lastWin) { const tally = (await db.prepare("SELECT student_id AS id, SUM(dmg) AS dmg FROM boss_hits WHERE boss_id=? AND student_id>0 GROUP BY student_id").bind(lastWin.id).all()).results, mine = tally.find(x => x.id === st.id), joined = !!mine;
+    win = { id: lastWin.id, name: BOSSES[lastWin.kind].name, art: BOSSES[lastWin.kind], gold: bossGoldFor(lastWin, joined, lastWin.finisher === st.id), last: lastWin.finisher === st.id, finisher: nameOf(lastWin.finisher), joined, mine: mine?.dmg || 0, helpers: tally.length, crew: mates.length,
+      top: tally.filter(x => nameOf(x.id)).sort((x, y) => y.dmg - x.dmg).slice(0, 3).map(x => ({ who: nameOf(x.id), dmg: x.dmg })) }; }
   if (!b) return { off: true, win, missed };
   const tot = (await db.prepare("SELECT student_id AS id, SUM(dmg) AS dmg FROM boss_hits WHERE boss_id=? GROUP BY student_id").bind(b.id).all()).results, sum = tot.reduce((n, x) => n + x.dmg, 0);
   const feed = (await db.prepare("SELECT student_id AS id, dmg, src FROM boss_hits WHERE boss_id=? ORDER BY id DESC LIMIT 4").bind(b.id).all()).results.map(x => ({ who: x.id ? nameOf(x.id) : "선생님", dmg: x.dmg, src: x.src })).filter(x => x.who);

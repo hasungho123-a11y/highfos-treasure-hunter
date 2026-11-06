@@ -660,14 +660,19 @@ function build() {
   const snapShadow = new T.Mesh(new T.PlaneGeometry(400, 400), new T.ShadowMaterial({ opacity: .38, depthWrite: false })); snapShadow.rotation.x = -Math.PI / 2; snapShadow.position.y = .01; snapShadow.receiveShadow = true; snapShadow.visible = false; scene.add(snapShadow);
   const snapFoam = new T.Mesh(new T.PlaneGeometry(1, 1), new T.MeshBasicMaterial({ map: glowTex, transparent: true, opacity: .55, depthWrite: false, toneMapped: false })); snapFoam.rotation.x = -Math.PI / 2; snapFoam.position.y = .005; snapFoam.visible = false; scene.add(snapFoam);
   const waterline = [new T.Plane(new T.Vector3(0, 1, 0), 0)];
-  function snapshot(look, sailHex, flagHex, shipId, size = 512, angle = {}) {
+  // one picture at a time: a second call while one is dressing the ship would photograph the wrong look
+  let snapQ = Promise.resolve();
+  function snapshot(look, sailHex, flagHex, shipId, size = 512, angle = {}) { const job = snapQ.then(() => takeSnapshot(look, sailHex, flagHex, shipId, size, angle)); snapQ = job.catch(() => {}); return job; }
+  function takeSnapshot(look, sailHex, flagHex, shipId, size, angle) {
     setLook(look, sailHex, flagHex, shipId);
     return lookReady.then(() => {
       const hide = [skyMesh, orb, stars, ocean, foamPts, smokeObj], shown = hide.map(o => o.visible), oldTime = time, oldSize = renderer.getSize(new T.Vector2()), oldRatio = renderer.getPixelRatio(), oldFov = camera.fov, oldAspect = camera.aspect, oldFog = [scene.fog.near, scene.fog.far];
       hide.forEach(o => o.visible = false); time = "day"; applyTime();
       sun.position.set(-4, 26, 15); sun.color.set("#FFEBCF"); sun.intensity = 1.2; hemi.intensity = .55;
       scene.fog.near = 1e4; scene.fog.far = 1e5;
-      ship.position.set(0, 0, 0); ship.rotation.set(0, 0, 0); ship.updateMatrixWorld(true);
+      // angle.damage 1 to 3: a beaten ship lists toward the camera, down by the stern and low in the water (the water plane below cuts her off)
+      const dmg = angle.damage || 0;
+      ship.position.set(0, -shipSpec.H0 * [0, .05, .14, .32][dmg], 0); ship.rotation.set([0, .03, .07, .13][dmg], 0, [0, .015, .035, .07][dmg]); ship.updateMatrixWorld(true);
       const box = new T.Box3(), part = new T.Box3();
       const visit = o => { if (!o.visible || o.isPoints) return; if (o.geometry) { if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); part.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); box.union(part); } o.children.forEach(visit); };
       visit(ship); box.min.y = Math.max(0, box.min.y);
@@ -681,17 +686,30 @@ function build() {
       let far = 0; const pt = new T.Vector3();
       for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) { pt.set(x, y, z).project(camera); far = Math.max(far, Math.abs(pt.x), Math.abs(pt.y)); }
       camera.zoom = .84 / far; camera.updateProjectionMatrix(); const r = r0 / camera.zoom;
+      // burn marks where the camera really meets the ship, and those same places returned so the page can set fires there
+      const dimmed = new Map(), marks = [], spots = [];
+      if (dmg) { const shade = [1, .86, .7, .55][dmg];
+        ship.traverse(o => { if (!o.material || o.isPoints || o.isSprite) return; [].concat(o.material).forEach(m => { if (m.color && !dimmed.has(m)) { dimmed.set(m, m.color.clone()); m.color.multiplyScalar(shade); } }); });
+        let nx0 = 1, nx1 = -1, ny0 = 1, ny1 = -1;
+        for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) { pt.set(x, y, z).project(camera); nx0 = Math.min(nx0, pt.x); nx1 = Math.max(nx1, pt.x); ny0 = Math.min(ny0, pt.y); ny1 = Math.max(ny1, pt.y); }
+        const ray = new T.Raycaster(), ndc = new T.Vector2(), toCam = new T.Vector3(), shown = o => { for (let w = o; w && w !== ship; w = w.parent) if (!w.visible) return false; return true; };
+        for (const fx of [.36, .66, .5, .22, .8, .44]) for (const fy of [.2, .3, .42, .55, .7]) { ndc.set(nx0 + (nx1 - nx0) * fx, ny0 + (ny1 - ny0) * fy); ray.setFromCamera(ndc, camera);
+          const hit = ray.intersectObject(ship, true).find(h => h.object.isMesh && h.point.y > .15 && shown(h.object)); if (!hit) continue;
+          spots.push([(ndc.x + 1) / 2 * size, (1 - ndc.y) / 2 * size]);
+          if (marks.length < dmg * 2) { const sp = new T.Sprite(new T.SpriteMaterial({ map: glowTex, color: 0x0B0807, transparent: true, opacity: .82, depthWrite: false, fog: false, toneMapped: false })); toCam.copy(camera.position).sub(hit.point).normalize(); sp.position.copy(hit.point).addScaledVector(toCam, .25 * shipK); sp.scale.setScalar((1.5 + dmg * .35) * shipK); scene.add(sp); marks.push(sp); }
+          break; } }
       snapFoam.position.x = c.x; snapFoam.position.z = c.z; snapFoam.scale.set((box.max.x - box.min.x) * 1.16, Math.max(1.4, (box.max.z - box.min.z) * 2), 1);
       snapShadow.visible = snapFoam.visible = true; renderer.clippingPlanes = waterline;
       renderer.setPixelRatio(1); renderer.setSize(size, size, false);
       renderer.render(scene, camera);
       const url = renderer.domElement.toDataURL("image/webp", .9);
-      puffs.forEach(sp => { scene.remove(sp); sp.material.dispose(); });
+      puffs.concat(marks).forEach(sp => { scene.remove(sp); sp.material.dispose(); });
+      dimmed.forEach((col, m) => m.color.copy(col)); ship.position.set(0, 0, 0); ship.rotation.set(0, 0, 0);
       snapShadow.visible = snapFoam.visible = false; renderer.clippingPlanes = [];
       hide.forEach((o, i) => o.visible = shown[i]); time = oldTime; applyTime();
       [scene.fog.near, scene.fog.far] = oldFog; camera.zoom = 1; camera.fov = oldFov; camera.aspect = oldAspect; camera.updateProjectionMatrix();
       renderer.setPixelRatio(oldRatio); renderer.setSize(oldSize.x, oldSize.y, false);
-      return { url, r };
+      return { url, r, spots };
     });
   }
 
@@ -851,7 +869,7 @@ function build() {
           if (u.sink > 0 && c.visible) { u.sink = Math.min(1, u.sink + dt / 7.5); if (u.sink >= 1) c.visible = false; // all the way down, then gone
             if (u.sink < .72 && Math.random() < dt * 2.6) { v3.set(R(u.spec.L * .4), u.spec.H0, R(u.spec.W * .5)); c.localToWorld(v3); if (v3.y > .2) { burst(v3.clone(), .5); fireCloud(v3, 12, .6); ctrl.onBlast?.(.35); } } }
           const dip = u.sink * u.sink * (u.spec.L * .5 + u.spec.H0 * 3 + 6), k = c === a ? .55 : 1;
-          c.position.y = h0 * .7 * k + .05 - dip; c.rotation.z = (hb - hs) * .06 * k + u.tilt * u.sink * .34; c.rotation.x = (hr - hl) * .09 * k + u.tilt * u.sink * .24; c.rotation.y = u.yaw;
+          c.position.y = h0 * .7 * k + .05 - dip; c.rotation.z = (hb - hs) * .06 * k + u.tilt * u.sink * .34; c.rotation.x = (hr - hl) * .09 * k + u.tilt * u.sink * .24 + (u.list || 0); c.rotation.y = u.yaw;
           u.kick = Math.max(0, u.kick - dt * 5); u.wm.children.forEach(o => o.position.x = -u.kick * .32);
           for (const r of u.rotors) r.rotation.y = t * 22;
           for (const f of u.fires) { if (Math.random() < dt * 22 && u.sink < 1) { v1.copy(f); c.localToWorld(v1); if (v1.y > .1) { const near = c === a && view === "fp", z = near ? .3 : 1; // my own fires blow away from the camera and stay small, so they never block the view
@@ -888,6 +906,8 @@ function build() {
 
       const wait = ms => new Promise(r => setTimeout(r, ms));
       const ctrl = { onHurt: null,
+        // a ship already beaten before the scene opens: burning in n places and listing
+        wound(by, n, list = 0) { const c = by === "a" ? a : b; c.userData.list = list; for (let i = 0; i < n; i++) c.userData.fires.push(c.worldToLocal(hullSpot(c))); },
         // walk out onto the deck
         intro: () => wait(1500).then(() => { goView("fp"); return wait(1250); }),
         fire(by, dmg, kind) { const c = by === "a" ? a : b, sh = SHOT[kind] ? kind : "cannon", n = SHOT[sh][2]; sortie(c);

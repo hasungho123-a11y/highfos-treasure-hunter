@@ -110,10 +110,11 @@ function shipSVG(id, look = {}, sailIdx = 0) {
 /* shop cards: a 3D still of the ship wearing that item on its sea's water. The flat ship shows until the still is ready, and stays where 3D can't run. Only cards on screen get one. */
 const THUMBS = new Map(); let thumbQ = [], thumbBusy = false, thumbFail = false, thumbIO = null;
 // cuts the empty space around a ship, so the card can show it as large as it fits
-const trimPic = url => loadImg(url).then(im => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(im, 0, 0);
+const trimPic = url => trimBox(url).then(t => t.url);
+const trimBox = url => loadImg(url).then(im => { const c = document.createElement("canvas"); c.width = im.width; c.height = im.height; const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(im, 0, 0);
   const a = g.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
   for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (a[(y * c.width + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-  if (x1 < 0) return url; const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1; o.getContext("2d").drawImage(c, -x0, -y0); return o.toDataURL("image/webp", .9); });
+  if (x1 < 0) return { url, x: 0, y: 0, w: im.width, h: im.height }; const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1; o.getContext("2d").drawImage(c, -x0, -y0); return { url: o.toDataURL("image/webp", .9), x: x0, y: y0, w: o.width, h: o.height }; });
 function thumbCard(ship, look, sailIdx) { const key = JSON.stringify([ship, look, sailIdx, K.tab === "deco" && (K.slot === "hull" || K.slot === "camo")]), pic = THUMBS.get(key), era = K.d.ships.find(s => s.id === ship)?.era ?? 0;
   return `<div class="deco-sea tiny art" style="--pic:url(/maps/sea${Math.min(2, era) + 1}.webp)" ${pic ? "" : `data-thumb="${esc(key)}"`}><div class="ship mine ${pic ? "s3" : ""} ${V.wakeClass(look)}" style="--sail:${sail(sailIdx)}">${pic ? `<img class="hull" src="${pic}" alt="">` : shipSVG(ship, look, sailIdx)}</div></div>`; }
 function thumbScan() { thumbIO?.disconnect(); thumbQ = []; if (thumbFail || !window.Ship3D?.available()) return;
@@ -204,20 +205,33 @@ async function kidStart() {
   setInterval(duelPoll, 3000); duelPoll();
 }
 /* ---------- the class boss ---------- */
-// a still of the 3D ship, kept between visits; until it is ready (or where 3D can't run) the flat drawing stands in
-const bossMem = art => `hs_boss_pic_${art.ship}_${art.sail.slice(1)}`;
-function bossShip(art) { const pic = ls.get(bossMem(art));
-  if (!pic) wantBossPic(art);
-  return pic ? `<img src="${pic}" alt="">` : shipSVG(art.ship, art.look, 0); }
-async function wantBossPic(art) { const mem = bossMem(art); if (K.bossPicBusy === mem || K.bossPicFail || !window.Ship3D?.available()) return; K.bossPicBusy = mem;
-  try { const v = await Ship3D.thumbs(), url = await trimPic((await v.snapshot(art.look, art.sail, art.sail, art.ship, 384, { th: 2.45, ph: 1.2 })).url); try { ls.set(mem, url); } catch (e) {}
-    document.querySelectorAll(`[data-boss-ship="${mem}"]`).forEach(el => el.innerHTML = `<img src="${url}" alt="">`);
+// a still of the 3D ship for each state of damage, kept between visits; until it is ready (or where 3D can't run) the flat drawing stands in
+const bossStage = (left, hp) => { const r = left / hp; return r > .75 ? 0 : r > .5 ? 1 : r > .25 ? 2 : 3; };
+const BOSS_STATE = ["아직 멀쩡해요", "배에 불이 붙었어요", "크게 기울었어요", "곧 가라앉아요!"];
+const bossMem = (art, stage) => `hs_boss_v2_${art.ship}_${art.sail.slice(1)}_${stage}`;
+// fire and smoke drawn over the still; only these few shapes move, so the card costs a phone almost nothing
+let bossFireId = 0;
+const BOSS_TONGUES = [[0, 1], [-3.4, .62], [3.2, .7]]; // each fire is a low, uneven cluster, so it reads as a burning deck and not as one icon
+function bossFire(stage, W, spots) { if (!stage) return ""; const id = `bf${++bossFireId}`, s = W * .0075;
+  const one = ([x, y], i) => `<g transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${s.toFixed(3)})">${[0, 1, 2, 3].map(n => `<circle class="bw-smoke" r="7" cy="-9" fill="url(#${id}s)" style="animation-delay:${-(n * .72 + i * .4).toFixed(2)}s"/>`).join("")}<ellipse rx="9" ry="3.4" fill="url(#${id}g)"/>${BOSS_TONGUES.map(([dx, k], n) => `<path class="bw-flame" style="animation-delay:${-(i * .23 + n * .17).toFixed(2)}s" transform="translate(${dx} 0) scale(${k * .72})" fill="url(#${id}f)" d="M0 1C-5 1-6-4-3.5-8-3-10-1.6-12-1-16 .8-12 4.6-9.6 5-5 5.4-1.6 3.4 1 0 1Z"/>`).join("")}</g>`;
+  return `<defs><radialGradient id="${id}s"><stop offset="0" stop-color="#413C3D" stop-opacity=".95"/><stop offset=".62" stop-color="#4E494A" stop-opacity=".62"/><stop offset="1" stop-color="#5C5758" stop-opacity="0"/></radialGradient><radialGradient id="${id}g"><stop offset="0" stop-color="#FF9A2E" stop-opacity=".85"/><stop offset="1" stop-color="#FF6A1A" stop-opacity="0"/></radialGradient><linearGradient id="${id}f" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#FFE9A0"/><stop offset=".34" stop-color="#FFA52B"/><stop offset=".74" stop-color="#E8481A"/><stop offset="1" stop-color="#B8200F" stop-opacity=".25"/></linearGradient></defs>${spots.slice(0, stage).map(one).join("")}`; }
+function bossShip(art, stage = 0) { let pic = null; try { pic = JSON.parse(ls.get(bossMem(art, stage))); } catch (e) {}
+  if (!pic) wantBossPic(art, stage);
+  if (pic) return `<svg viewBox="0 0 ${pic.w} ${pic.h}" aria-hidden="true"><image href="${pic.u}" width="${pic.w}" height="${pic.h}"/>${bossFire(stage, pic.w, pic.s)}</svg>`;
+  return shipSVG(art.ship, art.look, 0).replace(`<g class="hull">`, `<g class="hull" style="filter:brightness(${[1, .86, .7, .55][stage]});transform:rotate(${stage * 2}deg);transform-origin:center">`).replace(/<\/svg>$/, `${bossFire(stage, 60, [[24, 27], [38, 25], [31, 22]])}</svg>`); }
+const bossShipBox = (art, stage, cls = "") => `<div class="boss-ship ${cls}" data-boss-ship="${bossMem(art, stage)}">${bossShip(art, stage)}</div>`;
+async function wantBossPic(art, stage) { const mem = bossMem(art, stage); K.bossPicBusy ||= new Set(); if (K.bossPicBusy.has(mem) || K.bossPicFail || !window.Ship3D?.available()) return; K.bossPicBusy.add(mem);
+  try { const v = await Ship3D.thumbs(), shot = await v.snapshot(art.look, art.sail, art.sail, art.ship, 384, { th: 2.45, ph: 1.2, damage: stage }), t = await trimBox(shot.url);
+    ls.set(mem, JSON.stringify({ u: t.url, w: t.w, h: t.h, s: shot.spots.map(([x, y]) => [x - t.x, y - t.y]) }));
+    document.querySelectorAll(`[data-boss-ship="${mem}"]`).forEach(el => el.innerHTML = bossShip(art, stage));
   } catch (e) { K.bossPicFail = true; }
-  K.bossPicBusy = null; }
+  K.bossPicBusy.delete(mem); }
 function bossCard() { const b = K.d.boss; if (!b || b.off) return "";
+  // before the bar plays out, the ship still looks the way this kid last saw it
+  const stage = bossStage(Math.max(b.left, Number(ls.get(`hs_boss_left_${b.id}`) ?? b.hp)), b.hp);
   const pct = b.left / b.hp * 100, feed = b.feed.slice(0, 3).map(f => `<li><b>${esc(f.who)}</b> ${{ quest: "미션", game: "미니게임", teacher: "포격" }[f.src]} <span class="num">-${f.dmg}</span></li>`).join("");
-  return `<section class="panel boss ${b.down ? "down" : ""}" id="bossCard"><div class="boss-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)"><div class="boss-ship" data-boss-ship="${bossMem(b.art)}">${bossShip(b.art)}</div><span class="boss-pop" hidden></span></div>
-    <div class="boss-body"><span class="small muted">이번 주 우리 반 보스</span><h2>${esc(b.name)}</h2>
+  return `<section class="panel boss ${b.down ? "down" : ""}" id="bossCard"><div class="boss-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)">${bossShipBox(b.art, stage)}<span class="boss-pop" hidden></span></div>
+    <div class="boss-body"><span class="small muted">이번 주 우리 반 보스</span><h2>${esc(b.name)}</h2>${b.down ? "" : `<span class="boss-state small" id="bossState">${BOSS_STATE[stage]}</span>`}
       <div class="boss-hp" role="progressbar" aria-label="보스 체력" aria-valuemin="0" aria-valuemax="${b.hp}" aria-valuenow="${b.left}"><i id="bossBar" style="width:${pct}%"></i><b class="num">${b.left} / ${b.hp}</b></div>
       ${b.down ? `<p class="small"><b>우리 반이 격파했어요!</b> 다음 보스는 월요일에 나타나요.</p>` : `<p class="small">미션 확인 1개 <b class="num">-${b.questDmg}</b><br>미니게임 별 1개 <b class="num">-${b.starDmg}</b><br>일요일까지 잡으면 공격한 친구 모두 금화 <b class="num">${b.gold}</b>개!</p>`}
       <p class="small muted">내 공격 <b class="num">${b.mine}</b> · 함께한 친구 <b class="num">${b.joined}</b>/${b.crew}명</p>
@@ -225,14 +239,37 @@ function bossCard() { const b = K.d.boss; if (!b || b.off) return "";
 // the bar remembers what this kid last saw, so damage done by anyone since then plays out on arrival
 function bossAnim() { const b = K.d.boss, bar = $("#bossBar"); if (!b || b.off || !bar) return; const mem = `hs_boss_left_${b.id}`, seen = Number(ls.get(mem) ?? b.hp); ls.set(mem, b.left);
   if (seen <= b.left) return; bar.style.transition = "none"; bar.style.width = seen / b.hp * 100 + "%"; bar.offsetWidth;
-  setTimeout(() => { if (!bar.isConnected) return; bar.style.transition = ""; bar.style.width = b.left / b.hp * 100 + "%"; const card = $("#bossCard"), pop = card.querySelector(".boss-pop"); card.classList.add("hit"); pop.hidden = false; pop.textContent = `-${seen - b.left}`; Sfx.bossHit(); setTimeout(() => { card.classList.remove("hit"); pop.hidden = true; }, 1300); }, 450); }
-function bossWin() { const w = K.d.boss?.win, mem = `hs_boss_win_${K.d.me.id}`; if (!w || w.id <= Number(ls.get(mem) || 0)) return false; ls.set(mem, w.id); const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
-  m.innerHTML = `<div class="panel reward boss-win"><div class="boss-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)"><div class="boss-ship sink" data-boss-ship="${bossMem(w.art)}">${bossShip(w.art)}</div></div><h2>보스 격파!</h2><p><b>${esc(w.name)}</b>을(를) 우리 반이 함께 쓰러뜨렸어요.</p>
-    ${w.finisher ? `<p class="small">${w.last ? "마지막 일격은 바로 나! 금화를 더 받았어요." : `마지막 일격: <b>${esc(w.finisher)}</b>`}</p>` : `<p class="small">마지막 일격은 선생님의 포격이었어요.</p>`}<p class="found">${coin(`+${w.gold}`)}</p>${w.joined ? "" : `<p class="small muted">다음 보스 때 함께 공격하면 금화를 훨씬 많이 받아요.</p>`}<button class="btn primary lg" data-close>확인</button></div>`;
-  document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); Sfx.bossDown(); b.onclick = () => { m.remove(); kidRender(); kidNotices(); }; return true; }
+  setTimeout(() => { if (!bar.isConnected) return; bar.style.transition = ""; bar.style.width = b.left / b.hp * 100 + "%"; const card = $("#bossCard"), pop = card.querySelector(".boss-pop"); card.classList.add("hit"); pop.hidden = false; pop.textContent = `-${seen - b.left}`; Sfx.bossHit();
+    const now = bossStage(b.left, b.hp); if (now !== bossStage(seen, b.hp)) { const box = card.querySelector(".boss-ship"), say = $("#bossState"); box.dataset.bossShip = bossMem(b.art, now); box.innerHTML = bossShip(b.art, now); if (say) say.textContent = BOSS_STATE[now]; }
+    setTimeout(() => { card.classList.remove("hit"); pop.hidden = true; }, 1300); }, 450); }
+// the words of a win, the same over the 3D scene and on the flat card
+const bossWinBody = w => `<h2>보스 격파!</h2><p><b>${esc(w.name)}</b>을(를) 우리 반이 함께 쓰러뜨렸어요.</p>
+  ${w.finisher ? `<p class="small">${w.last ? "마지막 일격은 바로 나! 금화를 더 받았어요." : `마지막 일격: <b>${esc(w.finisher)}</b>`}</p>` : `<p class="small">마지막 일격은 선생님의 포격이었어요.</p>`}<p class="found">${coin(`+${w.gold}`)}</p>
+  ${w.top?.length ? `<ol class="boss-top">${w.top.map(t => `<li><b>${esc(t.who)}</b><span class="num">${t.dmg}</span></li>`).join("")}</ol>` : ""}
+  ${w.joined ? `<p class="small">내 공격 <b class="num">${w.mine}</b> · 함께한 친구 <b class="num">${w.helpers}</b>/${w.crew}명</p>` : `<p class="small">다음 보스 때 함께 공격하면 금화를 훨씬 많이 받아요.</p>`}<button class="btn primary lg" data-close>확인</button>`;
+function bossWin() { const w = K.d.boss?.win, mem = `hs_boss_win_${K.d.me.id}`; if (!w || w.id <= Number(ls.get(mem) || 0)) return false; ls.set(mem, w.id); bossScene(w); return true; }
+// the class's win, seen once by each kid when they next come in: their own ship fires the last shots and the boss goes down. Nothing here is decided: the win and the gold are already the server's.
+async function bossScene(w) { K.busy = true; const m = document.createElement("div"); m.className = "fight"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.innerHTML = `<p class="f-load">보스를 찾았어요…</p>`; document.body.appendChild(m);
+  const done = () => { m.remove(); K.busy = false; kidRender(); kidNotices(); };
+  let v3d = null, fx = null, me = K.d.me;
+  if (window.Ship3D?.available() && !matchMedia("(prefers-reduced-motion: reduce)").matches) try { v3d = await Promise.race([Ship3D.get(), sleep(6000)]); } catch (e) {}
+  if (v3d) { m.className = "fight f3"; m.innerHTML = `<div class="f-view"></div><div class="f-top boss-hud"><div class="f-side"><b>${esc(w.name)}</b><div class="hpbar"><i style="width:14%"></i></div></div></div><span class="f-dmg" hidden></span><div class="f-bottom"><button type="button" class="btn sm" data-skip>건너뛰기</button>${sndBtn()}</div>`;
+    try { fx = await v3d.fight(m.querySelector(".f-view"), { look: me.look, sailHex: sail(me.sail), flagHex: me.look.fc != null ? sail(me.look.fc) : sail(me.sail), ship: me.ship }, { look: w.art.look, sailHex: w.art.sail, flagHex: w.art.sail, ship: w.art.ship }); } catch (e) { fx = null; } }
+  if (!fx) { m.className = "modal"; m.innerHTML = `<div class="panel reward boss-win"><div class="boss-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)">${bossShipBox(w.art, 3, "sink")}</div>${bossWinBody(w)}</div>`; const b = m.querySelector("[data-close]"); b.focus(); Sfx.bossDown(); b.onclick = done; return; }
+  let fast = false; m.querySelector("[data-skip]").onclick = () => fast = true;
+  const bar = m.querySelector(".hpbar i"), say = m.querySelector(".f-dmg"), mine = K.d.deco.find(x => x.key === `weapon.${me.look.weapon}`)?.kind || "cannon", theirs = w.art.ship === "galleon" ? "cannon" : "turret";
+  fx.wound("b", 3, .08); fx.onSortie = () => Sfx.jet(); fx.onStrafe = () => Sfx.shot("gun"); fx.onBlast = k => Sfx.boom(k);
+  if (!fast) await fx.intro();
+  for (const [by, hp, word] of [["a", 9, "명중!"], ["b", 9, "빗나감"], ["a", 5, "명중!"], ["a", 0, "격파!"]]) { if (fast) break;
+    Sfx.shot(by === "a" ? mine : theirs); await fx.fire(by, by === "a" ? 1 : 0, by === "a" ? mine : theirs); by === "a" ? Sfx.boom() : Sfx.splash();
+    bar.style.width = hp + "%"; say.className = `f-dmg pop ${by === "a" ? "to-d" : "to-a miss"}`; say.hidden = false; say.textContent = word; await sleep(620); say.hidden = true; }
+  bar.style.width = "0"; m.querySelector("[data-skip]").hidden = true; await fx.finish(true, fast); Sfx.bossDown(); if (!fast) await sleep(2600); // let her go under before the card covers the water
+  m.querySelector(".f-bottom").innerHTML = `<div class="f-result win boss-result">${bossWinBody(w)}</div>`;
+  await new Promise(res => { const b = m.querySelector("[data-close]"); b.focus(); b.onclick = res; });
+  fx.close(); done(); }
 const noticeModal = (html, sound) => { const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true"); m.innerHTML = `<div class="panel reward">${html}<button class="btn primary lg" data-close>확인</button></div>`; document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); sound?.(); b.onclick = () => { m.remove(); kidNotices(); }; };
 function bossMissed() { const w = K.d.boss?.missed, mem = `hs_boss_miss_${K.d.me.id}`; if (!w || w.id <= Number(ls.get(mem) || 0)) return false; ls.set(mem, w.id); const b = K.d.boss;
-  noticeModal(`<div class="boss-sea notice-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)"><div class="boss-ship" data-boss-ship="${bossMem(w.art)}">${bossShip(w.art)}</div></div><h2>${esc(w.name)}이(가) 도망갔어요</h2><p>체력 <b class="num">${w.left}</b>이 남아 있었어요.${w.left <= w.hp * .3 ? " 조금만 더 했으면 잡았어요!" : ""}</p>${b.off ? "" : `<p class="small muted">이번 주 보스는 <b>${esc(b.name)}</b>이에요. 다시 힘을 합쳐요.</p>`}`, Sfx.lose); return true; }
+  noticeModal(`<div class="boss-sea notice-sea" style="--pic:url(/maps/sea${K.map + 1}.webp)">${bossShipBox(w.art, bossStage(w.left, w.hp))}</div><h2>${esc(w.name)}이(가) 도망갔어요</h2><p>체력 <b class="num">${w.left}</b>이 남아 있었어요.${w.left <= w.hp * .3 ? " 조금만 더 했으면 잡았어요!" : ""}</p>${b.off ? "" : `<p class="small muted">이번 주 보스는 <b>${esc(b.name)}</b>이에요. 다시 힘을 합쳐요.</p>`}`, Sfx.lose); return true; }
 // missions the teacher has accepted since this kid last looked; the first visit only sets the mark, so old missions don't pop up
 function missionNews() { const list = K.d.approved || [], mem = `hs_seen_quest_${K.d.me.id}`, top = list[0]?.id || 0, raw = ls.get(mem); if (raw === null) { ls.set(mem, top); return false; } const fresh = list.filter(l => l.id > Number(raw)); ls.set(mem, Math.max(top, Number(raw))); if (!fresh.length) return false;
   const energy = fresh.reduce((n, l) => n + l.energy, 0), b = K.d.boss, hit = b && !b.off && !b.down ? fresh.length * b.questDmg : 0;
