@@ -442,7 +442,7 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 /* sound switch */
 .snd { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--ink); cursor: pointer }
 .snd[aria-pressed="false"] { color: var(--muted) }
-nav.tabs .snd { margin-left: auto; flex: none; width: 36px; padding: 0; border: 1px solid var(--line); color: var(--ink); background: var(--surface); border-radius: 50% } nav.tabs .snd[aria-pressed="false"] { color: var(--muted) }
+.brand:has(.snd) { flex: 1 1 auto } .brand .snd { margin-left: auto; flex: none }
 .reward { text-align: center; justify-items: center }
 .stars { display: flex; gap: 8px } .stars i { width: 38px; height: 38px; background: var(--sunk); clip-path: polygon(50% 0, 62% 35%, 100% 37%, 70% 59%, 81% 96%, 50% 75%, 19% 96%, 30% 59%, 0 37%, 38% 35%) } .stars i.on { background: var(--gold-bg) }
 .found { display: grid; gap: 4px; justify-items: center; padding: 12px 18px; border-radius: 12px; background: var(--gold-soft); width: 100% }
@@ -557,7 +557,8 @@ nav.tabs .snd { margin-left: auto; flex: none; width: 36px; padding: 0; border: 
 .dex-w { width: 92px; display: grid; gap: 2px; justify-items: center; padding: 6px; text-align: center; border-radius: 10px; background: var(--sunk) } .dex-w svg { width: 100%; height: auto; filter: grayscale(1) brightness(.45); opacity: .55 } .dex-w.got { background: var(--surface); border: 1px solid var(--line) } .dex-w.got svg { filter: none; opacity: 1 }
 /* classmates' ships */
 .likes { display: inline-flex; align-items: center; gap: 3px; color: #D84B6B; font-weight: 700 } .likes i { width: 13px; height: 12px; background: currentColor; clip-path: path("M6.5 12 .9 6.2a3.3 3.3 0 0 1 4.7-4.6l.9.9.9-.9a3.3 3.3 0 0 1 4.7 4.6z") }
-@media (max-width: 480px) { nav.tabs { gap: 2px } nav.tabs button { padding: 8px 6px; font-size: .9rem } }
+@media (max-width: 480px) { nav.tabs { gap: 1px } nav.tabs button { padding: 8px 5px; font-size: .88rem } nav.tabs button .cnt { margin-left: 2px; min-width: 16px; height: 16px; padding: 0 4px } }
+.boss-go { justify-content: center; margin-top: 12px }
 
 /* live duels */
 .duel-panel { width: min(100%, 440px); display: grid; gap: 8px; justify-items: center } .duel-panel:empty { display: none }

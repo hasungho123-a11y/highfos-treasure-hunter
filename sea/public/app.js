@@ -238,6 +238,8 @@ function bossCard() { const b = K.d.boss; if (!b || b.off) return "";
       ${b.down ? `<p class="small"><b>우리 반이 격파했어요!</b> 다음 보스는 월요일에 나타나요.</p>` : `<p class="small">미션 확인 1개 <b class="num">-${b.questDmg}</b><br>미니게임 별 1개 <b class="num">-${b.starDmg}</b><br>일요일까지 잡으면 공격한 친구 모두 금화 <b class="num">${b.gold}</b>개!</p>`}
       <p class="small muted">내 공격 <b class="num">${b.mine}</b> · 함께한 친구 <b class="num">${b.joined}</b>/${b.crew}명</p>
       ${feed ? `<ul class="boss-feed small">${feed}</ul>` : ""}</div></section>`; }
+function kBoss() { const card = bossCard(); if (!card) return `<section class="panel"><h2>보스</h2><p class="small muted">이번 주에는 나타난 보스가 없어요.</p></section>`;
+  return `${card}${K.d.boss.down ? "" : `<div class="row boss-go"><button class="btn primary" data-act="ktab" data-v="missions">미션 하러 가기</button><button class="btn" data-act="ktab" data-v="map">미니게임 하러 가기</button></div>`}`; }
 // the bar remembers what this kid last saw, so damage done by anyone since then plays out on arrival
 function bossAnim() { const b = K.d.boss, bar = $("#bossBar"); if (!b || b.off || !bar) return; const mem = `hs_boss_left_${b.id}`, seen = Number(ls.get(mem) ?? b.hp); ls.set(mem, b.left);
   if (seen <= b.left) return; bar.style.transition = "none"; bar.style.width = seen / b.hp * 100 + "%"; bar.offsetWidth;
@@ -284,16 +286,16 @@ const sndIcon = () => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidd
 const sndBtn = () => `<button type="button" class="snd" data-act="ksnd" aria-pressed="${Sfx.on}" aria-label="소리 ${Sfx.on ? "끄기" : "켜기"}" title="소리 ${Sfx.on ? "끄기" : "켜기"}">${sndIcon()}</button>`;
 function kidRender() {
   const d = K.d, me = d.me, keep = keepInputs(app);
-  const tabs = [["map", "지도"], ["missions", "미션"], ["deco", "장비"], ["shop", "상점"], ["dex", "도감"], ["crew", "친구"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
-  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>${esc(titleName(me.look) || me.className)} · 전투력 ${me.power}</small></div></div>
+  const tabs = [["map", "지도"], ["missions", "미션"], ["boss", "보스"], ["deco", "장비"], ["shop", "상점"], ["dex", "도감"], ["crew", "친구"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
+  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>${esc(titleName(me.look) || me.className)} · 전투력 ${me.power}</small></div>${sndBtn()}</div>
       <div class="hright wallet"><span title="행동력">${nrg(d.bal.energy)}</span><span title="포인트">${pts(d.bal.points)}</span><span title="금화">${coin(d.bal.gold)}</span></div></div>
-      <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "missions" && openQ ? `<span class="cnt">${openQ}</span>` : ""}</button>`).join("")}${sndBtn()}</nav></header>
-    <main>${({ map: kMap, missions: kMissions, deco: kDeco, shop: kDeco, dex: kDex, crew: kCrew, log: kLog })[K.tab]()}</main>
+      <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "missions" && openQ ? `<span class="cnt">${openQ}</span>` : ""}</button>`).join("")}</nav></header>
+    <main>${({ map: kMap, missions: kMissions, boss: kBoss, deco: kDeco, shop: kDeco, dex: kDex, crew: kCrew, log: kLog })[K.tab]()}</main>
     ${me.mustChange ? `<div class="modal" role="dialog" aria-modal="true"><div class="panel"><h2>나만의 비밀번호 정하기</h2><p class="small muted">임시 비밀번호 대신 나만 아는 숫자 4개로 바꿔요.</p>
       <form data-form="kpin" class="stack" style="gap:10px"><input type="password" id="kp1" inputmode="numeric" maxlength="4" placeholder="숫자 4개" data-keep="no" required><input type="password" id="kp2" inputmode="numeric" maxlength="4" placeholder="한 번 더" data-keep="no" required><button class="btn primary">정하기</button></form></div></div>` : ""}`;
   restoreInputs(keep);
   if (inDeck()) { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey), base = draftLook(me.look); show3D($("#deco3d"), x ? previewItem(base, x) : base, me.sail, K.tryShip || me.ship); if (K.crop) drawCrop(); thumbScan(); }
-  if (K.tab === "map") bossAnim();
+  if (K.tab === "boss") bossAnim();
   if (K.tab === "crew") { const m = d.mates.find(x => x.id === K.mate); if (m) show3D($("#mate3d"), m.look, m.sail, m.ship); thumbScan(); }
 }
 const tallMap = () => innerWidth < 640;
@@ -346,7 +348,7 @@ function kMap() {
   const artImg = () => { const [cx, cy, cw] = artCrop(art), ch = cw * h / w; return `<img class="wart" src="${art.src}" alt="" style="width:${art.size / cw * 100}%;left:${-cx / cw * 100}%;top:${-cy / ch * 100}%"><div class="wfx" aria-hidden="true"><i class="wglint"></i><i class="wcloud"></i><i class="wcloud c2"></i><i class="wcloud c3"></i></div>`; };
   const route = (a, b, bend) => { const p = (art ? dockPos : islePos)(a), q = (art ? dockPos : islePos)(b); return `M${p.x} ${p.y} Q${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2 - bend} ${q.x} ${q.y}`; };
   const tabs = d.maps.map(m => { const open = seaOpen(m); return `<button class="seatab ${open ? "" : "locked"}" data-act="ksea" data-v="${m.id}" aria-pressed="${K.map === m.id}"><b>${esc(m.name)}</b><small>${open ? esc(m.era) : `전투력 ${m.power}부터`}</small>${open ? "" : `<i class="seabar"><i style="width:${Math.min(100, me.power / m.power * 100)}%"></i></i>`}</button>`; }).join("");
-  return `${installCard()}${bossCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
+  return `${installCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p><div class="seatabs">${tabs}</div></section>
     <div class="world ${art ? "art" : ""}">${art ? artImg() : ""}<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(d.maps[K.map].name)} 지도">
       ${art ? "" : `<defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sea.top}"/><stop offset="1" stop-color="${sea.bot}"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
       <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>`}
