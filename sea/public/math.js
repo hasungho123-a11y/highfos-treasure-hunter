@@ -1,4 +1,4 @@
-/* 하이포스 제도 — math for the mini-games, at upper-elementary level (Korean grades 5-6).
+/* 하이포스 매쓰아일랜드 — math for the mini-games, at upper-elementary level (Korean grades 5-6).
    Questions are made fresh every time and never stored, so answers can't be memorised or passed around.
    Labels are plain text such as "3/4", "0.75", "75%", "(2+3)×4"; MathQ.html() draws the fractions stacked. */
 (() => {

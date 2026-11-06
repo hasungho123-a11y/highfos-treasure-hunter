@@ -1,4 +1,4 @@
-/* 하이포스 제도 — every sound is synthesised here, so there are no audio files to download. Sfx.on / Sfx.toggle() is the kid's switch. */
+/* 하이포스 매쓰아일랜드 — every sound is synthesised here, so there are no audio files to download. Sfx.on / Sfx.toggle() is the kid's switch. */
 window.Sfx = (() => {
   const KEY = "hs_sound"; let on = true; try { on = localStorage.getItem(KEY) !== "off"; } catch (e) {}
   let ctx = null, out = null, noiseBuf = null;

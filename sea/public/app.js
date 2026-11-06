@@ -1,4 +1,4 @@
-/* 하이포스 제도 — screens for students (phone) and teachers (classroom screen) */
+/* 하이포스 매쓰아일랜드 — screens for students (phone) and teachers (classroom screen) */
 const V = window.Voyage;
 const { esc, sail } = V;
 const $ = s => document.querySelector(s);
@@ -159,7 +159,7 @@ function renderGate() {
     <p class="muted small">비밀번호 숫자 4개를 눌러요.</p><div class="pindots">${[0, 1, 2, 3].map(i => `<i class="${i < G.pin.length ? "on" : ""}"></i>`).join("")}</div>
     <div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-act="pin" data-v="${n}">${n}</button>`).join("")}<button data-act="pin" data-v="clr" style="font-size:1rem">지우기</button><button data-act="pin" data-v="0">0</button><button data-act="pin" data-v="back" aria-label="한 칸 지우기">←</button></div>`;
   else body = `<h2>선생님 로그인</h2><form data-form="teacher" class="stack" style="gap:10px"><label class="f">아이디<input type="text" id="g-user" autocomplete="username"></label><label class="f">비밀번호<input type="password" id="g-pw" autocomplete="current-password"></label><button class="btn primary lg">로그인</button></form><button class="btn ghost sm" data-act="gmode" data-v="code">학생 화면으로</button>`;
-  app.innerHTML = `<div class="gate"><div class="card"><div class="logo"><img src="${LOGO}" alt=""><div><h1>하이포스 제도</h1><small>숙제로 떠나는 섬 모험</small></div></div>${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${G.mode === "setup" || G.mode === "teacher" ? "" : installCard()}${body}</div></div>`;
+  app.innerHTML = `<div class="gate"><div class="card"><div class="logo"><img src="${LOGO}" alt=""><div><h1>하이포스 매쓰아일랜드</h1><small>수학으로 떠나는 섬 모험</small></div></div>${G.err ? `<p class="err">${esc(G.err)}</p>` : ""}${G.mode === "setup" || G.mode === "teacher" ? "" : installCard()}${body}</div></div>`;
 }
 const GATE_ACTS = {
   gmode: v => { G.mode = v; G.err = ""; G.pin = ""; renderGate(); },
@@ -282,8 +282,8 @@ const sndIcon = () => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidd
 const sndBtn = () => `<button type="button" class="snd" data-act="ksnd" aria-pressed="${Sfx.on}" aria-label="소리 ${Sfx.on ? "끄기" : "켜기"}" title="소리 ${Sfx.on ? "끄기" : "켜기"}">${sndIcon()}</button>`;
 function kidRender() {
   const d = K.d, me = d.me, keep = keepInputs(app);
-  const tabs = [["map", "제도 지도"], ["missions", "미션"], ["deco", "내 배"], ["crew", "친구 배"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
-  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 제도</h1><small>${esc(titleName(me.look) || me.className)} · 전투력 ${me.power}</small></div></div>
+  const tabs = [["map", "섬 지도"], ["missions", "미션"], ["deco", "내 배"], ["crew", "친구 배"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
+  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>${esc(titleName(me.look) || me.className)} · 전투력 ${me.power}</small></div></div>
       <div class="hright wallet"><span title="행동력">${nrg(d.bal.energy)}</span><span title="포인트">${pts(d.bal.points)}</span><span title="금화">${coin(d.bal.gold)}</span></div></div>
       <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "missions" && openQ ? `<span class="cnt">${openQ}</span>` : ""}</button>`).join("")}${sndBtn()}</nav></header>
     <main>${({ map: kMap, missions: kMissions, deco: kDeco, crew: kCrew, log: kLog })[K.tab]()}</main>
@@ -729,7 +729,7 @@ const tList = () => T.d.students.filter(s => T.cls === "all" || s.class_id === T
 const tChips = () => T.d.classes.length < 2 ? "" : `<div class="chips">${[["all", "전체"], ...T.d.classes.map(c => [c.id, c.name])].map(([v, n]) => `<button class="chip" data-act="tcls" data-v="${v}" aria-pressed="${T.cls === v}">${esc(n)}</button>`).join("")}</div>`;
 function tRender() {
   const d = T.d, keep = keepInputs(app);
-  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 제도</h1><small>선생님 · ${esc(d.teacher)}</small></div></div><div class="hright"><button class="btn ghost sm" data-act="logout">로그아웃</button></div></div>
+  app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>선생님 · ${esc(d.teacher)}</small></div></div><div class="hright"><button class="btn ghost sm" data-act="logout">로그아웃</button></div></div>
     <nav class="tabs" aria-label="화면">${TTABS.map(([k, l]) => `<button data-act="ttab" data-v="${k}" aria-current="${T.tab === k}">${l}${k === "grant" && d.requests.length ? `<span class="cnt">${d.requests.length}</span>` : ""}${k === "give" && d.orders.length ? `<span class="cnt">${d.orders.length}</span>` : ""}${k === "photo" && d.photos.length ? `<span class="cnt">${d.photos.length}</span>` : ""}</button>`).join("")}</nav></header>
     <main>${({ grant: tGrant, photo: tPhoto, crew: tCrew, quests: tQuests, give: tGive, battle: tBattle, log: tLog })[T.tab]()}</main>`;
   restoreInputs(keep);

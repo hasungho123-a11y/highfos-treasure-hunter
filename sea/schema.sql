@@ -1,4 +1,4 @@
--- 하이포스 제도 · D1 schema
+-- 하이포스 매쓰아일랜드 · D1 schema
 CREATE TABLE IF NOT EXISTS teachers (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,

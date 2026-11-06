@@ -1,4 +1,4 @@
-/* 하이포스 제도 — the mini-games. Games.run(kind) shows a full-screen game and resolves with the score (null if the child leaves early). */
+/* 하이포스 매쓰아일랜드 — the mini-games. Games.run(kind) shows a full-screen game and resolves with the score (null if the child leaves early). */
 (() => {
 const V = window.Voyage;
 // what the child got wrong in the game just played, for the reward card. null when a game has no right or wrong answers (the card pairs)

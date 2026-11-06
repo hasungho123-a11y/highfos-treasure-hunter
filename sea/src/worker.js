@@ -1,4 +1,4 @@
-// 하이포스 제도 · Cloudflare Worker (API) — static files are served from ./public
+// 하이포스 매쓰아일랜드 · Cloudflare Worker (API) — static files are served from ./public
 // Homework gives energy. Energy buys mini-game plays, which pay points and now and then an item.
 // Battles pay gold. Gold buys decorations and bigger ships. Points only buy the monthly homework pass (or turn into gold).
 const SESSION_DAYS = { teacher: 14, student: 60 };
