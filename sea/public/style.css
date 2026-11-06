@@ -535,12 +535,13 @@ nav.tabs .snd { margin-left: auto; flex: none; width: 36px; padding: 0; border: 
 .dex-titles { display: grid; gap: 8px } .dex-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
 .dex-title > div { display: grid; gap: 3px; flex: 1; min-width: 0 } .dex-title:not(.got) b { color: var(--muted, #777) } .dex-title.got { border-color: var(--gold); background: var(--gold-soft) }
 .dex-bar { height: 7px; border-radius: 4px; background: var(--sunk); overflow: hidden } .dex-bar i { display: block; height: 100%; background: var(--accent) }
+.deck-more { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: nowrap; gap: 10px } .deck-more .btn { flex: none }
 .dex-group { display: grid; gap: 6px; margin-top: 8px } .dex-group h3 { margin: 0 } .dex-list { display: flex; flex-wrap: wrap; gap: 6px }
 .dex-c { padding: 3px 9px; border-radius: 999px; font-size: .8rem; background: var(--sunk); color: var(--muted, #777) } .dex-c.got { background: var(--accent-soft); color: var(--accent); font-weight: 700 }
 .dex-w { width: 92px; display: grid; gap: 2px; justify-items: center; padding: 6px; text-align: center; border-radius: 10px; background: var(--sunk) } .dex-w svg { width: 100%; height: auto; filter: grayscale(1) brightness(.45); opacity: .55 } .dex-w.got { background: var(--surface); border: 1px solid var(--line) } .dex-w.got svg { filter: none; opacity: 1 }
 /* classmates' ships */
 .likes { display: inline-flex; align-items: center; gap: 3px; color: #D84B6B; font-weight: 700 } .likes i { width: 13px; height: 12px; background: currentColor; clip-path: path("M6.5 12 .9 6.2a3.3 3.3 0 0 1 4.7-4.6l.9.9.9-.9a3.3 3.3 0 0 1 4.7 4.6z") }
-@media (max-width: 480px) { nav.tabs button { padding: 8px 8px } }
+@media (max-width: 480px) { nav.tabs { gap: 2px } nav.tabs button { padding: 8px 6px; font-size: .9rem } }
 
 /* live duels */
 .duel-panel { width: min(100%, 440px); display: grid; gap: 8px; justify-items: center } .duel-panel:empty { display: none }

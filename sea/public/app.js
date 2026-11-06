@@ -115,7 +115,7 @@ const trimBox = url => loadImg(url).then(im => { const c = document.createElemen
   const a = g.getImageData(0, 0, c.width, c.height).data; let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
   for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (a[(y * c.width + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   if (x1 < 0) return { url, x: 0, y: 0, w: im.width, h: im.height }; const o = document.createElement("canvas"); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1; o.getContext("2d").drawImage(c, -x0, -y0); return { url: o.toDataURL("image/webp", .9), x: x0, y: y0, w: o.width, h: o.height }; });
-function thumbCard(ship, look, sailIdx) { const key = JSON.stringify([ship, look, sailIdx, K.tab === "deco" && (K.slot === "hull" || K.slot === "camo")]), pic = THUMBS.get(key), era = K.d.ships.find(s => s.id === ship)?.era ?? 0;
+function thumbCard(ship, look, sailIdx) { const key = JSON.stringify([ship, look, sailIdx, inDeck() && (K.slot === "hull" || K.slot === "camo")]), pic = THUMBS.get(key), era = K.d.ships.find(s => s.id === ship)?.era ?? 0;
   return `<div class="deco-sea tiny art" style="--pic:url(/maps/sea${Math.min(2, era) + 1}.webp)" ${pic ? "" : `data-thumb="${esc(key)}"`}><div class="ship mine ${pic ? "s3" : ""} ${V.wakeClass(look)}" style="--sail:${sail(sailIdx)}">${pic ? `<img class="hull" src="${pic}" alt="">` : shipSVG(ship, look, sailIdx)}</div></div>`; }
 function thumbScan() { thumbIO?.disconnect(); thumbQ = []; if (thumbFail || !window.Ship3D?.available()) return;
   thumbIO = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) { thumbIO.unobserve(e.target); if (!thumbQ.includes(e.target.dataset.thumb)) thumbQ.push(e.target.dataset.thumb); } thumbPump(); }, { rootMargin: "200px" });
@@ -133,7 +133,7 @@ const shipBox = (ship, look, sailIdx, name, cls = "") => cls === "tiny" ? thumbC
 /* ---------- 3D ---------- */
 function show3D(host, look, sailIdx, shipId) {
   if (!host || !window.Ship3D) return;
-  Ship3D.get().then(v => { if (!host.isConnected) return; v.setLook(look, sail(sailIdx), look.fc != null ? sail(look.fc) : sail(sailIdx), shipId); v.focusWeapon(K.tab === "deco" && K.slot === "weapon"); v.mount(host); host.classList.add("ready"); })
+  Ship3D.get().then(v => { if (!host.isConnected) return; v.setLook(look, sail(sailIdx), look.fc != null ? sail(look.fc) : sail(sailIdx), shipId); v.focusWeapon(inDeck() && K.slot === "weapon"); v.mount(host); host.classList.add("ready"); })
     .catch(e => { host.classList.add("failed"); const m = host.querySelector(".s3d-msg"); if (m) m.textContent = e.message; });
 }
 
@@ -184,8 +184,10 @@ const ISLES = {
   memory: { x: 180, y: 150, px: 150, py: 170, r: 72, game: "memory" },
   battle: { x: 660, y: 490, px: 320, py: 790, r: 74 }
 };
+// the gear and shop screens share one page and one preview ship
+function inDeck() { return K.tab === "deco" || K.tab === "shop"; }
 // the third value keeps a tab to the ships it can show on
-const DECO_TABS = [["ship", "배 종류"], ["dex", "도감·칭호"], ["upgrade", "배 강화"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["photo", "내 사진"], ["camo", "위장 도색", "steel"], ["air", "함재기", "steel"], ["smoke", "연기", "steel"], ["pattern", "돛 무늬", "sail"], ["hull", "배 색"], ["att", "부착물"], ["head", "선수상", "sail"], ["trim", "테두리", "sail"], ["wake", "물결"], ["tag", "이름표"]];
+const DECO_TABS = [["ship", "배"], ["upgrade", "배 강화"], ["color", "돛·깃발 색"], ["weapon", "무기"], ["emblem", "문양"], ["photo", "내 사진"], ["camo", "위장 도색", "steel"], ["air", "함재기", "steel"], ["smoke", "연기", "steel"], ["pattern", "돛 무늬", "sail"], ["hull", "배 색"], ["att", "부착물"], ["head", "선수상", "sail"], ["trim", "테두리", "sail"], ["wake", "물결"], ["tag", "이름표"]];
 const withItem = (look, x) => x.slot === "att" ? { ...look, att: [...new Set([...(look.att || []), x.id])] } : x.slot === "emblem" ? { ...look, se: x.id } : { ...look, [x.slot]: x.id };
 // camo paints over the hull colour, so a hull colour is previewed without it (the shop says so in a note)
 const previewItem = (look, x) => x.slot === "hull" ? { ...withItem(look, x), camo: undefined } : withItem(look, x);
@@ -282,15 +284,15 @@ const sndIcon = () => `<svg viewBox="0 0 24 24" width="20" height="20" aria-hidd
 const sndBtn = () => `<button type="button" class="snd" data-act="ksnd" aria-pressed="${Sfx.on}" aria-label="소리 ${Sfx.on ? "끄기" : "켜기"}" title="소리 ${Sfx.on ? "끄기" : "켜기"}">${sndIcon()}</button>`;
 function kidRender() {
   const d = K.d, me = d.me, keep = keepInputs(app);
-  const tabs = [["map", "섬 지도"], ["missions", "미션"], ["deco", "내 배"], ["crew", "친구 배"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
+  const tabs = [["map", "지도"], ["missions", "미션"], ["deco", "장비"], ["shop", "상점"], ["dex", "도감"], ["crew", "친구"], ["log", "기록"]], openQ = d.quests.filter(q => q.status === "open").length;
   app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>${esc(titleName(me.look) || me.className)} · 전투력 ${me.power}</small></div></div>
       <div class="hright wallet"><span title="행동력">${nrg(d.bal.energy)}</span><span title="포인트">${pts(d.bal.points)}</span><span title="금화">${coin(d.bal.gold)}</span></div></div>
       <nav class="tabs" aria-label="화면">${tabs.map(([k, l]) => `<button data-act="ktab" data-v="${k}" aria-current="${K.tab === k}">${l}${k === "missions" && openQ ? `<span class="cnt">${openQ}</span>` : ""}</button>`).join("")}${sndBtn()}</nav></header>
-    <main>${({ map: kMap, missions: kMissions, deco: kDeco, crew: kCrew, log: kLog })[K.tab]()}</main>
+    <main>${({ map: kMap, missions: kMissions, deco: kDeco, shop: kDeco, dex: kDex, crew: kCrew, log: kLog })[K.tab]()}</main>
     ${me.mustChange ? `<div class="modal" role="dialog" aria-modal="true"><div class="panel"><h2>나만의 비밀번호 정하기</h2><p class="small muted">임시 비밀번호 대신 나만 아는 숫자 4개로 바꿔요.</p>
       <form data-form="kpin" class="stack" style="gap:10px"><input type="password" id="kp1" inputmode="numeric" maxlength="4" placeholder="숫자 4개" data-keep="no" required><input type="password" id="kp2" inputmode="numeric" maxlength="4" placeholder="한 번 더" data-keep="no" required><button class="btn primary">정하기</button></form></div></div>` : ""}`;
   restoreInputs(keep);
-  if (K.tab === "deco") { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey), base = draftLook(me.look); show3D($("#deco3d"), x ? previewItem(base, x) : base, me.sail, K.tryShip || me.ship); if (K.crop) drawCrop(); thumbScan(); }
+  if (inDeck()) { const x = K.tryKey && d.deco.find(i => i.key === K.tryKey), base = draftLook(me.look); show3D($("#deco3d"), x ? previewItem(base, x) : base, me.sail, K.tryShip || me.ship); if (K.crop) drawCrop(); thumbScan(); }
   if (K.tab === "map") bossAnim();
   if (K.tab === "crew") { const m = d.mates.find(x => x.id === K.mate); if (m) show3D($("#mate3d"), m.look, m.sail, m.ship); thumbScan(); }
 }
@@ -407,14 +409,16 @@ const embTile = (id, cloth) => `<svg class="emb-tile" viewBox="0 0 100 100" aria
 /* ---------- my photo on the ship ---------- */
 const CROP_W = 480, CROP_H = 400;
 const draftLook = look => K.photoDraft ? { ...look, photoSrc: K.photoDraft } : look;
-function kPhoto() {
+function kPhoto(shop) {
   const d = K.d, p = d.photo, L = d.me.look, gold = d.bal.gold, viewShip = d.ships.find(s => s.id === (K.tryShip || d.me.ship));
   const where = viewShip.sails ? "돛" : "선체 옆면";
   const rules = `<p class="small muted">내 사진을 골라 배에 달 수 있어요. 돛이 있는 배는 돛에, 돛이 없는 배는 선체 옆면에 크게 그려져요. 금화 <b class="num">${p.price}</b>개이고, 선생님이 확인한 뒤에 달려요. 신청은 일주일에 3번까지예요.</p><p class="small"><b>내 얼굴이나 친구 얼굴이 나온 사진은 올리지 마세요.</b></p>`;
   if (K.crop) return `${rules}<div class="crop"><canvas id="cropCv" width="${CROP_W}" height="${CROP_H}" aria-label="사진 자르기"></canvas><p class="small muted">사진을 끌어서 위치를 맞춰요.</p><label class="f">크기<input type="range" id="cropZoom" min="1" max="4" step="0.01" value="${K.crop.zoom}" data-keep="no"></label><div class="row"><button class="btn primary" data-act="kcropOk">배에 달아 보기</button><button class="btn" data-act="kcropNo">취소</button></div></div>`;
   if (K.photoDraft) return `${rules}<div class="photo-row"><img class="photo-thumb" src="${K.photoDraft}" alt="고른 사진"><div class="stack" style="gap:8px"><span>위에서 ${where}에 달린 모습을 볼 수 있어요. 금화 ${p.price}개를 내고 신청할까요? 남는 금화 ${gold - p.price}</span><div class="row"><button class="btn primary" data-act="kphotoSend">선생님께 신청</button><button class="btn" data-act="kcropNo">다시 고르기</button></div></div></div>`;
-  const current = L.photo ? `<h3>지금 달린 사진</h3><div class="photo-row"><img class="photo-thumb" src="/api/photo/${L.photo}" alt="지금 달린 사진"><button class="btn sm ghost" data-act="kphotoOff">사진 내리기</button></div>` : "";
-  if (p.pending) return `${rules}<h3>선생님 확인을 기다려요</h3><div class="photo-row"><img class="photo-thumb" src="/api/photo/${p.pending}" alt="신청한 사진"><div class="stack" style="gap:8px"><span class="pill wait">확인 중</span><button class="btn sm" data-act="kphotoCancel">신청 취소하고 금화 돌려받기</button></div></div>${current}`;
+  const current = !shop && L.photo ? `<h3>지금 달린 사진</h3><div class="photo-row"><img class="photo-thumb" src="/api/photo/${L.photo}" alt="지금 달린 사진"><button class="btn sm ghost" data-act="kphotoOff">사진 내리기</button></div>` : shop && L.photo ? `<p class="small muted">새 사진이 확인되면 지금 달린 사진과 바뀌어요. 사진을 내리는 곳은 장비예요.</p>` : "";
+  const waiting = p.pending ? `<h3>선생님 확인을 기다려요</h3><div class="photo-row"><img class="photo-thumb" src="/api/photo/${p.pending}" alt="신청한 사진"><div class="stack" style="gap:8px"><span class="pill wait">확인 중</span><button class="btn sm" data-act="kphotoCancel">신청 취소하고 금화 돌려받기</button></div></div>` : "";
+  if (!shop) return `${waiting}${current}`;
+  if (p.pending) return `${rules}${waiting}${current}`;
   const why = !p.left ? "이번 주 신청을 다 했어요" : gold < p.price ? `금화가 ${p.price - gold}개 모자라요` : "";
   return `${rules}${p.rejected ? `<div class="notice">선생님이 지난 사진을 돌려보냈어요. 금화는 돌려받았어요.</div>` : ""}${current}<div class="row">${why ? `<button class="btn" disabled>${why}</button>` : `<label class="btn primary">사진 고르기<input type="file" id="photoFile" accept="image/*" data-keep="no" hidden></label>`}<span class="small muted">이번 주 ${p.left}번 남음</span></div>`;
 }
@@ -450,7 +454,9 @@ function boxRow(m) {
 function kDeco() {
   const d = K.d, me = d.me, L = draftLook(me.look), gold = d.bal.gold, owned = new Set(d.owned), curShip = d.ships.find(s => s.id === me.ship), viewShip = d.ships.find(s => s.id === (K.tryShip || me.ship));
   const rank = id => d.ships.findIndex(s => s.id === id), reaches = x => (!x.from || rank(me.ship) >= rank(x.from)) && (!x.upto || rank(me.ship) <= rank(x.upto));
-  const tabs = DECO_TABS.filter(([, , only]) => !only || (only === "sail") === viewShip.sails); if (!tabs.some(([k]) => k === K.slot)) K.slot = "ship";
+  // gear lists what you own and the shop what you don't, so nothing shows up in both
+  const shop = K.tab === "shop", inSlot = (x, k) => k === "air" ? x.group === "air" : x.slot === k && !x.group && (!x.upto || viewShip.sails), mine = x => owned.has(x.key) || isWorn(L, x), hasShip = s => !s.price || owned.has(`ship.${s.id}`);
+  const tabs = DECO_TABS.filter(([k, , only]) => (!only || (only === "sail") === viewShip.sails) && (shop ? k !== "color" : k !== "upgrade" && (["ship", "weapon", "color"].includes(k) || (k === "photo" ? L.photo || d.photo.pending : d.deco.some(x => inSlot(x, k) && mine(x)))))); if (!tabs.some(([k]) => k === K.slot)) K.slot = "ship";
   const slot = K.slot;
   const conf = K.confirm && K.confirm.key && d.deco.find(x => x.key === K.confirm.key), shipConf = K.confirm && K.confirm.ship && d.ships.find(s => s.id === K.confirm.ship), upConf = K.confirm && K.confirm.up && d.upgrades.find(u => u.id === K.confirm.up);
   const tryItem = K.tryKey && d.deco.find(x => x.key === K.tryKey);
@@ -466,20 +472,24 @@ function kDeco() {
   const shipCard = s => { const has = !s.price || owned.has(`ship.${s.id}`), on = me.ship === s.id, can = gold >= s.price;
     return `<div class="deco-item ${K.tryShip === s.id ? "sel" : ""}" data-act="ktryShip" data-v="${s.id}">${shipBox(s.id, L, me.sail, "", "tiny")}<b>${esc(s.name)}</b><span class="small muted">전투력 +${s.power}${s.sails ? "" : " · 돛 없음"}</span>${has ? "" : `<span class="gold num">${s.price}</span>`}
       ${on ? `<span class="pill ok">타는 중</span>` : has ? `<button class="btn sm" data-act="kshipUse" data-v="${s.id}">타기</button>` : `<button class="btn sm ${can ? "primary" : ""}" data-act="kshipAsk" data-v="${s.id}" ${can ? "" : "disabled"}>${can ? "사기" : `${s.price - gold}개 모자라요`}</button>`}</div>`; };
-  const plain = ["hull", "pattern", "trim", "head", "wake", "tag", "weapon", "camo", "smoke"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined, ...(slot === "hull" ? { camo: undefined } : {}) }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
+  const plain = !shop && ["hull", "pattern", "trim", "head", "wake", "tag", "weapon", "camo", "smoke"].includes(slot) ? `<div class="deco-item ${L[slot] ? "" : "sel"}" data-act="ktry" data-v="">${slot === "weapon" ? `<div class="wtile"><b class="small">없음</b></div>` : shipBox(me.ship, { ...L, [slot]: undefined, ...(slot === "hull" ? { camo: undefined } : {}) }, me.sail, "", "tiny")}<b>기본</b>${L[slot] ? `<button class="btn sm" data-act="kwear" data-v="${slot}">기본으로</button>` : `<span class="pill ok">쓰는 중</span>`}</div>` : "";
   const sw = (i, act, on, label) => `<button style="--sail:${V.SAILS[i]}" data-act="${act}" data-v="${i}" aria-pressed="${on}" aria-label="${label} ${i + 1}"></button>`;
   const noSail = !curShip.sails && ["pattern", "emblem", "color"].includes(slot) ? `<p class="small muted">지금 배에는 돛이 없어서 돛 꾸미기는 안 보여요. 깃발 색과 깃발 문양은 보여요.</p>` : "";
-  const body = slot === "dex" ? kDex() : slot === "photo" ? kPhoto() : slot === "upgrade" ? kUpgrade() : slot === "ship" ? `<p class="small muted">금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요.</p>${d.maps.map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${d.ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("")}`
+  const allDone = `<p class="small muted">이 종류는 모두 모았어요.</p>`, ships = d.ships.filter(s => hasShip(s) !== shop);
+  const weaponEras = d.maps.map(m => [m, d.deco.filter(x => x.slot === "weapon" && x.era === m.id && mine(x) !== shop)]);
+  const items = d.deco.filter(x => inSlot(x, slot) && mine(x) !== shop);
+  const body = slot === "photo" ? kPhoto(shop) : slot === "upgrade" ? kUpgrade() : slot === "ship" ? `<p class="small muted">${shop ? "금화로 더 큰 배를 살 수 있어요. 배를 누르면 위에서 미리 볼 수 있어요." : "가지고 있는 배예요. 타고 싶은 배로 바꿀 수 있어요."}</p>${ships.length ? d.maps.filter(m => ships.some(s => s.era === m.id)).map(m => `<h3>${esc(m.era)}</h3><div class="deco-grid">${ships.filter(s => s.era === m.id).map(shipCard).join("")}</div>`).join("") : allDone}`
     : slot === "color" ? `<p class="small muted">돛 색과 깃발 색은 무료예요.</p><h3>돛 색</h3><div class="sails">${V.SAILS.map((c, i) => sw(i, "ksail", me.sail === i, "돛 색")).join("")}</div>
       <h3>깃발 색</h3><div class="sails"><button class="same" data-act="kflag" data-v="-1" aria-pressed="${L.fc == null}" style="--sail:${sail(me.sail)}">돛과 같게</button>${V.SAILS.map((c, i) => sw(i, "kflag", L.fc === i, "깃발 색")).join("")}</div>`
-    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${L.se || L.fe ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요. ${esc(d.deco.filter(x => x.upto).map(x => x.name).join("·"))}${viewShip.sails ? "는 돛이 있는 옛날 배에만 달려요." : "는 돛이 있는 옛날 배 전용이라 여기에는 나오지 않아요."}</p>` : slot === "air" ? `<p class="small muted">여러 대를 같이 띄울 수 있어요. 헬기와 정찰기는 순양함부터, 나머지는 항공모함에서 쓸 수 있어요.</p>` : slot === "hull" && L.camo && !viewShip.sails ? `<p class="small muted">지금은 위장 도색이 칠해져 있어요. 배 색이 보이려면 위장 도색을 ‘기본으로’ 바꿔 주세요.</p>` : slot === "camo" ? `<p class="small muted">돛이 없는 배의 선체에 칠해요. 칠한 동안에는 배 색 대신 위장이 보여요.</p>` : slot === "smoke" ? `<p class="small muted">굴뚝에서 나오는 연기 색을 바꿔요.</p>` : slot === "weapon" ? `<p class="small muted">시대마다 그 바다의 미니게임에서 낮은 확률로 발견해요. 장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요.</p>` : ""}${slot === "weapon" ? `<div class="deco-grid">${plain}</div>${d.maps.map(m => `<h3>${esc(m.era)}</h3>${boxRow(m)}<div class="deco-grid">${d.deco.filter(x => x.slot === "weapon" && x.era === m.id).map(card).join("")}</div>`).join("")}` : `<div class="deco-grid">${plain}${d.deco.filter(x => slot === "air" ? x.group === "air" : x.slot === slot && !x.group && (!x.upto || viewShip.sails)).map(card).join("")}</div>`}`;
+    : `${slot === "emblem" ? `<p class="small muted">문양은 한 번 사면 돛과 깃발에 따로 달 수 있어요.</p>${!shop && (L.se || L.fe) ? `<div class="row">${L.se ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|sail">돛 문양 빼기</button>` : ""}${L.fe ? `<button class="btn sm ghost" data-act="kwear" data-v="emblem|flag">깃발 문양 빼기</button>` : ""}</div>` : ""}` : slot === "att" ? `<p class="small muted">여러 개를 같이 달 수 있어요. ${esc(d.deco.filter(x => x.upto).map(x => x.name).join("·"))}${viewShip.sails ? "는 돛이 있는 옛날 배에만 달려요." : "는 돛이 있는 옛날 배 전용이라 여기에는 나오지 않아요."}</p>` : slot === "air" ? `<p class="small muted">여러 대를 같이 띄울 수 있어요. 헬기와 정찰기는 순양함부터, 나머지는 항공모함에서 쓸 수 있어요.</p>` : !shop && slot === "hull" && L.camo && !viewShip.sails ? `<p class="small muted">지금은 위장 도색이 칠해져 있어요. 배 색이 보이려면 위장 도색을 ‘기본으로’ 바꿔 주세요.</p>` : slot === "camo" ? `<p class="small muted">돛이 없는 배의 선체에 칠해요. 칠한 동안에는 배 색 대신 위장이 보여요.</p>` : slot === "smoke" ? `<p class="small muted">굴뚝에서 나오는 연기 색을 바꿔요.</p>` : slot === "weapon" ? `<p class="small muted">${shop ? "시대마다 그 바다의 미니게임에서 낮은 확률로 발견하거나, 포인트로 보급 상자를 열어 얻어요." : "장착은 그 시대의 배부터 할 수 있어요. 장착하면 배 위에 올라가고 전투력도 올라가요."}</p>` : ""}${slot === "weapon" ? shop ? weaponEras.map(([m, list]) => `<h3>${esc(m.era)}</h3>${boxRow(m)}${list.length ? `<div class="deco-grid">${list.map(card).join("")}</div>` : ""}`).join("") : `<div class="deco-grid">${plain}</div>${weaponEras.filter(([, list]) => list.length).map(([m, list]) => `<h3>${esc(m.era)}</h3><div class="deco-grid">${list.map(card).join("")}</div>`).join("")}` : shop && !items.length ? allDone : `<div class="deco-grid">${plain}${items.map(card).join("")}</div>`}`;
+  const toShop = shop || slot === "color" ? "" : `<div class="row between deck-more"><span class="small muted">가진 것만 여기에 보여요. 더 모으려면 상점을 둘러봐요.</span><button class="btn sm" data-act="ktab" data-v="shop">상점 가기</button></div>`;
   return `<section class="panel deco-hero"><div class="row between"><h2>${esc(me.nickname)}의 ${esc((d.ships.find(s => s.id === (K.tryShip || me.ship)) || curShip).name)}</h2><span class="small">전투력 <b class="num">${me.power}</b> · ${coin(gold)}</span></div>
       <div class="deco3d" id="deco3d">${shipBox(K.tryShip || me.ship, tryItem ? previewItem(L, tryItem) : L, me.sail, me.nickname, "big")}<p class="s3d-msg">3D 배를 불러오는 중…</p></div>
       ${conf ? `<div class="confirm"><span><b>${esc(conf.name)}</b>을(를) 금화 ${conf.price}개로 살까요? 남는 금화 ${gold - conf.price}</span><button class="btn sm primary" data-act="kdecoBuy" data-v="${conf.key}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
       ${shipConf ? `<div class="confirm"><span><b>${esc(shipConf.name)}</b>을(를) 금화 ${shipConf.price}개로 살까요? 남는 금화 ${gold - shipConf.price}</span><button class="btn sm primary" data-act="kshipBuy" data-v="${shipConf.id}">사기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
       ${K.confirm && K.confirm.box != null ? `<div class="confirm"><span><b>보급 상자</b>를 포인트 ${d.boxes[K.confirm.box].price}으로 열까요? 남는 포인트 ${d.bal.points - d.boxes[K.confirm.box].price}</span><button class="btn sm primary" data-act="kboxOpen" data-v="${K.confirm.box}">열기</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}
       ${upConf ? `<div class="confirm"><span><b>${esc(upConf.name)}</b> ${upConf.level + 1}단계를 금화 ${upConf.price}개로 올릴까요? 남는 금화 ${gold - upConf.price}</span><button class="btn sm primary" data-act="kupBuy" data-v="${upConf.id}">강화</button><button class="btn sm" data-act="kno">취소</button></div>` : ""}</section>
-    <section class="panel"><div class="chips" role="group" aria-label="꾸미기 종류">${tabs.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>${noSail}${body}</section>`;
+    <section class="panel"><div class="chips" role="group" aria-label="${shop ? "상점" : "장비"} 종류">${tabs.map(([k, l]) => `<button class="chip" data-act="kslot" data-v="${k}" aria-pressed="${slot === k}">${l}</button>`).join("")}</div>${noSail}${body}${toShop}</section>`;
 }
 /* ---------- the collection book and titles ---------- */
 function kDex() { const d = K.d, has = new Set(d.owned), now = d.me.look.ttl, bar = (a, b) => `<div class="dex-bar"><i style="width:${b ? a / b * 100 : 0}%"></i></div>`;
@@ -488,8 +498,8 @@ function kDex() { const d = K.d, has = new Set(d.owned), now = d.me.look.ttl, ba
   const tile = x => { const got = has.has(x.key); return x.slot === "weapon" ? `<div class="dex-w ${got ? "got" : ""} r-${x.rarity}">${weaponImg(x.id)}<span class="small">${got ? esc(x.name) : "???"}</span></div>` : `<span class="dex-c ${got ? "got" : ""}">${got ? esc(x.name) : "???"}</span>`; };
   const group = ([n, list]) => { const c = list.filter(x => has.has(x.key)).length; return `<div class="dex-group"><div class="row between"><h3>${esc(n)}</h3><span class="small num ${c === list.length ? "ok" : "muted"}">${c} / ${list.length}</span></div>${bar(c, list.length)}<div class="dex-list">${list.map(tile).join("")}</div></div>`; };
   const ships = d.ships, shipsGot = ships.filter(s => !s.price || has.has(`ship.${s.id}`)).length;
-  return `<h3>칭호</h3><p class="small muted">얻은 칭호를 하나 달면 이름 옆에 보여요.</p><div class="dex-titles">${titles}</div>
-    <div class="dex-group"><div class="row between"><h3>배</h3><span class="small num muted">${shipsGot} / ${ships.length}</span></div>${bar(shipsGot, ships.length)}<div class="dex-list">${ships.map(s => { const got = !s.price || has.has(`ship.${s.id}`); return `<span class="dex-c ${got ? "got" : ""}">${got ? esc(s.name) : "???"}</span>`; }).join("")}</div></div>${[...eras, ...slots].map(group).join("")}`; }
+  return `<section class="panel"><h2>칭호</h2><p class="small muted">얻은 칭호를 하나 달면 이름 옆에 보여요.</p><div class="dex-titles">${titles}</div></section>
+    <section class="panel"><h2>도감</h2><p class="small muted">모은 배와 무기, 꾸미기가 여기에 채워져요.</p><div class="dex-group"><div class="row between"><h3>배</h3><span class="small num muted">${shipsGot} / ${ships.length}</span></div>${bar(shipsGot, ships.length)}<div class="dex-list">${ships.map(s => { const got = !s.price || has.has(`ship.${s.id}`); return `<span class="dex-c ${got ? "got" : ""}">${got ? esc(s.name) : "???"}</span>`; }).join("")}</div></div>${[...eras, ...slots].map(group).join("")}</section>`; }
 /* ---------- classmates' ships ---------- */
 function kCrew() { const d = K.d, me = d.me, friends = d.mates.filter(m => m.id !== me.id), v = friends.find(m => m.id === K.mate), mine = new Set(d.likes.mine), count = id => d.likes.counts[id] || 0;
   const heart = m => mine.has(m.id) ? `<span class="pill ok">좋아요 눌렀어요</span>` : `<button class="btn sm primary" data-act="klike" data-v="${m.id}">좋아요</button>`, shipName = id => d.ships.find(s => s.id === id)?.name || "";
@@ -534,7 +544,7 @@ async function playGame(kind) {
   } catch (e) { toast(e.message); }
   K.busy = false; kidNotices();
 }
-const foundHTML = it => `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? (K.d.deco.find(x => x.key === it.key).era > K.d.ships.find(s => s.id === K.d.me.ship).era ? `${K.d.ships.find(s => s.era === K.d.deco.find(x => x.key === it.key).era).name}부터 장착할 수 있어요` : "내 배 → 무기에서 장착할 수 있어요") : "내 배에서 쓸 수 있어요"}</small></div>`;
+const foundHTML = it => `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? (K.d.deco.find(x => x.key === it.key).era > K.d.ships.find(s => s.id === K.d.me.ship).era ? `${K.d.ships.find(s => s.era === K.d.deco.find(x => x.key === it.key).era).name}부터 장착할 수 있어요` : "장비 → 무기에서 장착할 수 있어요") : "장비에서 쓸 수 있어요"}</small></div>`;
 async function openBox(mapId) {
   if (K.busy) return; K.busy = true; K.confirm = null;
   try {
@@ -694,7 +704,7 @@ const KID_ACTS = {
   ksea: v => { const m = K.d.maps[Number(v)]; if (!seaOpen(m)) return toast(`${m.name}는 전투력 ${m.power}부터 열려요. 지금은 ${K.d.me.power}이에요`); K.map = m.id; K.isle = null; K.at = "port"; K.confirm = null; kidRender(); },
   kpassAsk: () => { K.confirm = "pass"; kidRender(); }, kno: () => { K.confirm = null; kidRender(); },
   kpass: () => { K.confirm = null; return kDo(() => api("/api/kid/pass", {}), "숙제 면제권을 샀어요! 선생님이 챙겨 줄 거예요"); },
-  kgoShips: () => { K.tab = "deco"; K.slot = "ship"; kidRender(); scrollTo(0, 0); },
+  kgoShips: () => { K.tab = "shop"; K.slot = "ship"; kidRender(); scrollTo(0, 0); },
   krequest: v => kDo(() => api("/api/kid/request", { questId: Number(v) }), "선생님께 확인을 요청했어요"),
   kcancel: v => kDo(() => api(`/api/kid/cancel/${v}`, {})),
   kslot: v => { K.slot = v; K.tryKey = null; K.tryShip = null; K.confirm = null; K.crop = null; K.photoDraft = null; kidRender(); },
@@ -711,9 +721,9 @@ const KID_ACTS = {
   ktry: v => { K.tryKey = v && K.tryKey !== v ? v : null; kidRender(); },
   ktryShip: v => { K.tryShip = K.tryShip === v ? null : v; kidRender(); },
   kdecoAsk: v => { K.confirm = { key: v }; K.tryKey = v; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
-  kdecoBuy: v => { K.confirm = null; K.tryKey = null; Sfx.coin(); return kDo(() => api("/api/kid/deco/buy", { key: v }), "새 꾸미기를 달았어요!"); },
+  kdecoBuy: v => { K.confirm = null; K.tryKey = null; Sfx.coin(); return kDo(() => api("/api/kid/deco/buy", { key: v }), "새 꾸미기를 달았어요! 장비에서 바꿀 수 있어요"); },
   kshipAsk: v => { K.confirm = { ship: v }; K.tryShip = v; kidRender(); scrollTo({ top: 0, behavior: "smooth" }); },
-  kshipBuy: v => { K.confirm = null; K.tryShip = null; Sfx.coin(); return kDo(() => api("/api/kid/ship/buy", { id: v }), "새 배가 생겼어요!"); },
+  kshipBuy: v => { K.confirm = null; K.tryShip = null; Sfx.coin(); return kDo(() => api("/api/kid/ship/buy", { id: v }), "새 배로 갈아탔어요! 장비에서 다른 배로 바꿀 수 있어요"); },
   kshipUse: v => { K.tryShip = null; return kDo(async () => { const r = await api("/api/kid/ship/use", { id: v }); if (r.removed) toast("이 배에는 달 수 없는 무기라서 내려놓았어요"); return r; }); },
   kwear: v => { const [item, where] = v.split("|"), [slot] = item.split("."); K.tryKey = null; return kDo(() => api("/api/kid/deco/wear", { slot, key: item.includes(".") ? item : null, where })); },
   ksail: v => kDo(() => api("/api/kid/sail", { sail: Number(v) })), kflag: v => kDo(() => api("/api/kid/sail", { flag: Number(v) }))
