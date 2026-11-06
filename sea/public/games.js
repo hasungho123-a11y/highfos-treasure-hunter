@@ -52,10 +52,10 @@ const gunBarrel = (g, w, h, kick) => { const x = w / 2, y0 = h - 16 + kick * 14;
   g.fillStyle = "#C9A24A"; g.fillRect(x - 17, y0 - 94, 34, 6); g.fillRect(x - 21, y0 - 40, 42, 5);
   const c = g.createLinearGradient(0, y0 - 18, 0, h); c.addColorStop(0, "#6B4A2C"); c.addColorStop(1, "#2C1C10"); g.fillStyle = c; g.beginPath(); g.moveTo(x - 66, h); g.lineTo(x - 50, y0 - 18); g.lineTo(x + 50, y0 - 18); g.lineTo(x + 66, h); g.fill(); };
 
-const windArrow = (g, x, y, v, label) => { const l = 16 + Math.abs(v) * 34, d = Math.sign(v) || 1; g.save(); g.translate(x, y); g.fillStyle = "rgba(6,22,40,.62)"; g.beginPath(); g.roundRect(-62, -19, 124, 38, 12); g.fill(); g.fillStyle = "#fff"; g.font = "700 12px sans-serif"; g.textAlign = "left"; g.fillText(label, -54, 4); g.translate(18, 0); g.strokeStyle = "#FFE27A"; g.fillStyle = "#FFE27A"; g.lineWidth = 4; g.lineCap = "round"; g.beginPath(); g.moveTo(-d * l / 2, 0); g.lineTo(d * l / 2 - d * 6, 0); g.stroke(); g.beginPath(); g.moveTo(d * l / 2 + d * 3, 0); g.lineTo(d * l / 2 - d * 8, -7); g.lineTo(d * l / 2 - d * 8, 7); g.fill(); g.restore(); };
+const windArrow = (g, x, y, v, label) => { const l = 16 + Math.abs(v) * 34, d = Math.sign(v) || 1; g.save(); g.translate(x, y); g.fillStyle = "rgba(6,22,40,.62)"; g.beginPath(); g.roundRect(-62, -19, 124, 38, 12); g.fill(); g.fillStyle = "#fff"; g.font = `700 12px ${uiFont()}`; g.textAlign = "left"; g.fillText(label, -54, 4); g.translate(18, 0); g.strokeStyle = "#FFE27A"; g.fillStyle = "#FFE27A"; g.lineWidth = 4; g.lineCap = "round"; g.beginPath(); g.moveTo(-d * l / 2, 0); g.lineTo(d * l / 2 - d * 6, 0); g.stroke(); g.beginPath(); g.moveTo(d * l / 2 + d * 3, 0); g.lineTo(d * l / 2 - d * 8, -7); g.lineTo(d * l / 2 - d * 8, 7); g.fill(); g.restore(); };
 // a line of text on a dark or bright rounded plate, drawn on the canvas
 // text with its fractions stacked, as in a textbook (children read 1/5 as a fraction only when it looks like one). Centred on x, y; fills with the current fillStyle, and outlines first when asked.
-const uiFont = () => getComputedStyle(document.body).fontFamily;
+let uiFace = null; const uiFont = () => uiFace || (uiFace = getComputedStyle(document.body).fontFamily);
 const richParts = t => String(t).split(/(\d+\/\d+)/).filter(Boolean).map(p => { const m = p.match(/^(\d+)\/(\d+)$/); return m ? { n: m[1], d: m[2] } : { s: p }; });
 const richWidth = (g, parts, size, face, weight) => { let tw = 0; for (const p of parts) { g.font = `${weight} ${p.s ? size : size * .8}px ${face}`; p.w = p.s ? g.measureText(p.s).width : Math.max(g.measureText(p.n).width, g.measureText(p.d).width) + size * .34; tw += p.w; } return tw; };
 const rich = (g, x, y, text, size, face, weight = 700, outline = false) => { const parts = richParts(text); let px = x - richWidth(g, parts, size, face, weight) / 2; g.textAlign = "center"; g.textBaseline = "middle";
@@ -84,8 +84,8 @@ function cannon({ map, title, art }) {
       // the sea chart
       for (let i = 1; i <= N; i++) for (let j = 1; j <= N; j++) { const [x, y] = spot(l, i, j); g.fillStyle = (i + j) % 2 ? "rgba(255,255,255,.1)" : "rgba(255,255,255,.03)"; g.fillRect(x - c / 2, y - c / 2, c, c); }
       g.strokeStyle = "rgba(255,255,255,.5)"; g.lineWidth = 1; g.beginPath(); for (let i = 0; i <= N; i++) { g.moveTo(ox + i * c, oy); g.lineTo(ox + i * c, oy + N * c); g.moveTo(ox, oy + i * c); g.lineTo(ox + N * c, oy + i * c); } g.stroke();
-      g.fillStyle = "#fff"; g.font = "700 15px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; for (let i = 1; i <= N; i++) { g.fillText(i, ox + (i - .5) * c, oy + N * c + 12); g.fillText(i, ox - 12, oy + (N - i + .5) * c); }
-      g.font = "700 12px sans-serif"; g.fillStyle = "#FFE27A"; g.fillText("가로 →", ox + N * c - 20, oy + N * c + 28); g.save(); g.translate(ox - 28, oy + 24); g.rotate(-Math.PI / 2); g.fillText("세로 →", 0, 0); g.restore(); g.textBaseline = "alphabetic";
+      g.fillStyle = "#fff"; g.font = `700 15px ${uiFont()}`; g.textAlign = "center"; g.textBaseline = "middle"; for (let i = 1; i <= N; i++) { g.fillText(i, ox + (i - .5) * c, oy + N * c + 12); g.fillText(i, ox - 12, oy + (N - i + .5) * c); }
+      g.font = `700 12px ${uiFont()}`; g.fillStyle = "#FFE27A"; g.fillText("가로 →", ox + N * c - 20, oy + N * c + 28); g.save(); g.translate(ox - 28, oy + 24); g.rotate(-Math.PI / 2); g.fillText("세로 →", 0, 0); g.restore(); g.textBaseline = "alphabetic";
       // the orders
       if (q) { const size = Math.min(20, w / 19); plate(g, w / 2, 27, `가로 칸: ${q.xText}`, size, "rgba(255,226,122,.97)", "#1B2A33"); plate(g, w / 2, 71, `세로 칸: ${q.yText}`, size, "rgba(255,226,122,.97)", "#1B2A33");
         if (q.wind) plate(g, w / 2, 109, `바람: 포탄이 ${q.wind > 0 ? "오른쪽" : "왼쪽"}으로 ${Math.abs(q.wind)}칸 밀려요`, Math.min(14, w / 25), "rgba(6,22,40,.82)", "#BFE8FF"); }
@@ -158,48 +158,60 @@ function memory({ map, title }) {
       lock = true; const a = first.b; first = null; setTimeout(() => { a.classList.remove("up"); b.classList.remove("up"); lock = false; }, 1300); }); // long enough to read both and remember them
   });
 }
-/* 증기의 바다 포격: a torpedo is slow, so aim where the ship will be, not where it is. 10 torpedoes; score = hits. */
-/* 증기의 바다 포격: while the torpedo runs, the ship keeps sailing. Work out how far away the ship must be when the torpedo is fired and press that mark on the ruler.
-   Everything then plays out at true scale, so a wrong answer shows by how much it missed. 10 shots; score = hits. */
+/* 증기의 바다 포격: while the torpedo runs, the ship keeps sailing. Work out how far away the ship must be when the torpedo is fired and press that key on the bridge console.
+   Buoys mark the distances on the water and everything plays out at true scale, so a wrong answer shows by how much it missed. 10 shots; score = hits. */
 function torpedo({ map, title, art }) {
   return new Promise(done => {
-    const s = shell(title, "적함이 몇 m 남았을 때 쏠지 계산해서 그 눈금을 눌러요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    const s = shell(title, "적함이 몇 m 남았을 때 쏠지 계산해서 눌러요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits(), face = uiFont();
     const SHOTS = 10, MARKS = 6, START = MARKS + .6, FLIGHT = 1.3, timeOf = n => 31 - n; // time to work it out: 30 seconds, down to 21
     let shot = 0, hits = 0, t = 0, last = performance.now(), q = null, left = 0, shipAt = START, run = null, pause = .3, rest = 0, gone = false, msg = null, over = false, kick = 0;
-    const layout = (w, h) => { const x0 = Math.max(44, w * .12), step = (w - x0 - 34) / START, ty = Math.max(178, h * .36); return { x0, step, ty, bar: ty + 40, y0: h - 74 }; };
-    const say = (a, b, good) => { msg = { a, b, good, life: good ? 1.2 : 3 }; };
-    s.stage.addEventListener("pointerdown", e => { e.preventDefault(); if (!q || run || rest > 0 || over) return; const r = s.stage.getBoundingClientRect(), l = layout(cv.w, cv.h), y = e.clientY - r.top; if (y < l.ty - 30 || y > l.bar + 62) return; const k = Math.round((e.clientX - r.left - l.x0) / l.step); if (k < 1 || k > MARKS) return; run = { k, fired: false, p: 0 }; Sfx.lock(); });
+    const layout = (w, h) => { const x0 = Math.max(44, w * .12), step = (w - x0 - 34) / START, con = h - Math.min(172, h * .28); return { x0, step, con, ty: 104 + (con - 104) * .52 }; };
+    const say = (a, b, good) => { msg = { a, b, good }; };
+    s.stage.addEventListener("pointerdown", e => { e.preventDefault(); if (!q || run || rest > 0 || over) return; const r = s.stage.getBoundingClientRect(), l = layout(cv.w, cv.h), y = e.clientY - r.top; if (y < l.ty - 34) return; const k = Math.round((e.clientX - r.left - l.x0) / l.step); if (k < 1 || k > MARKS) return; run = { k, fired: false, p: 0 }; Sfx.lock(); });
     const end = v => { if (over) return; over = true; cv.stop(); s.el.remove(); done(v); };
     s.quit.onclick = () => end(null);
+    const round = (x, y, wd, ht, r) => { g.beginPath(); g.roundRect(x, y, wd, ht, r); };
+    const buoy = (x, y) => { const b = y + Math.sin(t * 2.2 + x) * 1.5; g.fillStyle = "rgba(255,255,255,.3)"; g.beginPath(); g.ellipse(x, y + 8, 9, 3, 0, 0, 7); g.fill(); g.fillStyle = "#23262B"; g.fillRect(x - 1, b - 15, 2, 8); g.fillStyle = "#D8392C"; g.beginPath(); g.moveTo(x - 6, b + 6); g.lineTo(x - 3.5, b - 8); g.lineTo(x + 3.5, b - 8); g.lineTo(x + 6, b + 6); g.fill(); g.fillStyle = "#F5EFE0"; g.fillRect(x - 5, b - 3, 10, 4); };
+    // the bridge console: riveted steel, one brass-rimmed key for each distance, and a dark read-out
+    const consolePanel = (w, h, l) => { const { x0, step, con } = l, X = k => x0 + k * step, steel = g.createLinearGradient(0, con, 0, h); steel.addColorStop(0, "#4B5159"); steel.addColorStop(1, "#23272C"); g.fillStyle = steel; g.fillRect(0, con, w, h - con); g.fillStyle = "#C9A24A"; g.fillRect(0, con, w, 4); g.fillStyle = "#6E5624"; g.fillRect(0, con + 4, w, 1);
+      for (let x = 14; x < w; x += 48) for (const y of [con + 11, h - 7]) { g.fillStyle = "#1A1D21"; g.beginPath(); g.arc(x, y, 2.6, 0, 7); g.fill(); g.fillStyle = "rgba(255,255,255,.28)"; g.beginPath(); g.arc(x - .7, y - .7, 1, 0, 7); g.fill(); }
+      const ky = con + 18, kh = 54, answer = rest > 0 && q;
+      g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#C9A24A"; g.font = `700 11px ${face}`; g.fillText("거리", x0 - 8, ky + 18); g.fillStyle = "#fff"; g.font = `700 14px ${face}`; g.fillText("0m", x0 - 8, ky + 36);
+      if (q) for (let k = 1; k <= MARKS; k++) { const on = run && run.k === k, right = answer && k === q.k, x = X(k) - step / 2 + 3, wd = step - 6, sunk = on || right ? 3 : 0;
+        g.fillStyle = "#14171A"; round(x, ky + 4, wd, kh, 8); g.fill();
+        const cap = g.createLinearGradient(0, ky + sunk, 0, ky + sunk + kh - 4), c = right ? ["#BDF7D8", "#62C993"] : on ? ["#FFE9A1", "#E2B23F"] : ["#F7F0DD", "#CFC4A6"]; cap.addColorStop(0, c[0]); cap.addColorStop(1, c[1]); g.fillStyle = cap; round(x, ky + sunk, wd, kh - 4, 8); g.fill(); g.strokeStyle = "#8C6E2E"; g.lineWidth = 1.5; g.stroke();
+        g.fillStyle = "#1B2A33"; g.font = `700 ${Math.min(17, step / 2.7)}px ${face}`; g.fillText(q.S * k, X(k), ky + sunk + kh / 2 - 2); }
+      // the read-out
+      const dy = ky + kh + 10, dh = h - dy - 13; g.fillStyle = "#0A0F0C"; round(12, dy, w - 24, dh, 8); g.fill(); g.strokeStyle = "#6E5624"; g.lineWidth = 2; g.stroke();
+      if (msg) { const two = msg.b; g.fillStyle = msg.good ? "#9DF2C7" : "#FFB59E"; rich(g, w / 2, dy + dh * (two ? .32 : .5), msg.a, Math.min(21, w / 18), "Jua, sans-serif", 400); if (two) { g.fillStyle = "#F4E7BE"; rich(g, w / 2, dy + dh * .72, msg.b, Math.min(15, w / 25), face, 600); } }
+      else if (q) { g.fillStyle = "#FFD36B"; rich(g, w / 2, dy + dh * .46, run ? (run.fired ? "어뢰 발사!" : "적함이 눈금에 오면 발사해요") : "적함이 몇 m 남았을 때 쏠까요?", Math.min(18, w / 21), "Jua, sans-serif", 400); }
+      if (q && !run && rest <= 0) { const bw = w - 44, by = dy + dh - 9; g.fillStyle = "rgba(255,255,255,.14)"; g.fillRect(22, by, bw, 3); g.fillStyle = left < 6 ? "#FF6A52" : "#FFD36B"; g.fillRect(22, by, bw * Math.max(0, left) / timeOf(shot), 3); }
+      g.textBaseline = "alphabetic"; };
     (function tick(now) { if (over) return;
-      const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; t += dt; const w = cv.w, h = cv.h, l = layout(w, h), { x0, step, ty, bar, y0 } = l, X = k => x0 + k * step;
-      sea(g, w, h, t * .3, art); g.fillStyle = "rgba(6,28,46,.3)"; g.fillRect(0, 0, w, h);
-      if (!q && rest <= 0 && shot < SHOTS) { pause -= dt; if (pause <= 0) { shot++; q = MathQ.speed(shot); left = timeOf(shot); shipAt = START; gone = false; run = null; } }
-      if (q && !run && rest <= 0) { left -= dt; if (left <= 0) { say("시간 초과", q.D + "m에서 쏴요 · " + q.why, false); Sfx.splash(); rest = 3.2; } }
-      // the ship sails at its true speed on the ruler's scale, and covers the right distance in exactly the torpedo's flight
-      if (run) shipAt -= dt * q.k / FLIGHT;
+      const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; t += dt; const w = cv.w, h = cv.h, l = layout(w, h), { x0, step, con, ty } = l, X = k => x0 + k * step;
+      sea(g, w, h, t * .3, art); g.fillStyle = "rgba(6,28,46,.18)"; g.fillRect(0, 0, w, h);
+      if (!q && rest <= 0 && shot < SHOTS) { pause -= dt; if (pause <= 0) { shot++; q = MathQ.speed(shot); left = timeOf(shot); shipAt = START; gone = false; run = null; msg = null; } }
+      if (q && !run && rest <= 0) { left -= dt; if (left <= 0) { say("시간 초과 · " + q.D + "m에서 쏴요", q.why, false); Sfx.splash(); rest = 3.2; } }
+      // the ship sails at its true speed on the buoys' scale, and covers the right distance in exactly the torpedo's flight
+      if (run) { shipAt -= dt * q.k / FLIGHT; if (!gone) fx.add(x0 + shipAt * step + Math.min(150, w * .4) * .42, ty + 8, 1, () => ({ vx: 26 + Math.random() * 18, vy: (Math.random() - .5) * 8, life: .7, c: "#F2FAFF", a: .6, r0: 3, r1: 8 })); }
       if (run && !run.fired && shipAt <= run.k) { run.fired = true; kick = 1; Sfx.shot("torpedo"); }
-      if (run && run.fired && run.p < 1) { run.p += dt / FLIGHT; const p = Math.min(1, run.p);
-        if (p >= 1) { if (run.k === q.k) { hits++; gone = true; blast(fx, x0, ty); Sfx.boom(); say("명중!", q.why, true); rest = 1.6; } else { spray(fx, x0, ty + 6); Sfx.splash(); say(q.D + "m에서 쏴야 해요", q.why, false); rest = 3.2; } } }
-      // the ship's track, the crossing point and the torpedo's lane
-      g.strokeStyle = "rgba(255,255,255,.28)"; g.setLineDash([4, 10]); g.lineWidth = 2; g.beginPath(); g.moveTo(0, ty + 8); g.lineTo(w, ty + 8); g.moveTo(x0, ty + 8); g.lineTo(x0, y0); g.stroke(); g.setLineDash([]);
-      g.strokeStyle = "#FFE27A"; g.lineWidth = 2; g.beginPath(); g.arc(x0, ty + 8, 11, 0, 7); g.stroke();
-      // the ruler
-      if (q) { g.strokeStyle = "#fff"; g.lineWidth = 2; g.beginPath(); g.moveTo(x0, bar); g.lineTo(X(MARKS), bar); g.stroke();
-        for (let k = 0; k <= MARKS; k++) { g.beginPath(); g.moveTo(X(k), bar - 6); g.lineTo(X(k), bar + 6); g.stroke(); }
-        const showAnswer = rest > 0; for (let k = 1; k <= MARKS; k++) { const on = run && run.k === k, right = showAnswer && k === q.k; g.fillStyle = right ? "#9DF2C7" : on ? "#FFE27A" : "rgba(8,24,40,.88)"; g.beginPath(); g.roundRect(X(k) - step / 2 + 2, bar + 10, step - 4, 44, 8); g.fill(); g.fillStyle = right || on ? "#14251F" : "#fff"; g.font = "700 " + Math.min(16, step / 2.8) + "px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(q.S * k, X(k), bar + 33); g.textBaseline = "alphabetic"; }
-        g.fillStyle = "#fff"; g.font = "700 12px sans-serif"; g.textAlign = "center"; g.fillText("0m", x0, bar + 22); g.fillStyle = "#FFE27A"; g.fillText("만나는 곳", Math.max(32, x0), ty - 16);
-        if (run && !run.fired) { g.strokeStyle = "#FFE27A"; g.lineWidth = 2; g.setLineDash([3, 5]); g.beginPath(); g.moveTo(X(run.k), bar); g.lineTo(X(run.k), ty + 8); g.stroke(); g.setLineDash([]); } }
+      if (run && run.fired && run.p < 1) { run.p += dt / FLIGHT;
+        if (run.p >= 1) { if (run.k === q.k) { hits++; gone = true; blast(fx, x0, ty); Sfx.boom(); say("명중!", q.why, true); rest = 1.8; } else { spray(fx, x0, ty + 6); Sfx.splash(); say(q.D + "m에서 쏴야 해요", q.why, false); rest = 3.2; } } }
+      // the torpedo's lane, the meeting point and the distance buoys
+      g.strokeStyle = "rgba(255,255,255,.45)"; g.setLineDash([4, 8]); g.lineWidth = 2; g.beginPath(); g.moveTo(x0, ty + 8); g.lineTo(x0, con - 30); g.stroke();
+      for (let k = 1; k <= MARKS; k++) { const on = run && !run.fired && run.k === k; g.strokeStyle = on ? "#FFE27A" : "rgba(255,255,255,.2)"; g.lineWidth = on ? 2 : 1; g.beginPath(); g.moveTo(X(k), ty + 18); g.lineTo(X(k), con); g.stroke(); } g.setLineDash([]);
+      g.strokeStyle = "#FFE27A"; g.lineWidth = 2.5; g.beginPath(); g.ellipse(x0, ty + 8, 16, 6, 0, 0, 7); g.stroke(); g.fillStyle = "#FFE27A"; g.font = `700 12px ${face}`; g.textAlign = "center"; g.lineWidth = 4; g.strokeStyle = "rgba(5,24,38,.8)"; g.strokeText("만나는 곳", Math.max(32, x0), ty + 30); g.fillText("만나는 곳", Math.max(32, x0), ty + 30);
+      for (let k = 1; k <= MARKS; k++) buoy(X(k), ty + 8);
       // the ship, then the torpedo
-      if (q && !gone) { const x = x0 + shipAt * step, bob = ty + Math.sin(t * 2.6) * 2; if (art?.target) sprite(g, art.target, x, bob, Math.min(116, w * .3), true); else targetShip(g, x, bob, 1.2, map); }
-      if (run && run.fired && run.p < 1) { const y = y0 + (ty + 8 - y0) * Math.min(1, run.p); fx.add(x0 + (Math.random() - .5) * 6, y + 14, 2, () => ({ vx: (Math.random() - .5) * 18, vy: 8, life: .9, c: "#E8F6FF", a: .7, r0: 2.5, r1: 7 })); g.save(); g.translate(x0, y); g.fillStyle = "#23272C"; g.beginPath(); g.ellipse(0, 0, 5, 16, 0, 0, 7); g.fill(); g.fillStyle = "#C9A24A"; g.fillRect(-5, -9, 10, 3); g.restore(); }
+      if (q && !gone) { const x = x0 + shipAt * step, bob = ty + Math.sin(t * 2.6) * 2; if (art?.target) sprite(g, art.target, x, bob, Math.min(150, w * .4), true); else targetShip(g, x, bob, 1.5, map); }
+      if (run && run.fired && run.p < 1) { const y = con - 30 + (ty + 8 - con + 30) * Math.min(1, run.p); fx.add(x0 + (Math.random() - .5) * 6, y + 14, 2, () => ({ vx: (Math.random() - .5) * 18, vy: 8, life: .9, c: "#E8F6FF", a: .7, r0: 2.5, r1: 7 })); g.save(); g.translate(x0, y); g.fillStyle = "#23272C"; g.beginPath(); g.ellipse(0, 0, 5, 16, 0, 0, 7); g.fill(); g.fillStyle = "#C9A24A"; g.fillRect(-5, -9, 10, 3); g.restore(); }
       fx.draw(g, dt);
-      kick = Math.max(0, kick - dt * 5); g.save(); g.translate(x0, h - 18 + kick * 12); const m = g.createLinearGradient(-30, 0, 30, 0); m.addColorStop(0, "#14161A"); m.addColorStop(.45, "#59616B"); m.addColorStop(1, "#101215"); g.fillStyle = m; g.beginPath(); g.roundRect(-22, -48, 44, 70, 8); g.fill(); g.fillStyle = "#0A0B0D"; g.beginPath(); g.ellipse(0, -46, 15, 6, 0, 0, 7); g.fill(); g.fillStyle = "#7B5A36"; g.fillRect(-44, 2, 88, 30); g.restore();
-      // the orders
-      if (q) { const size = Math.min(18, w / 21), ink = "#1B2A33"; plate(g, w / 2, 27, q.shipText, size, "rgba(255,226,122,.97)", ink); plate(g, w / 2, 62, q.torpText, size, "rgba(255,226,122,.97)", ink); plate(g, w / 2, 98, "적함이 몇 m 남았을 때 쏠까요?", Math.min(15, w / 25), "rgba(6,22,40,.85)", "#BFE8FF"); }
-      if (q && !run && rest <= 0) { g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(0, 0, w, 5); g.fillStyle = "#FF6A52"; g.fillRect(0, 0, w * Math.max(0, left) / timeOf(shot), 5); }
-      if (rest > 0) { rest -= dt; if (rest <= 0) { const wasLast = shot >= SHOTS; q = null; run = null; pause = .25; if (wasLast) { end(hits); return; } } }
-      if (msg) { msg.life -= dt; if (msg.life <= 0) msg = null; else { const my = bar + 92; g.fillStyle = "#fff"; g.strokeStyle = "rgba(5,24,38,.85)"; g.lineWidth = 5; rich(g, w / 2, my, msg.a, Math.min(26, w / 15), "Jua, sans-serif", 400, true); rich(g, w / 2, my + 30, msg.b, Math.min(17, w / 23), "Jua, sans-serif", 400, true); } }
+      // my torpedo tube on the deck edge, and the console in front of everything
+      kick = Math.max(0, kick - dt * 5); const tube = g.createLinearGradient(x0 - 15, 0, x0 + 15, 0); tube.addColorStop(0, "#14161A"); tube.addColorStop(.42, "#68707A"); tube.addColorStop(1, "#101215"); g.fillStyle = tube; const ty2 = con - 36 + kick * 8; g.fillRect(x0 - 14, ty2, 28, con - ty2); g.fillStyle = "#C9A24A"; g.fillRect(x0 - 16, ty2, 32, 5); g.fillStyle = "#07080A"; g.beginPath(); g.ellipse(x0, ty2, 11, 4, 0, 0, 7); g.fill();
+      consolePanel(w, h, l);
+      // the order, on a slip of paper
+      if (q) { const size = Math.min(17, w / 23); g.fillStyle = "rgba(0,0,0,.28)"; round(13, 12, w - 24, 84, 3); g.fill(); g.fillStyle = "#F3E9CF"; round(12, 9, w - 24, 84, 3); g.fill(); g.fillStyle = "#B3261E"; g.fillRect(12, 9, w - 24, 4); g.fillStyle = "#2A2218"; rich(g, w / 2, 34, q.shipText, size, face); rich(g, w / 2, 68, q.torpText, size, face); g.strokeStyle = "rgba(90,70,30,.3)"; g.lineWidth = 1; g.beginPath(); g.moveTo(24, 51); g.lineTo(w - 24, 51); g.stroke(); }
+      if (rest > 0) { rest -= dt; if (rest <= 0) { const wasLast = shot >= SHOTS; q = null; run = null; msg = null; pause = .25; if (wasLast) { end(hits); return; } } }
       s.hud.textContent = "명중 " + hits + " · " + Math.max(shot, 1) + "/" + SHOTS + "발";
       requestAnimationFrame(tick); })(last);
   });
@@ -248,14 +260,15 @@ function lighthouse({ map, title }) {
   return new Promise(done => {
     const s = shell(title, "수가 변하는 규칙을 찾아 다음 수가 적힌 등을 눌러요."), ROUNDS = 8, TOTAL = 180;
     s.el.classList.add("g-mem", "era-" + map); s.stage.style.setProperty("--pic", "url(/maps/sea" + (map + 1) + ".webp)");
-    s.stage.innerHTML = '<div class="sig seq"><div class="seq-tape num" aria-live="polite"></div><i class="code-time"><i></i></i><p class="sig-say" aria-live="polite"></p><div class="lamps">' + ["red", "amber", "green", "blue"].map((c, i) => '<button type="button" class="lamp l-' + c + '" data-i="' + i + '"><b class="num"></b></button>').join("") + "</div></div>";
+    s.stage.innerHTML = '<div class="sig seq"><div class="seq-tape num" aria-live="polite"></div><i class="code-time"><i></i></i><svg class="seq-scene" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><defs><linearGradient id="lhBeam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--beam, #FFF3B8)" stop-opacity=".75"/><stop offset="1" stop-color="var(--beam, #FFF3B8)" stop-opacity="0"/></linearGradient><clipPath id="lhTower"><path d="M108 124 112 52h16l4 72z"/></clipPath></defs><g class="seq-beams"><path d="M120 40 340 4V76z" fill="url(#lhBeam)"/><path d="M120 40-100 4V76z" fill="url(#lhBeam)"/></g><path d="M-400 136H640V400H-400z" fill="#0A1E33"/><path d="M-400 136q20-5 40 0t40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0" fill="none" stroke="#2A5478" stroke-width="1.5"/><path d="M62 150c6-20 22-30 40-30h36c18 0 34 10 40 30z" fill="#2C2F35"/><path d="M84 132c8-8 18-12 28-12l-8 30H74c1-7 5-13 10-18z" fill="#3D4148"/><g clip-path="url(#lhTower)"><rect x="100" y="50" width="40" height="76" fill="#F2EAD8"/><rect x="100" y="66" width="40" height="15" fill="#B9352A"/><rect x="100" y="96" width="40" height="15" fill="#B9352A"/><rect x="120" y="50" width="20" height="76" fill="#0B1A2B" opacity=".24"/></g><rect x="107" y="49" width="26" height="4" rx="1" fill="#23262B"/><path d="M108 49v-5m24 5v-5m-12 5v-5m-6 5v-5m12 5v-5M106 44h28" stroke="#23262B" stroke-width="1.4"/><rect class="seq-lantern" x="112" y="30" width="16" height="14" fill="var(--beam, #FFE9A1)"/><path d="M112 30v14m5.300-14v14m5.400-14v14m5.300-14v14" stroke="#23262B" stroke-width="1.2"/><path d="M109 30h22l-11-10z" fill="#B9352A"/><circle cx="120" cy="18" r="1.800" fill="#C9A24A"/></svg><p class="sig-say" aria-live="polite"></p><div class="lamps">' + ["red", "amber", "green", "blue"].map((c, i) => '<button type="button" class="lamp l-' + c + '" data-i="' + i + '"><b class="num"></b></button>').join("") + "</div></div>";
     const tape = s.stage.querySelector(".seq-tape"), bar = s.stage.querySelector(".code-time i"), say = s.stage.querySelector(".sig-say"), lamps = [...s.stage.querySelectorAll(".lamp")], words = lamps.map(b => b.querySelector("b"));
     let round = 0, cur = null, step = 0, score = 0, lives = 3, left = TOTAL, lock = true, over = false, lastT = performance.now();
     const hud = () => s.hud.textContent = "점수 " + score + " · 기회 " + lives + " · " + Math.ceil(left) + "초";
     const end = v => { if (over) return; over = true; clearInterval(tm); s.el.remove(); done(v); };
     const tm = setInterval(() => { const n = performance.now(); left -= (n - lastT) / 1000; lastT = n; bar.style.width = Math.max(0, left / TOTAL * 100) + "%"; hud(); if (left <= 0) end(score); }, 100);
     s.quit.onclick = () => end(null);
-    const flash = async (i, ms) => { lamps[i].classList.add("lit"); Sfx.lamp(i); await wait(ms); lamps[i].classList.remove("lit"); };
+    const scene = s.stage.querySelector(".seq-scene"), COLORS = ["#FF8A7A", "#FFD56A", "#7DEBB0", "#8CCBFF"];
+    const flash = async (i, ms) => { lamps[i].classList.add("lit"); scene.style.setProperty("--beam", COLORS[i]); scene.classList.add("sending"); Sfx.lamp(i); await wait(ms); lamps[i].classList.remove("lit"); scene.classList.remove("sending"); scene.style.removeProperty("--beam"); };
     const chip = (text, cls = "") => { const e = document.createElement("span"); e.className = cls; e.innerHTML = MathQ.html(text); tape.appendChild(e); return e; };
     const blank = () => { tape.querySelector(".blank")?.remove(); chip("?", "blank"); };
     const deal = () => { cur.asks[step].opts.forEach((o, i) => { words[i].innerHTML = MathQ.html(o); lamps[i].setAttribute("aria-label", o); }); blank(); say.textContent = "다음 수가 적힌 등을 눌러요"; lock = false; };
