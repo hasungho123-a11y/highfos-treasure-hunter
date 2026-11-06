@@ -60,9 +60,10 @@ const ORDER = {
   biggest(n) { const vs = shuffle(NEAT).slice(0, n), top = vs.reduce((m, v) => pctOf(v) > pctOf(m) ? v : m), labels = vs.map(anyForm); return { ask: "가장 큰 수인 표적", real: labels[vs.indexOf(top)], opts: labels }; },
   same(n) { const v = pick(NEAT.filter(x => x[1] <= 10)), k = ri(2, 4), real = pick([frac(v[0] * k, v[1] * k), decOf(v), pctText(v)]), others = NEAT.filter(x => pctOf(x) !== pctOf(v)), opts = distinct(real, () => anyForm(pick(others)), n); return opts && { ask: `${frac(...v)}${wa(v[0])} 크기가 같은 표적`, real, opts }; }
 };
+const ORDER_TAG = { value: "식 계산", multiple: "배수", divisor: "약수", common: "공약수", overHalf: "크기 비교", biggest: "크기 비교", same: "같은 크기" };
 // wave runs from 1 to 10, n is how many choices are on the water; noun is what the player is picking
 function order(wave, n, noun = "표적") { const pool = wave <= 3 ? ["value", "multiple", "divisor"] : wave <= 7 ? ["value", "common", "overHalf", "same"] : ["value", "biggest", "same", "common"], hard = wave > 3;
-  for (;;) { const q = ORDER[pick(pool)](n, hard); if (q && q.opts.length === n) return { ask: q.ask.replace(/표적$/, noun), real: q.real, opts: shuffle(q.opts) }; } }
+  for (;;) { const kind = pick(pool), q = ORDER[kind](n, hard); if (q && q.opts.length === n) return { tag: ORDER_TAG[kind], ask: q.ask.replace(/표적$/, noun), real: q.real, opts: shuffle(q.opts) }; } }
 
 /* ----- 포격 섬: a 6-by-6 sea. The hidden ship's two grid numbers are the answers to two sums; later a wind pushes the shot sideways. ----- */
 const divisors = v => { const out = []; for (let i = 1; i <= v; i++) if (v % i === 0) out.push(i); return out; };

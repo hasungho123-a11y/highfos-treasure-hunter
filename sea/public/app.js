@@ -316,7 +316,7 @@ function kMap() {
     </svg>${worldShip(me)}</div>
     ${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}`;
 }
-const isleSub = k => ({ port: "배를 사고 면제권을 받는 곳", cannon: ["바람을 읽고 포탄으로 표적 맞히기", "배가 갈 자리를 계산해 어뢰 맞히기", "미끼를 가려내 미사일로 격추하기"][K.map], reef: ["해류를 버티며 암초 피하기", "안개 속 빙산 피해 멀리 가기", "소나로 숨은 기뢰 찾아 피하기"][K.map], memory: ["그림 짝 맞히기", "등대 불빛 신호 외워 따라 하기", "암호표를 보고 신호 해독하기"][K.map], battle: "친구 배와 겨뤄 금화 얻기" })[k];
+const isleSub = k => ({ port: "배를 사고 면제권을 받는 곳", cannon: ["식을 풀어 안개 속 적함이 있는 칸 쏘기", "빠르기와 시간으로 쏠 거리 계산하기", "조건에 맞는 표적을 계산해 격추하기"][K.map], reef: ["문제를 풀어 정답 통로로 암초 지나기", "안개 속 정답 통로로 빙산 지나기", "기뢰를 피해 정답 통로로 지나기"][K.map], memory: ["값이 같은 카드끼리 짝 맞추기", "수열의 규칙을 찾아 다음 수 누르기", "식을 풀어 기호의 값 알아내기"][K.map], battle: "친구 배와 겨뤄 금화 얻기" })[k];
 // little pictures standing on each island
 const ART = {
   port: (x, y) => `<rect x="${x - 34}" y="${y - 26}" width="26" height="22" fill="#F3E6C8"/><path d="M${x - 38} ${y - 26} L${x - 21} ${y - 42} L${x - 4} ${y - 26} Z" fill="#C2503A"/><rect x="${x + 6}" y="${y - 20}" width="22" height="18" fill="#F3E6C8"/><path d="M${x + 2} ${y - 20} L${x + 17} ${y - 34} L${x + 32} ${y - 20} Z" fill="#1F6F8B"/>`,
@@ -486,12 +486,13 @@ async function gameArt(kind) {
 async function playGame(kind) {
   if (K.busy) return; K.busy = true;
   try { // a game seen for the first time explains itself before any energy is spent
-    const seen = `hs_intro4_${kind}_${K.map}`; // "3": raise it when a game's rules change, so everyone sees the new rules once if (!ls.get(seen)) { const go = await Games.intro(kind, K.map, K.d.maps[K.map].isles[kind], K.d.games[kind].stars, true); if (!go) { K.busy = false; return; } ls.set(seen, "1"); }
+    const seen = `hs_intro4_${kind}_${K.map}`; // raise the number when a game's rules change, so everyone sees the new rules once
+    if (!ls.get(seen)) { const go = await Games.intro(kind, K.map, K.d.maps[K.map].isles[kind], K.d.games[kind].stars, true); if (!go) { K.busy = false; return; } ls.set(seen, "1"); }
     const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
     const art = await Promise.race([gameArt(kind), sleep(1800).then(() => null)]); // never make a child wait long for pictures: the plain drawings are the fallback
     const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], art });
     if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0, quit: true }).catch(() => {}); toast("다음에 다시 도전해요"); }
-    else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r); }
+    else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r, Games.missed()); }
     await kidLoad(); kidRender();
   } catch (e) { toast(e.message); }
   K.busy = false; kidNotices();
@@ -508,11 +509,16 @@ async function openBox(mapId) {
   } catch (e) { toast(e.message); kidRender(); }
   K.busy = false;
 }
-function rewardCard(r) {
+// the questions missed in this game, kept for the card only: nothing is sent to the server
+function missHTML(miss) { if (!miss) return "";
+  if (!miss.length) return `<p class="miss-none">틀린 문제가 없어요!</p>`;
+  const counts = {}; for (const m of miss) counts[m.tag] = (counts[m.tag] || 0) + 1;
+  return `<details class="miss"><summary><span>틀린 문제 다시 보기 <b class="num">${miss.length}</b>개</span><span class="miss-tags">${Object.entries(counts).map(([t, n]) => `<i>${t} ${n}</i>`).join("")}</span></summary><ol>${miss.map(m => `<li><small>${m.tag}</small><div class="miss-q num">${m.lines.map(l => `<div>${MathQ.html(l)}</div>`).join("")}</div><p class="miss-a">정답 <b class="num">${MathQ.html(m.answer)}</b></p>${m.how ? `<p class="miss-how num">${MathQ.html(m.how)}</p>` : ""}</li>`).join("")}</ol></details>`; }
+function rewardCard(r, miss) {
   return new Promise(done => {
     const it = r.item, m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
     m.innerHTML = `<div class="panel reward"><div class="stars" aria-label="별 ${r.stars}개">${[0, 1, 2].map(i => `<i class="${i < r.stars ? "on" : ""}"></i>`).join("")}</div><h2>${r.stars ? "잘했어요!" : "아쉬워요!"}</h2><p class="num">점수 ${r.score} · ${pts(`+${r.points}`)}</p>
-      ${r.boss ? `<p class="small">${r.boss.down ? `<b>${esc(r.boss.name)}</b>을(를) 쓰러뜨렸어요!` : `<b>${esc(r.boss.name)}</b>에게 <b class="num">${r.boss.dmg}</b> 피해! 남은 체력 <span class="num">${r.boss.left}</span>`}</p>` : ""}${it ? foundHTML(it) : ""}<button class="btn primary lg" data-close>확인</button></div>`;
+      ${r.boss ? `<p class="small">${r.boss.down ? `<b>${esc(r.boss.name)}</b>을(를) 쓰러뜨렸어요!` : `<b>${esc(r.boss.name)}</b>에게 <b class="num">${r.boss.dmg}</b> 피해! 남은 체력 <span class="num">${r.boss.left}</span>`}</p>` : ""}${it ? foundHTML(it) : ""}${missHTML(miss)}<button class="btn primary lg" data-close>확인</button></div>`;
     document.body.appendChild(m); const b = m.querySelector("[data-close]"); b.focus(); Sfx.stars(r.stars); if (it) setTimeout(Sfx.coin, 560); b.onclick = () => { m.remove(); done(); };
   });
 }

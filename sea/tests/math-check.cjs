@@ -11,7 +11,7 @@ for (let i = 0; i < N; i++) { const p = Q.pairs(); if (p.length !== 6) fail("짝
   const texts = p.flatMap(c => [c.a, c.b]); if (new Set(texts).size !== 12) fail("같은 글자 카드", texts); }
 const asks = {};
 for (let i = 0; i < N; i++) { const wave = 1 + i % 10, n = 2 + Math.min(2, Math.floor(wave / 4)), q = Q.order(wave, n); asks[q.ask.replace(/[\d/]+/g, "#")] = (asks[q.ask.replace(/[\d/]+/g, "#")] || 0) + 1;
-  if (q.opts.length !== n || new Set(q.opts).size !== n || !q.opts.includes(q.real)) fail("표적 구성", q);
+  if (!q.tag) fail("유형 이름 없음", q); if (q.opts.length !== n || new Set(q.opts).size !== n || !q.opts.includes(q.real)) fail("표적 구성", q);
   const fits = l => { const v = val(l), a = q.ask; let m;
     if ((m = a.match(/^값이 (-?\d+)인/))) return eq(v, +m[1]);
     if ((m = a.match(/^(\d+)의 배수/))) return v % +m[1] === 0;

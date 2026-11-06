@@ -1,6 +1,10 @@
 /* 하이포스 제도 — the mini-games. Games.run(kind) shows a full-screen game and resolves with the score (null if the child leaves early). */
 (() => {
 const V = window.Voyage;
+// what the child got wrong in the game just played, for the reward card. null when a game has no right or wrong answers (the card pairs)
+let missed = null;
+const note = (tag, lines, answer, how = "") => { if (missed) missed.push({ tag, lines, answer, how }); };
+const noteOrder = q => note(q.tag, [q.ask, `보기: ${q.opts.join(", ")}`], q.real);
 function shell(title, help) {
   const el = document.createElement("div"); el.className = "game";
   el.innerHTML = `<div class="game-top"><b>${title}</b><span class="game-hud num"></span><button type="button" class="btn sm" data-quit>그만하기</button></div><p class="game-help">${help}</p><div class="game-stage"></div>`;
@@ -71,7 +75,7 @@ function cannon({ map, title, art }) {
     const layout = (w, h) => { const c = Math.floor(Math.min((w - 58) / N, (h - TOP - 118) / N)); return { c, ox: (w - c * N) / 2 + 12, oy: TOP }; };
     const spot = ({ c, ox, oy }, i, j) => [ox + (i - .5) * c, oy + (N - j + .5) * c];
     const say = (text, good) => { msg = { text, good, a: good ? 1 : 2.6 }; };
-    const finish = (ok, wait) => { reveal = { ok, left: wait }; ball = null; };
+    const finish = (ok, wait) => { reveal = { ok, left: wait }; ball = null; if (!ok) note("칸 계산", [`가로 칸: ${q.xText}`, `세로 칸: ${q.yText}`], `가로 ${q.x}, 세로 ${q.y}`, q.wind ? `바람이 포탄을 ${q.wind > 0 ? "오른쪽" : "왼쪽"}으로 ${Math.abs(q.wind)}칸 밀어서, 가로 ${q.x - q.wind}칸을 쏴야 맞아요` : ""); };
     s.stage.addEventListener("pointerdown", e => { e.preventDefault(); if (!q || ball || reveal || over) return; const r = s.stage.getBoundingClientRect(), l = layout(cv.w, cv.h), i = Math.floor((e.clientX - r.left - l.ox) / l.c) + 1, j = N - Math.floor((e.clientY - r.top - l.oy) / l.c); if (i < 1 || i > N || j < 1 || j > N) return;
       ball = { p: 0, i: i + q.wind, j, aim: [i, j] }; kick = 1; Sfx.shot("cannon"); fx.add(cv.w / 2, cv.h - 112, 9, () => ({ vx: (Math.random() - .5) * 50, vy: -70 - Math.random() * 120, life: .3 + Math.random() * .2, c: "#FFD27A", a: 1, r0: 7, r1: 1 })); });
     const end = v => { if (over) return; over = true; cv.stop(); s.el.remove(); done(v); };
@@ -129,7 +133,7 @@ function reef({ map, title, art }) {
       if (map === 1) { const clear = h * .34, f = g.createLinearGradient(0, 0, 0, clear); f.addColorStop(0, "rgba(222,232,236,1)"); f.addColorStop(.62, "rgba(222,232,236,.97)"); f.addColorStop(1, "rgba(222,232,236,0)"); g.fillStyle = f; g.fillRect(0, 0, w, clear); }
       if (gate) { if (map !== 1 || gate.y > h * .3) gate.q.opts.forEach((o, i) => plate(g, (i + .5) * w / LANES, gate.y, o, Math.min(19, w / 21), "rgba(5,24,38,.93)", "#FFF3B8"));
         plate(g, w / 2, 30, gate.q.ask, Math.min(20, w / 18), "rgba(255,226,122,.97)", "#1B2A33");
-        if (gate.y >= py - 12) { const right = gate.q.opts[lane] === gate.q.real; if (right) { passed++; Sfx.match(); say(`통과! +${POINT}`, true); } else { lives--; blast(fx, px, py - 6); Sfx.boom(); say(`쿵! 정답은 ${gate.q.real}`, false); }
+        if (gate.y >= py - 12) { const right = gate.q.opts[lane] === gate.q.real; if (right) { passed++; Sfx.match(); say(`통과! +${POINT}`, true); } else { lives--; blast(fx, px, py - 6); Sfx.boom(); say(`쿵! 정답은 ${gate.q.real}`, false); noteOrder(gate.q); }
           gap = right ? .5 : 1.7; gate = null; if (!ending && (lives <= 0 || count >= GATES)) { ending = true; setTimeout(() => end(passed * POINT), 1600); } } }
       if (!ending && Math.random() < dt * 28) fx.add(px + (Math.random() - .5) * 16, py + 20, 1, () => ({ vx: (Math.random() - .5) * 26, vy: 70 + speed * .35, life: .6, c: "#F2FAFF", a: .65, r0: 3, r1: 8 }));
       fx.draw(g, dt);
@@ -166,7 +170,7 @@ function torpedo({ map, title, art }) {
     const SHOTS = 10, MARKS = 6, START = MARKS + .6, FLIGHT = 1.3, timeOf = n => 31 - n; // time to work it out: 30 seconds, down to 21
     let shot = 0, hits = 0, t = 0, last = performance.now(), q = null, left = 0, shipAt = START, run = null, pause = .3, rest = 0, gone = false, msg = null, over = false, kick = 0;
     const layout = (w, h) => { const x0 = Math.max(44, w * .12), step = (w - x0 - 34) / START, con = h - Math.min(172, h * .28); return { x0, step, con, ty: 104 + (con - 104) * .52 }; };
-    const say = (a, b, good) => { msg = { a, b, good }; };
+    const say = (a, b, good) => { msg = { a, b, good }; if (!good) note("속력·거리·시간", [q.shipText, q.torpText], `${q.D}m`, q.why); };
     s.stage.addEventListener("pointerdown", e => { e.preventDefault(); if (!q || run || rest > 0 || over) return; const r = s.stage.getBoundingClientRect(), l = layout(cv.w, cv.h), y = e.clientY - r.top; if (y < l.ty - 34) return; const k = Math.round((e.clientX - r.left - l.x0) / l.step); if (k < 1 || k > MARKS) return; run = { k, fired: false, p: 0 }; Sfx.lock(); });
     const end = v => { if (over) return; over = true; cv.stop(); s.el.remove(); done(v); };
     s.quit.onclick = () => end(null);
@@ -237,7 +241,7 @@ function missile({ map, title, art }) {
       sea(g, w, h, t * .3, art); g.fillStyle = "rgba(3,18,30,.55)"; g.fillRect(0, 0, w, h); g.strokeStyle = "rgba(120,230,190,.13)"; g.lineWidth = 1; for (let r = 90; r < h * 1.25; r += 90) { g.beginPath(); g.arc(w / 2, h, r, 0, 7); g.stroke(); }
       const sweep = t * 1.3 % 6.283; g.strokeStyle = "rgba(120,230,190,.32)"; g.lineWidth = 2; g.beginPath(); g.moveTo(w / 2, h); g.lineTo(w / 2 + Math.cos(sweep) * h * 1.3, h + Math.sin(sweep) * h * 1.3); g.stroke();
       if (!cs.length && !shot && over !== "ending" && wave < WAVES) { pause -= dt; if (pause <= 0) spawn(w, h); }
-      if (cs.length && !shot) { left -= dt; if (left <= 0) { say(`시간 초과 · 정답 ${q.real}`, false); Sfx.splash(); closeWave(); } }
+      if (cs.length && !shot) { left -= dt; if (left <= 0) { say(`시간 초과 · 정답 ${q.real}`, false); noteOrder(q); Sfx.splash(); closeWave(); } }
       for (const c of cs) { c.x = Math.max(62, Math.min(w - 62, c.x + c.vx * dt));
         if (art?.target) sprite(g, art.target, c.x, c.y + 4, 84, c.vx < 0); else targetShip(g, c.x, c.y + 2, .95, map);
         g.strokeStyle = "#FF6A52"; g.lineWidth = 2; const b = 40; for (const [dx, dy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { g.beginPath(); g.moveTo(c.x + dx * b, c.y + dy * (b - 13)); g.lineTo(c.x + dx * b, c.y + dy * b); g.lineTo(c.x + dx * (b - 13), c.y + dy * b); g.stroke(); }
@@ -245,7 +249,7 @@ function missile({ map, title, art }) {
       if (q && cs.length) plate(g, w / 2, 34, q.ask, Math.min(21, w / 17), "rgba(255,226,122,.96)", "#1B2A33");
       if (lock && !shot) { lock.p += dt / HOLD; g.strokeStyle = "#FFE27A"; g.lineWidth = 5; g.beginPath(); g.arc(lock.c.x, lock.c.y, 50, -1.57, -1.57 + Math.min(1, lock.p) * 6.283); g.stroke(); if (lock.p >= 1) { shot = { c: lock.c, p: 0 }; lock = null; Sfx.shot("missile"); } }
       if (shot) { shot.p += dt / .55; const p = Math.min(1, shot.p), mx = w / 2 + (shot.c.x - w / 2) * p, my = h - 20 + (shot.c.y - h + 20) * p * p; fx.add(mx, my + 8, 3, () => ({ vx: (Math.random() - .5) * 22, vy: 24, life: .55, c: "#F3F5F7", a: .7, r0: 3, r1: 10 })); g.fillStyle = "#EDEFF2"; g.beginPath(); g.ellipse(mx, my, 4, 12, Math.atan2(shot.c.x - w / 2, h) * .8, 0, 7); g.fill();
-        if (shot.p >= 1) { if (shot.c.real) { hits++; blast(fx, shot.c.x, shot.c.y); Sfx.boom(); say("격추!", true); } else { spray(fx, shot.c.x, shot.c.y); Sfx.wrong(); say(`아니에요 · 정답 ${q.real}`, false); } shot = null; closeWave(); } }
+        if (shot.p >= 1) { if (shot.c.real) { hits++; blast(fx, shot.c.x, shot.c.y); Sfx.boom(); say("격추!", true); } else { spray(fx, shot.c.x, shot.c.y); Sfx.wrong(); say(`아니에요 · 정답 ${q.real}`, false); noteOrder(q); } shot = null; closeWave(); } }
       fx.draw(g, dt);
       if (cs.length) { g.fillStyle = "rgba(255,255,255,.2)"; g.fillRect(0, 0, w, 5); g.fillStyle = "#FF6A52"; g.fillRect(0, 0, w * Math.max(0, left) / timeOf(wave), 5); }
       if (msg) { msg.a -= dt * 1.7; if (msg.a <= 0) msg = null; else { g.fillStyle = `rgba(255,255,255,${Math.min(1, msg.a)})`; rich(g, w / 2, h * .82, msg.text, Math.min(34, w / 13), "Jua, sans-serif", 400); } }
@@ -274,7 +278,7 @@ function lighthouse({ map, title }) {
     const deal = () => { cur.asks[step].opts.forEach((o, i) => { words[i].innerHTML = MathQ.html(o); lamps[i].setAttribute("aria-label", o); }); blank(); say.textContent = "다음 수가 적힌 등을 눌러요"; lock = false; };
     const show = async () => { lock = true; step = 0; cur = MathQ.series(round); tape.innerHTML = ""; words.forEach(w => w.innerHTML = ""); say.textContent = round === 2 || round === 5 ? "규칙이 더 어려워져요!" : "신호를 받는 중이에요"; await wait(500); for (const label of cur.shown) { if (over) return; chip(label); await flash(Math.floor(Math.random() * 4), 230); await wait(90); } if (!over) deal(); };
     s.stage.addEventListener("click", async e => { const b = e.target.closest(".lamp"); if (!b || lock || over) return; const i = Number(b.dataset.i), ask = cur.asks[step], got = ask.opts[i]; lock = true; flash(i, 170);
-      if (got !== ask.real) { lives--; hud(); Sfx.wrong(); tape.querySelector(".blank")?.remove(); chip(ask.real, "fix"); say.innerHTML = MathQ.html("정답 " + ask.real + " · " + cur.rule); await wait(3000); if (over) return; if (!lives) return end(score); round++; if (round >= ROUNDS) return end(score); return show(); }
+      if (got !== ask.real) { note("수열", [[...cur.shown, ...cur.asks.slice(0, step).map(a => a.real), "?"].join(", ")], ask.real, cur.rule); lives--; hud(); Sfx.wrong(); tape.querySelector(".blank")?.remove(); chip(ask.real, "fix"); say.innerHTML = MathQ.html("정답 " + ask.real + " · " + cur.rule); await wait(3000); if (over) return; if (!lives) return end(score); round++; if (round >= ROUNDS) return end(score); return show(); }
       score++; hud(); tape.querySelector(".blank")?.remove(); chip(ask.real, "got"); step++;
       if (step < cur.asks.length) return deal();
       Sfx.match(); say.textContent = "수신 완료! " + cur.rule; await wait(1300); if (over) return; round++; if (round >= ROUNDS) return end(score); show(); });
@@ -293,7 +297,7 @@ function codebreak({ map, title }) {
     let cur = null, solved = 0, wrong = 0, score = 0, left = TOTAL, over = false, wait2 = false, lastT = performance.now();
     const levelOf = n => n < 3 ? 0 : n < 6 ? 1 : 2;
     const next = () => { cur = MathQ.cipher(levelOf(solved)); wrong = 0; const pick = MathQ.shuffle(ids), sym = { a: pick[0], b: pick[1], c: pick[2] }, tok = t => sym[t] ? icon(sym[t]) : `<b>${t}</b>`;
-      clues.innerHTML = cur.clues.map(c => `<div class="num">${c.map(tok).join("")}</div>`).join(""); clues.classList.remove("new"); clues.offsetWidth; clues.classList.add("new");
+      cur.shownClues = cur.clues.map(c => c.map(tok).join("")); cur.askIcon = icon(sym[cur.ask]); clues.innerHTML = cur.shownClues.map(c => `<div class="num">${c}</div>`).join(""); clues.classList.remove("new"); clues.offsetWidth; clues.classList.add("new");
       ask.innerHTML = `${icon(sym[cur.ask])}<b>= ?</b>`; };
     const end = v => { if (over) return; over = true; clearInterval(tm); s.el.remove(); done(v); };
     const hud = () => s.hud.textContent = `점수 ${score} · ${Math.ceil(left)}초`;
@@ -301,7 +305,7 @@ function codebreak({ map, title }) {
     s.quit.onclick = () => end(null);
     s.stage.addEventListener("click", e => { const b = e.target.closest("[data-n]"); if (!b || over || wait2) return;
       if (Number(b.dataset.n) === cur.answer) { score = Math.min(MAX, score + levelOf(solved) + 1); solved++; Sfx.match(); say.textContent = solved === 3 || solved === 6 ? "더 어려운 암호가 들어와요!" : "해독 성공!"; if (score >= MAX) return end(score); next(); }
-      else { left -= 5; wrong++; Sfx.wrong(); if (wrong < 2) say.textContent = "틀렸어요! 5초 감소"; else { say.textContent = `정답은 ${cur.answer}이었어요. 다음 암호로 넘어가요`; wait2 = true; setTimeout(() => { wait2 = false; if (!over) { say.textContent = ""; next(); } }, 1800); } } hud(); });
+      else { if (!wrong) note("기호 식", cur.shownClues, `${cur.askIcon} = ${cur.answer}`); left -= 5; wrong++; Sfx.wrong(); if (wrong < 2) say.textContent = "틀렸어요! 5초 감소"; else { say.textContent = `정답은 ${cur.answer}이었어요. 다음 암호로 넘어가요`; wait2 = true; setTimeout(() => { wait2 = false; if (!over) { say.textContent = ""; next(); } }, 1800); } } hud(); });
     next(); hud();
   });
 }
@@ -338,5 +342,5 @@ const intro = (kind, map, title, stars, ask) => new Promise(done => { const h = 
 // 3-2-1 with the game's one-line reminder, so a game never starts before the child is looking
 const countdown = (title, line) => new Promise(done => { const m = document.createElement("div"); m.className = "game-count"; m.setAttribute("role", "status"); m.innerHTML = `<b>${title}</b><span class="count-n num"></span><p>${line}</p>`; document.body.appendChild(m); const n = m.querySelector(".count-n"); let i = 3;
   const step = () => { if (!i) { m.remove(); done(); return; } n.textContent = i; n.style.animation = "none"; void n.offsetWidth; n.style.animation = ""; window.Sfx?.tick?.(); i--; setTimeout(step, 750); }; step(); });
-window.Games = { intro, run: async (kind, opts) => { const map = opts.map || 0; await countdown(opts.title, HOW[kind][map].short); return ({ cannon: [cannon, torpedo, missile], reef: [reef, reef, reef], memory: [memory, lighthouse, codebreak] })[kind][map](opts); } };
+window.Games = { intro, missed: () => missed, run: async (kind, opts) => { const map = opts.map || 0; missed = kind === "memory" && !map ? null : []; await countdown(opts.title, HOW[kind][map].short); return ({ cannon: [cannon, torpedo, missile], reef: [reef, reef, reef], memory: [memory, lighthouse, codebreak] })[kind][map](opts); } };
 })();
