@@ -375,7 +375,7 @@ function build() {
     add(new T.Mesh(new T.ConeGeometry(.17, .2, 8), M.iron), lamp).position.y = .58;
     const pl = new T.PointLight(0xFFB347, 1.2, 6, 2); pl.position.y = .35; lamp.add(pl); lamps.push(pl); }
   // the parrot stands on its own wooden perch on the rail, so the long tail hangs clear of the hull
-  grp("parrot"); { const rail = sideP(.5, 0, 1), k = 1.2 + W * .12, postH = .54, stand = new T.Group(), bird = new T.Group(); A.parrot.add(stand); stand.position.set(rail.x, rail.y + postH, rail.z); stand.rotation.y = -.35; stand.add(bird); bird.scale.setScalar(k); bird.position.set(-.02 * k, .034 * k, 0);
+  grp("parrot"); { const rail = sideP(.5, 0, 1), k = 1.2 + W * .12, postH = .54, stand = new T.Group(); bird = new T.Group(); A.parrot.add(stand); stand.position.set(rail.x, rail.y + postH, rail.z); stand.rotation.y = -.35; stand.add(bird); bird.scale.setScalar(k); bird.position.set(-.02 * k, .034 * k, 0);
     add(new T.Mesh(new T.CylinderGeometry(.028, .04, postH, 12), M.wood), A.parrot).position.set(rail.x, rail.y + postH / 2, rail.z);
     add(new T.Mesh(new T.CylinderGeometry(.075, .085, .035, 14), M.wood), A.parrot).position.set(rail.x, rail.y + .02, rail.z);
     const bar = add(new T.Mesh(new T.CylinderGeometry(.03, .03, .44, 12), M.wood), stand); bar.rotation.x = Math.PI / 2;
