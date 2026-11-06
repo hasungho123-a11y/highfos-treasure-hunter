@@ -44,7 +44,7 @@ npx wrangler dev --port 8791
 ## 배포 순서
 처음 한 번 `npx wrangler login`을 합니다. 운영 DB ID는 `npx wrangler d1 list`로 확인합니다.
 
-1. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v33`입니다.
+1. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v34`입니다.
 2. DB가 바뀌면 **코드보다 먼저** 운영 DB에 마이그레이션하고 결과를 확인합니다. 과거에 순서를 바꿔 장애가 났습니다.
 3. `wrangler.toml`의 `REPLACE_WITH_DATABASE_ID`를 실제 ID로 잠시 바꾸고 배포한 뒤 **반드시 되돌립니다.** ID를 커밋하지 않습니다. ID 조회(`d1 list`)가 실패하면 배포하지 말고 다시 조회합니다. 인증 오류가 가끔 나는데, 빈 ID로 배포될 뻔한 적이 있습니다.
 4. 실서버 파일이 새 버전인지 확인하고, 고친 파일만 골라 커밋하고 푸시합니다.
@@ -68,7 +68,8 @@ npx wrangler deploy
 
 ## 수업 요일
 - 반마다 `classes.days`에 요일 숫자(0=일요일)로 저장합니다. 기본은 매일입니다. 기존 DB에는 `ALTER TABLE classes ADD COLUMN days TEXT NOT NULL DEFAULT '0123456'`를 실행해 두었습니다.
-- 수업 없는 날에는 매일 미션 신청만 막습니다. 매주·도전 미션과 선생님의 승인은 막지 않습니다.
+- 수업 없는 날에는 모든 미션 신청을 막습니다. 선생님의 승인, 직접 지급, 직접 조정은 막지 않습니다.
+- 행동력은 자동으로 회복되지 않습니다. 운영자가 그렇게 정했습니다. 선생님이 회수하면 0 아래로 내려갈 수 있고, 음수인 동안은 게임을 못 하며 미션으로 메웁니다.
 - 수업이 적은 반은 `classes.daily_bonus`(0~10)로 매일 미션 하나마다 행동력을 더 줍니다. 지급은 `giveEnergy` 한 곳에서 처리하므로 승인과 직접 지급에 모두 붙습니다. 행동력 상한은 그대로입니다. 기존 DB에는 `ALTER TABLE classes ADD COLUMN daily_bonus INTEGER NOT NULL DEFAULT 0`를 실행해 두었습니다.
 
 ## 지금까지 된 것
