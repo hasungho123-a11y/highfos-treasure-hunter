@@ -38,6 +38,44 @@ const KINDS = R => { const ri = (a, b) => a + Math.floor(R() * (b - a + 1)), pic
   ];
   return [...WHOLE, FRACTION, MIXED]; };
 
+/* ----- 중등반: negative numbers from the start, rational numbers, then letters. Choices may be negative, and the sign slip is always among them. ----- */
+const minus = x => String(x).replace(/-/g, "−");
+const signedFrac = (n, d) => { const s = n < 0 ? "−" : "", a = Math.abs(n), g = gcd(a, d) || 1; return d / g === 1 ? `${s}${a / g}` : `${s}${a / g}/${d / g}`; };
+const midValue = label => { const f = String(label).match(/^(−?)(\d+)\/(\d+)$/); return f ? (f[1] ? -1 : 1) * f[2] / f[3] : Number(String(label).replace("−", "-")); };
+const MID_KINDS = R => { const ri = (a, b) => a + Math.floor(R() * (b - a + 1)), pick = a => a[Math.floor(R() * a.length)], nz = (a, b) => { for (;;) { const v = ri(a, b); if (v) return v; } }, sg = n => n < 0 ? `(${minus(n)})` : String(n), lin = (a, b) => `${a === 1 ? "" : a === -1 ? "−" : minus(a)}x${b > 0 ? `+${b}` : b < 0 ? `−${-b}` : ""}`;
+  const rat = () => { const [n, d] = pick([[1, 2], [1, 3], [2, 3], [1, 4], [3, 4], [1, 5], [2, 5], [3, 5], [1, 6], [5, 6], [3, 8], [5, 8]]); return [pick([1, -1]) * n, d]; }, rt = ([n, d]) => `(${n < 0 ? "−" : ""}${Math.abs(n)}/${d})`;
+  return [
+    [
+      () => { const a = nz(-49, 49), b = nz(-49, 49); return { text: `${sg(a)}+${sg(b)}`, real: minus(a + b), near: [minus(a - b), minus(-(a + b))] }; },
+      () => { const a = nz(-49, 49), b = nz(-49, 49); return { text: `${sg(a)}−${sg(b)}`, real: minus(a - b), near: [minus(a + b), minus(b - a)] }; }
+    ],
+    [
+      () => { const a = nz(-15, 15), b = nz(-9, 9); return { text: `${sg(a)}×${sg(b)}`, real: minus(a * b), near: [minus(-a * b), minus(a + b)] }; },
+      () => { const a = nz(-9, 9), b = nz(-6, 6), c = nz(-6, 6); return { text: `${sg(a)}+${sg(b)}×${sg(c)}`, real: minus(a + b * c), near: [minus((a + b) * c), minus(a - b * c)] }; },
+      () => { const a = ri(2, 9), inside = R() < .5; return { text: inside ? `(−${a})²` : `−${a}²`, real: minus(inside ? a * a : -(a * a)), near: [minus(inside ? -(a * a) : a * a), minus(inside ? 2 * a : -2 * a)] }; },
+      () => { const a = ri(2, 5); return { text: `(−${a})³`, real: minus(-(a * a * a)), near: [minus(a * a * a), minus(-3 * a)] }; }
+    ],
+    [
+      () => { for (;;) { const [n1, d1] = rat(), [n2, d2] = rat(); if (d1 === d2) continue; return { text: `${rt([n1, d1])}+${rt([n2, d2])}`, real: signedFrac(n1 * d2 + n2 * d1, d1 * d2), near: [signedFrac(n1 * d2 - n2 * d1, d1 * d2), signedFrac(-(n1 * d2 + n2 * d1), d1 * d2)] }; } },
+      () => { for (;;) { const [n1, d1] = rat(), [n2, d2] = rat(); if (d1 === d2) continue; return { text: `${rt([n1, d1])}−${rt([n2, d2])}`, real: signedFrac(n1 * d2 - n2 * d1, d1 * d2), near: [signedFrac(n1 * d2 + n2 * d1, d1 * d2), signedFrac(n2 * d1 - n1 * d2, d1 * d2)] }; } },
+      () => { const [n1, d1] = rat(), [n2, d2] = rat(); return { text: `${rt([n1, d1])}×${rt([n2, d2])}`, real: signedFrac(n1 * n2, d1 * d2), near: [signedFrac(-n1 * n2, d1 * d2), signedFrac(n1 * d2, d1 * n2 < 0 ? d1 * -n2 : d1 * n2) ] }; },
+      () => { const [n1, d1] = rat(), [n2, d2] = rat(), neg2 = n2 < 0 ? -1 : 1; return { text: `${rt([n1, d1])}÷${rt([n2, d2])}`, real: signedFrac(n1 * d2 * neg2, d1 * Math.abs(n2)), near: [signedFrac(n1 * n2, d1 * d2), signedFrac(-n1 * d2 * neg2, d1 * Math.abs(n2))] }; }
+    ],
+    [
+      () => { const x = nz(-9, 9), a = ri(2, 7), b = nz(-12, 12); return { text: `${lin(a, b)} = ${minus(a * x + b)}`, ask: "x의 값은?", real: minus(x), near: [minus(-x), minus(x + 1), minus(x - 1)] }; },
+      () => { const x = nz(-9, 9), a = ri(3, 7), c = ri(1, a - 1), b = nz(-12, 12), d = (a - c) * x + b; return { text: `${lin(a, b)} = ${lin(c, d)}`, ask: "x의 값은?", real: minus(x), near: [minus(-x), minus(x + 1), minus(x - 1)] }; },
+      () => { const x = nz(-6, 6), a = nz(-6, 6), b = nz(-12, 12); return { text: lin(a, b), ask: `x = ${minus(x)}일 때 값은?`, real: minus(a * x + b), near: [minus(-a * x + b), minus(a * x - b)] }; }
+    ]
+  ]; };
+function midChoices(real, near, R) { const out = [String(real)], taken = new Set([midValue(real).toFixed(6)]);
+  const add = x => { const label = String(x), v = midValue(label); if (out.length < 4 && Number.isFinite(v) && !taken.has(v.toFixed(6))) { taken.add(v.toFixed(6)); out.push(label); } };
+  near.forEach(add);
+  const f = String(real).match(/^(−?)(\d+)\/(\d+)$/);
+  if (f) { const m = (f[1] ? -1 : 1) * f[2], d = +f[3]; for (const k of [1, -1, 2, -2, 3, -3, 4, -4]) add(signedFrac(m + k, d)); }
+  else { const v = midValue(real); for (const s of [1, -1, 2, -2, 10, -10, 3, -3, 5, -5]) add(minus(v + s)); }
+  for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
+  return out; }
+
 // fills the choices with values close enough to need checking, and never two that are worth the same
 function choices(real, near, R) { const out = [String(real)], taken = new Set([valueOf(real).toFixed(6)]);
   const add = x => { const label = String(x), v = valueOf(label); if (out.length < 4 && v > 0 && Number.isFinite(v) && !taken.has(v.toFixed(6))) { taken.add(v.toFixed(6)); out.push(label); } };
@@ -49,5 +87,6 @@ function choices(real, near, R) { const out = [String(real)], taken = new Set([v
   for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
   return out; }
 
-export function duelQuestion(seed, round) { const R = rngOf(`${seed}|${round}`), tiers = KINDS(R), tier = tiers[Math.min(tiers.length - 1, Math.floor((round - 1) / 2))], q = tier[Math.floor(R() * tier.length)](), real = String(q.real), opts = choices(real, q.near, R);
+// level 0 = 초등, 1 = 중등; the duel stores its level when it's asked for, so the questions can't change halfway through
+export function duelQuestion(seed, round, level = 0) { const R = rngOf(`${seed}|${round}`), tiers = (level ? MID_KINDS : KINDS)(R), tier = tiers[Math.min(tiers.length - 1, Math.floor((round - 1) / 2))], q = tier[Math.floor(R() * tier.length)](), real = String(q.real), opts = (level ? midChoices : choices)(real, q.near, R);
   return { ask: q.ask || "값은 얼마일까요?", text: q.text, opts, real, realIdx: opts.indexOf(real) }; }

@@ -149,7 +149,7 @@ async function auth(req, db) {
   const s = await db.prepare("SELECT * FROM sessions WHERE token=? AND expires_at>?").bind(t, Date.now()).first();
   if (!s) return null;
   if (s.role === "student") {
-    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.battle AS class_battle, c.days AS class_days, c.daily_bonus AS class_bonus FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
+    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.battle AS class_battle, c.days AS class_days, c.daily_bonus AS class_bonus, c.level AS class_level FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
     return st ? { role: "student", token: t, student: st } : null;
   }
   const te = await db.prepare("SELECT id, username FROM teachers WHERE id=?").bind(s.user_id).first();
@@ -351,7 +351,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id] },
     boxUsed, boxes: MAPS.map(m => ({ map: m.id, price: boxPrice(m), all: WEAPONS.filter(w => w.era === m.id).every(w => owned.includes(w.key)) })),
     upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
-    bal, game, quests, classDays: st.class_days, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
+    bal, game, quests, classDays: st.class_days, level: st.class_level || 0, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
     battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), duelLeft: await duelLeft(db, st.id, game, today), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates), titles: await titlesFor(db, st.id, owned),
     approved: (await db.prepare("SELECT id, title, energy FROM logs WHERE student_id=? AND kind='quest' ORDER BY id DESC LIMIT 20").bind(st.id).all()).results,
@@ -504,7 +504,7 @@ on("POST", "/api/kid/battle", "student", async ({ db, me, body }) => {
 // a round lasts longer on the server than the time on screen, because the shots of the last round play first; the first round also waits for the 3D to load
 const DUEL_WAIT = 30000, DUEL_FIRST = 45000, DUEL_ONLINE = 25000, DUEL_MAX_ROUNDS = 8;
 const duelLimit = round => [10000, 15000, 20000, 20000][Math.min(3, Math.floor((round - 1) / 2))], duelTurn = round => duelLimit(round) + 8000; // changes every two rounds, as the questions in duelq.js do
-const duelQ = (d, round) => duelQuestion(`${d.id}:${d.created_at}`, round);
+const duelQ = (d, round) => duelQuestion(`${d.id}:${d.created_at}`, round, d.level);
 const duelLeft = async (db, id, game, today = kstDate()) => Math.max(0, game.battlesPerDay - (await db.prepare("SELECT COUNT(*) AS n FROM duels WHERE (a=? OR b=?) AND date=?").bind(id, id, today).first()).n);
 const duelRow = (db, id) => db.prepare("SELECT * FROM duels WHERE id=?").bind(id).first();
 const duelOpenOf = (db, id) => db.prepare("SELECT * FROM duels WHERE (a=? OR b=?) AND status IN ('wait','live') ORDER BY id DESC LIMIT 1").bind(id, id).first();
@@ -539,7 +539,7 @@ on("POST", "/api/kid/duel/challenge/:id", "student", async ({ db, me, params }) 
   if (target === st.id) throw bad("나와는 대결할 수 없어요"); const t = await db.prepare("SELECT id, seen_at FROM students WHERE id=? AND class_id=? AND active=1").bind(target, st.class_id).first(); if (!t) throw bad("같은 반 친구에게만 신청할 수 있어요"); if (Date.now() - t.seen_at > DUEL_ONLINE) throw bad("친구가 지금 접속해 있지 않아요");
   if (await duelLeft(db, st.id, game) <= 0) throw bad("오늘 실시간 대결을 모두 했어요. 내일 다시 해요"); if (await duelLeft(db, target, game) <= 0) throw bad("친구가 오늘 실시간 대결을 모두 했어요");
   for (const id of [st.id, target]) { let o = await duelOpenOf(db, id); if (o) o = await duelStep(db, o); if (o && (o.status === "wait" || o.status === "live")) throw bad(id === st.id ? "이미 진행 중인 대결이 있어요" : "친구가 지금 다른 대결 중이에요"); }
-  const r = await db.prepare("INSERT INTO duels (class_id, a, b, created_at) VALUES (?,?,?,?)").bind(st.class_id, st.id, target, Date.now()).run(); return { id: r.meta.last_row_id }; });
+  const r = await db.prepare("INSERT INTO duels (class_id, a, b, level, created_at) VALUES (?,?,?,?,?)").bind(st.class_id, st.id, target, st.class_level || 0, Date.now()).run(); return { id: r.meta.last_row_id }; });
 on("POST", "/api/kid/duel/:id/answer", "student", async ({ db, me, params, body }) => { const st = me.student, game = await getGame(db); let d = await duelStep(db, await duelMine(db, st.id, Number(params.id))); if (d.b !== st.id) throw bad("받은 신청이 아니에요"); if (d.status !== "wait") throw bad("이미 끝난 신청이에요");
   if (!body.accept) { await db.prepare("UPDATE duels SET status='declined' WHERE id=? AND status='wait'").bind(d.id).run(); return { ok: true }; } duelGate(st, game);
   if (await duelLeft(db, d.a, game) <= 0 || await duelLeft(db, d.b, game) <= 0) { await db.prepare("UPDATE duels SET status='expired' WHERE id=?").bind(d.id).run(); throw bad("오늘 실시간 대결을 모두 했어요"); }
@@ -599,7 +599,7 @@ on("POST", "/api/t/photos/:id/remove", "teacher", async ({ db, params }) => { aw
 /* ----- teacher ----- */
 on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   const today = kstDate(), game = await getGame(db);
-  const classes = (await db.prepare("SELECT id, name, code, battle, days, daily_bonus FROM classes WHERE active=1 ORDER BY name").all()).results;
+  const classes = (await db.prepare("SELECT id, name, code, battle, days, daily_bonus, level FROM classes WHERE active=1 ORDER BY name").all()).results;
   const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, photo, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const bal = await balances(db, students.map(s => s.id)), pw = await powers(db, students);
   for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = lookOf(s); s.locked = s.locked_until > Date.now(); delete s.locked_until; }
@@ -655,11 +655,12 @@ on("POST", "/api/t/adjust", "teacher", async ({ db, body }) => {
 });
 on("POST", "/api/t/classes", "teacher", async ({ db, body }) => {
   let code; for (let i = 0; i < 6; i++) { code = classCode(); if (!(await db.prepare("SELECT 1 FROM classes WHERE code=?").bind(code).first())) break; }
-  await db.prepare("INSERT INTO classes (name, code, created_at) VALUES (?,?,?)").bind(str(body.name, 20), code, Date.now()).run(); return { ok: true, code };
+  await db.prepare("INSERT INTO classes (name, code, level, created_at) VALUES (?,?,?,?)").bind(str(body.name, 20), code, body.level ? 1 : 0, Date.now()).run(); return { ok: true, code };
 });
 on("POST", "/api/t/classes/:id/battle", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET battle=? WHERE id=?").bind(body.on ? 1 : 0, params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/days", "teacher", async ({ db, params, body }) => { const days = [...new Set(String(body.days || "").replace(/[^0-6]/g, ""))].sort().join(""); if (!days) throw bad("수업 요일을 하루 이상 골라 주세요"); await db.prepare("UPDATE classes SET days=? WHERE id=?").bind(days, params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/bonus", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET daily_bonus=? WHERE id=?").bind(int(body.bonus, 0, 10), params.id).run(); return { ok: true }; });
+on("POST", "/api/t/classes/:id/level", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET level=? WHERE id=?").bind(body.level ? 1 : 0, params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/delete", "teacher", async ({ db, params }) => {
   await db.batch([db.prepare("DELETE FROM sessions WHERE role='student' AND user_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE classes SET active=0 WHERE id=?").bind(params.id),
     db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE class_id=?").bind(params.id)]); return { ok: true };

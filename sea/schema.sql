@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS classes (
   battle INTEGER NOT NULL DEFAULT 1,  -- 0 = battles switched off for this class
   days TEXT NOT NULL DEFAULT '0123456', -- lesson days as weekday digits, 0 = Sunday; kids can only hand in missions on these
   daily_bonus INTEGER NOT NULL DEFAULT 0, -- extra energy on each daily mission, for classes with fewer lessons a week
+  level INTEGER NOT NULL DEFAULT 0,   -- question level: 0 = 초등 고학년, 1 = 중1
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );
@@ -177,6 +178,7 @@ CREATE TABLE IF NOT EXISTS duels (
   class_id INTEGER NOT NULL,
   a INTEGER NOT NULL,                 -- who asked
   b INTEGER NOT NULL,                 -- who was asked
+  level INTEGER NOT NULL DEFAULT 0,   -- the class's question level when the duel was asked for
   status TEXT NOT NULL DEFAULT 'wait', -- wait | live | done | declined | cancelled | expired
   date TEXT NOT NULL DEFAULT '',      -- set when the duel starts; this is what counts towards the daily limit
   round INTEGER NOT NULL DEFAULT 0,

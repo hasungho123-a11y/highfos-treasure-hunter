@@ -134,7 +134,7 @@ const fakesOf = (label, dec) => { const f = label.match(/^(\d+)\/(\d+)$/);
 // round runs from 0 to 7
 function series(round) { const made = pick(RULES[round < 2 ? 0 : round < 5 ? 1 : 2])(), labels = made.labels || made.nums.map(String);
   return { shown: labels.slice(0, 5), rule: made.rule, asks: labels.slice(5).map(real => ({ real, opts: shuffle([real, ...differentValues(fakesOf(real, made.dec), real)]) })) }; }
-const valueOf = l => { const f = l.match(/^(\d+)\/(\d+)$/); return f ? f[1] / f[2] : +l; };
+const valueOf = l => { const f = l.match(/^(−?)(\d+)\/(\d+)$/); return f ? (f[1] ? -1 : 1) * f[2] / f[3] : +l.replace("−", "-"); };
 // three wrong numbers, no two worth the same: 7/7 and 8/8 on two lamps would give the game away
 const differentValues = (fakes, real) => { const seen = [valueOf(real)], out = []; for (const x of shuffle(fakes)) { const v = valueOf(x); if (out.length < 3 && !seen.some(y => Math.abs(y - v) < 1e-9)) { seen.push(v); out.push(x); } } return out; };
 
@@ -177,7 +177,8 @@ const WEIGH = [
   ]
 ];
 // round runs from 0 to 9. Six different weights on the rack; `parts` is one way to reach the total, for showing the answer
-function weigh(map, round) { const make = WEIGH[map][round < 3 ? 0 : round < 7 ? 1 : 2];
+function weigh(map, round) { return rack(map, WEIGH[map][round < 3 ? 0 : round < 7 ? 1 : 2]); }
+function rack(map, make) {
   for (;;) { const q = make(pick(GOODS[map])); if (!q || q.T % 50 || q.T > 6000) continue;
     const off = q.avoid || [], usable = WEIGHTS.filter(g => g !== q.T && !off.includes(g)), under = usable.filter(g => g < q.T); let parts = null;
     for (let t = 0; t < 300 && !parts; t++) { const take = shuffle(under).slice(0, ri(2, 3)); if (take.length >= 2 && take.reduce((a, b) => a + b, 0) === q.T) parts = take; }
@@ -187,6 +188,115 @@ function weigh(map, round) { const make = WEIGH[map][round < 3 ? 0 : round < 7 ?
     const opts = shuffle([...parts, ...spare]).map(g => ({ g, label: weightLabel(g, map) }));
     return { ...q, opts, parts: parts.map(g => opts.find(o => o.g === g).label) }; } }
 
+/* ===== 중등반 (middle-school grade 1): negative numbers, letters, prime factors and equations. Same shapes as the questions above, so the games need no new rules.
+   A class's level comes from the server; setLevel() is called before a game starts and the elementary questions above stay exactly as they were. ===== */
+let LEVEL = 0;
+const neg = x => String(x).replace(/-/g, "−"); // the printed minus sign
+const sg = n => n < 0 ? `(${neg(n)})` : String(n); // a negative number in the middle of a sum wears brackets
+const nz = (a, b) => { let v; do { v = ri(a, b); } while (!v); return v; };
+const lin = (a, b) => `${a === 1 ? "" : a === -1 ? "−" : neg(a)}x${b > 0 ? `+${b}` : b < 0 ? `−${-b}` : ""}`;
+const SUP = { 2: "²", 3: "³", 4: "⁴", 5: "⁵", 6: "⁶" };
+const primeForm = N => { const out = []; for (const p of [2, 3, 5, 7]) { let e = 0; while (N % p === 0) { N /= p; e++; } if (e) out.push(`${p}${SUP[e] || ""}`); } return out.join("×"); };
+const signedCalc = hard => hard ? pick([
+  () => { const a = nz(-9, 9), b = nz(-6, 6), c = nz(-6, 6); return { t: `${sg(a)}+${sg(b)}×${sg(c)}`, v: a + b * c }; },
+  () => { const b = pick([-9, -8, -7, -6, -5, -4, -3, -2, 2, 3, 4, 5, 6, 7, 8, 9]), q = nz(-9, 9); return { t: `${sg(b * q)}÷${sg(b)}`, v: q }; },
+  () => { const a = ri(2, 6), inside = Math.random() < .5; return { t: inside ? `(−${a})²` : `−${a}²`, v: inside ? a * a : -(a * a) }; },
+  () => { const a = ri(2, 4); return { t: `(−${a})³`, v: -(a * a * a) }; },
+  () => { const a = ri(2, 12), b = nz(-9, 9); return { t: `|−${a}|+${sg(b)}`, v: a + b }; }
+])() : pick([
+  () => { const a = nz(-15, 15), b = nz(-15, 15); return { t: `${sg(a)}+${sg(b)}`, v: a + b }; },
+  () => { const a = nz(-15, 15), b = nz(-15, 15); return { t: `${sg(a)}−${sg(b)}`, v: a - b }; },
+  () => { const a = nz(-9, 9), b = nz(-9, 9); return { t: `${sg(a)}×${sg(b)}`, v: a * b }; }
+])();
+const FACTORED = [12, 18, 20, 24, 28, 36, 40, 45, 48, 50, 54, 56, 60, 63, 72, 75, 80, 84, 90, 96, 98, 100, 108, 120];
+const PRIMES = [11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47], NOT_PRIME = [9, 15, 21, 25, 27, 33, 35, 39, 45, 49, 51, 55, 57];
+const PAIRS_GL = [[12, 18], [18, 24], [16, 24], [20, 30], [24, 36], [15, 25], [14, 21], [18, 30], [30, 45], [28, 42], [36, 48], [24, 40]];
+const signedItem = () => { const k = ri(0, 2); if (!k) { const v = nz(-9, 9); return { label: neg(v), v }; } const [p, q] = pick(NEAT.filter(x => x[1] <= 10)), s = pick([1, -1]); return { label: k === 1 ? `${s < 0 ? "−" : ""}${p}/${q}` : neg(s * p / q), v: s * p / q }; };
+const signedItems = n => { const out = []; while (out.length < n) { const it = signedItem(); if (!out.some(o => Math.abs(Math.abs(o.v) - Math.abs(it.v)) < 1e-9)) out.push(it); } return out; };
+const ORDER_MID = {
+  value(n, hard) { const r = signedCalc(hard), seen = new Set([r.v]), out = [r.t]; let tries = 0; while (out.length < n && ++tries < 600) { const c = signedCalc(hard); if (!seen.has(c.v) && Math.abs(c.v - r.v) <= 20) { seen.add(c.v); out.push(c.t); } } return out.length === n ? { tag: "정수의 계산", ask: `값이 ${neg(r.v)}인 표적`, real: r.t, opts: out } : null; },
+  subst(n) { const x = nz(-4, 4), a = nz(-5, 5), b = ri(-9, 9), v = a * x + b, seen = new Set([v]), out = [lin(a, b)]; let tries = 0; while (out.length < n && ++tries < 400) { const c = nz(-5, 5), d = ri(-9, 9), w = c * x + d; if (!seen.has(w)) { seen.add(w); out.push(lin(c, d)); } } return out.length === n ? { tag: "문자식의 값", ask: `x=${neg(x)}일 때 값이 ${neg(v)}인 표적`, real: out[0], opts: out } : null; },
+  factor(n) { const N = pick(FACTORED), opts = distinct(String(N), () => String(pick(FACTORED)), n); return opts && { tag: "소인수분해", ask: `${primeForm(N)}인 표적`, real: String(N), opts }; },
+  prime(n) { const real = String(pick(PRIMES)), opts = distinct(real, () => String(pick(NOT_PRIME)), n); return opts && { tag: "소수", ask: "소수인 표적", real, opts }; },
+  gcd(n) { const [a, b] = pick(PAIRS_GL), G = gcd(a, b), real = String(G), opts = distinct(real, () => String(ri(2, 18)), n); return opts && { tag: "최대공약수", ask: `${a}${wa(a)} ${b}의 최대공약수인 표적`, real, opts }; },
+  lcm(n) { const [a, b] = pick(PAIRS_GL), L = a * b / gcd(a, b), real = String(L), opts = distinct(real, () => String(pick([a * b, L * 2, L * 3, L + a, L + b, L - a, L - b, a * ri(2, 6), b * ri(2, 6)])), n, x => +x !== L); return opts && { tag: "최소공배수", ask: `${a}${wa(a)} ${b}의 최소공배수인 표적`, real, opts }; },
+  smallest(n) { const its = signedItems(n), low = its.reduce((m, o) => o.v < m.v ? o : m); return { tag: "수의 크기", ask: "가장 작은 수인 표적", real: low.label, opts: its.map(o => o.label) }; },
+  biggestAbs(n) { const its = signedItems(n), top = its.reduce((m, o) => Math.abs(o.v) > Math.abs(m.v) ? o : m); return { tag: "절댓값", ask: "절댓값이 가장 큰 표적", real: top.label, opts: its.map(o => o.label) }; }
+};
+const WAYS_MID = {
+  add: v => { let a, b; do { a = nz(-9, 9); b = v - a; } while (!b); return `${sg(a)}+${sg(b)}`; },
+  sub: v => { let a, b; do { a = nz(-9, 9); b = a - v; } while (!b); return `${sg(a)}−${sg(b)}`; },
+  times: v => { if (!v) return `0×${sg(nz(-9, -2))}`; const a = pick([-1, 1].flatMap(s => divisors(Math.abs(v)).map(d => s * d))); return `${sg(a)}×${sg(v / a)}`; },
+  over: v => { const b = pick([-5, -4, -3, -2, 2, 3, 4, 5]); return `${sg(v * b)}÷${sg(b)}`; },
+  power: v => { const c = v - 4; return c ? `(−2)²+${sg(c)}` : "(−2)²"; },
+  size: v => { const a = ri(2, 9), c = v - a; return c ? `|−${a}|+${sg(c)}` : `|−${a}|`; },
+  solve: v => { const a = ri(2, 5), b = nz(-9, 9); return `${lin(a, b)} = ${neg(a * v + b)}의 해`; }
+};
+const MID = {
+  order(wave, n, noun = "표적") { const pool = wave <= 3 ? ["value", "factor", "prime"] : wave <= 7 ? ["value", "gcd", "lcm", "smallest", "subst"] : ["value", "subst", "biggestAbs", "smallest", "lcm"], hard = wave > 3;
+    for (;;) { const q = ORDER_MID[pick(pool)](n, hard); if (q && q.opts.length === n) return { tag: q.tag, ask: q.ask.replace(/표적$/, noun), real: q.real, opts: shuffle(q.opts) }; } },
+  pairs() { const kinds = {
+      power: () => { const p = pick([[2, 3], [2, 4], [2, 5], [3, 2], [3, 3], [5, 2], [4, 2], [7, 2]]), v = p[0] ** p[1]; return Math.random() < .3 && p[1] === 2 ? [`(−${p[0]})²`, String(v), `i${v}`] : [`${p[0]}${SUP[p[1]]}`, String(v), `i${v}`]; },
+      signed: () => { const c = signedCalc(true); return [c.t, neg(c.v), `i${c.v}`]; },
+      fracDec: () => { const [n, d] = pick(NEAT.filter(x => x[1] <= 10)); return [`−${n}/${d}`, neg(-n / d), `f${n}/${d}`]; },
+      like: () => { const a = ri(2, 6), b = ri(1, 6), plus = Math.random() < .5 || a === b, s = plus ? a + b : a - b; return [plus ? `${a}x+${b === 1 ? "" : b}x` : `${a}x−${b === 1 ? "" : b}x`, lin(s, 0), `L${s},0`]; },
+      dist: () => { const a = ri(2, 5), b = nz(-6, 6); return [`${a}(${lin(1, b)})`, lin(a, a * b), `L${a},${a * b}`]; },
+      mix: () => { const a = ri(3, 7), b = nz(-6, 6), c = ri(1, a - 1); return [`${lin(a, b)}−${c === 1 ? "" : c}x`, lin(a - c, b), `L${a - c},${b}`]; }
+    }, seen = new Set(), out = [];
+    for (const kind of Object.keys(kinds)) { let p; do { p = kinds[kind](); } while (seen.has(p[2]) || p[0] === p[1]); seen.add(p[2]); out.push({ a: p[0], b: p[1], key: p[2] }); }
+    return out; },
+  // a 7-by-7 sea with -3 to 3 on both axes; x and y stay column and row numbers from 1, as the game counts them
+  grid(wave) { const vx = ri(-3, 3), vy = ri(-3, 3), x = vx + 4, y = vy + 4, way = () => WAYS_MID[wave <= 3 ? pick(["add", "sub"]) : wave <= 6 ? pick(["times", "over", "power", "size"]) : pick(["solve", "times", "power", "size"])]; let wind = 0; if (wave >= 7) do { wind = pick([-2, -1, 1, 2]); } while (x - wind < 1 || x - wind > 7);
+    return { x, y, wind, xText: way()(vx), yText: way()(vy) }; },
+  cipher(level) { const side = (m, s, k) => { const out = []; if (m === 1) out.push(s); else out.push(m, s); if (k > 0) out.push("+", k); else if (k < 0) out.push("−", -k); return out; }, one = a => pick([
+      () => { const m = ri(2, 6), k = nz(-9, 9); return [...side(m, "a", k), "=", neg(m * a + k)]; },
+      () => { const m = ri(2, 4), k = nz(-5, 9); return [m, "(", ...side(1, "a", k), ")", "=", neg(m * (a + k))]; },
+      () => { const m = ri(3, 6), n = ri(1, m - 1), k = nz(-9, 9), l = (m - n) * a + k; return [...side(m, "a", k), "=", ...side(n, "a", l)]; }
+    ])();
+    if (level === 0) { const a = ri(1, 9), m = ri(2, 6), k = nz(-9, 9); return { clues: [[...side(m, "a", k), "=", neg(m * a + k)]], ask: "a", answer: a }; }
+    if (level === 1) { const a = ri(1, 9); return { clues: [one(a)], ask: "a", answer: a }; }
+    let a, b; do { a = ri(1, 9); b = ri(1, 9); } while (a === b); const p = ri(2, 4); return { clues: [one(a), [p, "b", "−", "a", "=", neg(p * b - a)]], ask: "b", answer: b }; },
+  series(round) { const tiers = [
+      [() => { const d = ri(3, 9); return { nums: build(d * ri(1, 3) + ri(1, d - 1), x => x - d), rule: `${d}씩 작아져요` }; },
+       () => { const d = ri(3, 9); return { nums: build(ri(1, d - 1) - d * ri(2, 4), x => x + d), rule: `${d}씩 커져요` }; }],
+      [() => ({ nums: build(ri(1, 3), x => x * -2), rule: "−2배씩 변해요" }),
+       () => ({ nums: build(1, x => x * -3), rule: "−3배씩 변해요" }),
+       () => { const inc = ri(1, 3); let gap = ri(5, 8) + inc; return { nums: build(ri(-5, 9), x => { gap -= inc; return x + gap; }), rule: `늘어나는 수가 ${inc}씩 작아져요` }; },
+       () => { const dn = ri(5, 9), up = ri(1, dn - 2); return { nums: build(ri(1, 6), (x, all) => all.length % 2 ? x - dn : x + up), rule: `${dn} 빼기와 ${up} 더하기를 번갈아 해요` }; }],
+      [() => { const d = pick([3, 5, 7]), a = d * ri(1, 2) + ri(1, d - 1); return { labels: Array.from({ length: 8 }, (_, i) => neg(tenth(a - d * i))), dec: true, rule: `${tenth(d)}씩 작아져요` }; },
+       () => { const D = pick([8, 10]), a = pick([3, 5, 7]); return { labels: Array.from({ length: 8 }, (_, i) => { const m = a - 2 * i; return `${m < 0 ? "−" : ""}${Math.abs(m)}/${D}`; }), rule: "분모는 그대로, 분자가 2씩 작아져요" }; },
+       () => ({ nums: build(ri(1, 2) + 1, x => x * 2 - 3).map(x => x), rule: "2배 하고 3을 빼요" }),
+       () => ({ nums: build(pick([1, 2]), x => x * -2 + 1), rule: "−2배 하고 1을 더해요" })]
+    ], made = pick(tiers[round < 2 ? 0 : round < 5 ? 1 : 2])(), labels = made.labels || made.nums.map(neg);
+    const fakes = label => { const f = label.match(/^(−?)(\d+)\/(\d+)$/); if (f) { const m = (f[1] ? -1 : 1) * f[2], d = +f[3]; return [2, -2, 4, -4, 1, -1, -2 * m].map(k => m + k).filter(Boolean).map(x => `${x < 0 ? "−" : ""}${Math.abs(x)}/${d}`); }
+      const n = +label.replace("−", "-"); if (made.dec) { const v = Math.round(n * 10); return [1, 2, 3, 5, 10, -1, -2, -3, -5, -2 * v].map(k => neg(tenth(v + k))); } return [1, 2, 3, 5, 10, -1, -2, -3, -5, -10, -2 * n].map(k => neg(n + k)); };
+    return { shown: labels.slice(0, 5), rule: made.rule, asks: labels.slice(5).map(real => ({ real, opts: shuffle([real, ...differentValues(fakes(real), real)]) })) }; },
+  speed(wave) { const level = wave <= 3 ? 0 : wave <= 6 ? 1 : 2;
+    for (;;) { const S = pick([10, 20, 30, 40, 50, 60]), k = ri(2, 6), D = S * k, T = ri(2, 6), v = D / T; if (v % 5 || v > 80) continue; const kmh = v * 18 / 5;
+      if (level === 2) { const u = v + pick([10, 20, 30, 40]), more = (u - v) * T; return { shipText: `적함: 1초에 ${v}m 가요`, torpText: `어뢰: 1초에 ${u}m, 적함보다 ${more}m 더 가요`, S, k, D, why: `${u}x−${v}x=${more}에서 x=${T}, ${v}×${T}=${D}` }; }
+      if (level === 1) { const u = pick([10, 20, 25, 40, 50]); return { shipText: `적함: 시속 ${kmh}km로 가요`, torpText: `어뢰: 1초에 ${u}m, 만나는 곳까지 ${u * T}m`, S, k, D, why: `시속 ${kmh}km는 1초에 ${v}m, ${u * T}÷${u}=${T}, ${v}×${T}=${D}` }; }
+      return { shipText: `적함: 시속 ${kmh}km로 가요`, torpText: `어뢰: ${T}초 뒤에 도착해요`, S, k, D, why: `시속 ${kmh}km는 1초에 ${v}m, ${v}×${T}=${D}` }; } },
+  weigh(map, round) { const n = g => g / 1000, plain = [
+      it => { const T = ri(8, 45) * 100, b = ri(2, 20) * 100; return { tag: "일차방정식", T, load: `${it} xkg: x+${n(b)} = ${n(T + b)}`, why: `x = ${n(T + b)}−${n(b)} = ${n(T)}` }; },
+      it => { const T = ri(8, 45) * 100, b = ri(2, 7) * 100; return T > b ? { tag: "일차방정식", T, load: `${it} xkg: x−${n(b)} = ${n(T - b)}`, why: `x = ${n(T - b)}+${n(b)} = ${n(T)}` } : null; },
+      it => { const T = ri(4, 18) * 100, a = ri(2, 6); return { tag: "일차방정식", T, load: `${it} xkg: ${a}x = ${n(a * T)}`, why: `x = ${n(a * T)}÷${a} = ${n(T)}` }; }
+    ], twoStep = [
+      it => { const T = ri(4, 18) * 100, a = ri(2, 5), b = ri(2, 12) * 100; return { tag: "일차방정식", T, load: `${it} xkg: ${a}x+${n(b)} = ${n(a * T + b)}`, why: `${a}x = ${n(a * T)}, x = ${n(T)}` }; },
+      it => { const T = ri(4, 18) * 100, a = ri(2, 5), b = ri(2, 6) * 100; return a * T > b ? { tag: "일차방정식", T, load: `${it} xkg: ${a}x−${n(b)} = ${n(a * T - b)}`, why: `${a}x = ${n(a * T)}, x = ${n(T)}` } : null; }
+    ], twoStepHard = [
+      it => { const T = ri(10, 50) * 100, [p, q] = pick([[1, 2], [1, 4], [3, 4], [2, 5], [3, 5]]), part = T * p / q; return part % 100 ? null : { tag: "분수가 있는 방정식", T, load: `${it} xkg: ${p}/${q}x = ${n(part)}`, why: `x = ${n(part)}÷${p}×${q} = ${n(T)}` }; },
+      it => { const T = ri(4, 18) * 100, a = ri(2, 4), b = ri(2, 8) * 100; return { tag: "일차방정식", T, load: `${it} xkg: ${a}(x+${n(b)}) = ${n(a * (T + b))}`, why: `x+${n(b)} = ${n(T + b)}, x = ${n(T)}` }; }
+    ], words = [
+      it => { const T = ri(4, 18) * 100, m = ri(3, 6), k = ri(1, m - 1); return { tag: "방정식의 활용", T, load: `같은 ${it} ${m}개는 ${k}개보다 ${KG((m - k) * T)} 무거워요. 1개 무게`, why: `${m}x = ${k}x+${n((m - k) * T)}, x = ${n(T)}` }; },
+      it => { const T = ri(5, 25) * 100, d = ri(1, 12) * 100; return { tag: "방정식의 활용", T, load: `${it} 2개의 합이 ${KG(2 * T + d)}이고 한쪽이 ${KG(d)} 더 무거워요. 가벼운 쪽`, why: `x+(x+${n(d)}) = ${n(2 * T + d)}, x = ${n(T)}` }; }
+    ], wordsHard = [
+      it => { const T = ri(5, 15) * 100, d = ri(1, 6) * 100; return { tag: "방정식의 활용", T, load: `${it} 3개가 차례로 ${KG(d)}씩 무겁고 합이 ${KG(3 * T + 3 * d)}이에요. 가장 가벼운 것`, why: `x+(x+${n(d)})+(x+${n(2 * d)}) = ${n(3 * T + 3 * d)}, x = ${n(T)}` }; }
+    ], stage = round < 3 ? plain : round < 7 ? (map ? [...twoStep, ...twoStepHard] : twoStep) : (map === 2 ? [...words, ...wordsHard] : words);
+    return rack(map, it => pick(stage)(it)); }
+};
+const HOLD = { pairs, order, cipher, grid, series, speed, weigh };
+const either = name => (...a) => (LEVEL ? MID : HOLD)[name](...a);
 const html = label => String(label).replace(/(\d+)\/(\d+)/g, '<span class="frac"><i>$1</i><i>$2</i></span>');
-window.MathQ = { pairs, order, cipher, grid, series, speed, weigh, html, shuffle };
+window.MathQ = { pairs: either("pairs"), order: either("order"), cipher: either("cipher"), grid: either("grid"), series: either("series"), speed: either("speed"), weigh: either("weigh"), html, shuffle,
+  setLevel: n => { LEVEL = n ? 1 : 0; }, level: () => LEVEL, gridSize: () => LEVEL ? 7 : 6, gridLabel: i => LEVEL ? neg(i - 4) : String(i) };
 })();
