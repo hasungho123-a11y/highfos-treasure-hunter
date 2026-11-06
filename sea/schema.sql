@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS classes (
   code TEXT NOT NULL UNIQUE,
   battle INTEGER NOT NULL DEFAULT 1,  -- 0 = battles switched off for this class
   days TEXT NOT NULL DEFAULT '0123456', -- lesson days as weekday digits, 0 = Sunday; daily missions only open on these
+  daily_bonus INTEGER NOT NULL DEFAULT 0, -- extra energy on each daily mission, for classes with fewer lessons a week
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );

@@ -148,7 +148,7 @@ async function auth(req, db) {
   const s = await db.prepare("SELECT * FROM sessions WHERE token=? AND expires_at>?").bind(t, Date.now()).first();
   if (!s) return null;
   if (s.role === "student") {
-    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.battle AS class_battle, c.days AS class_days FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
+    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.battle AS class_battle, c.days AS class_days, c.daily_bonus AS class_bonus FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
     return st ? { role: "student", token: t, student: st } : null;
   }
   const te = await db.prepare("SELECT id, username FROM teachers WHERE id=?").bind(s.user_id).first();
@@ -235,11 +235,13 @@ async function titlesFor(db, sid, owned) {
 }
 // energy from homework, stopping at the cap
 async function giveEnergy(db, game, pairs) {
-  const bal = await balances(db, [...new Set(pairs.map(p => p.sid))]), ops = [], skipped = [];
+  const who = [...new Set(pairs.map(p => p.sid))], bal = await balances(db, who), ops = [], skipped = [], bonus = {};
+  // a class with fewer lessons a week can earn more from each daily mission
+  for (let i = 0; i < who.length; i += 80) { const part = who.slice(i, i + 80); for (const r of (await db.prepare(`SELECT s.id, c.daily_bonus FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id IN (${part.map(() => "?").join(",")})`).bind(...part).all()).results) bonus[r.id] = r.daily_bonus; }
   for (const p of pairs) {
     const why = await questBlocked(db, p.sid, p.quest);
     if (why) { p.blocked = true; skipped.push({ studentId: p.sid, why }); if (p.requestId) ops.push(db.prepare("UPDATE requests SET status='rejected', decided_at=? WHERE id=?").bind(Date.now(), p.requestId)); continue; }
-    const give = Math.max(0, Math.min(p.quest.energy, game.energyMax - bal[p.sid].energy)); bal[p.sid].energy += give;
+    const give = Math.max(0, Math.min(p.quest.energy + (p.quest.kind === "daily" ? bonus[p.sid] || 0 : 0), game.energyMax - bal[p.sid].energy)); bal[p.sid].energy += give;
     ops.push(logStmt(db, { student_id: p.sid, kind: "quest", title: p.quest.title, quest_id: p.quest.id, energy: give }));
     ops.push(db.prepare("UPDATE requests SET status='approved', decided_at=? WHERE student_id=? AND quest_id=? AND status='pending'").bind(Date.now(), p.sid, p.quest.id));
   }
@@ -335,7 +337,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const done = (await db.prepare("SELECT quest_id, date FROM logs WHERE student_id=? AND kind='quest' AND date>=?").bind(st.id, ws).all()).results;
   const pend = (await db.prepare("SELECT id, quest_id FROM requests WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
   for (const q of quests) { const d = done.some(r => r.quest_id === q.id && (q.kind === "weekly" || (q.kind === "daily" && r.date === today))), p = pend.find(r => r.quest_id === q.id);
-    q.status = q.kind !== "challenge" && d ? "done" : p ? "pending" : q.kind === "daily" && !isClassDay(st.class_days) ? "off" : "open"; q.requestId = p ? p.id : null; }
+    q.status = q.kind !== "challenge" && d ? "done" : p ? "pending" : q.kind === "daily" && !isClassDay(st.class_days) ? "off" : "open"; if (q.kind === "daily") q.energy += st.class_bonus || 0; q.requestId = p ? p.id : null; }
   const owned = (await db.prepare("SELECT item FROM owned WHERE student_id=?").bind(st.id).all()).results.map(r => r.item);
   const log = (await db.prepare("SELECT title, energy, points, gold, at FROM logs WHERE student_id=? ORDER BY id DESC LIMIT 30").bind(st.id).all()).results;
   const boxUsed = !!(await db.prepare("SELECT 1 FROM logs WHERE student_id=? AND kind='box' AND date LIKE ? LIMIT 1").bind(st.id, `${month}%`).first());
@@ -596,12 +598,12 @@ on("POST", "/api/t/photos/:id/remove", "teacher", async ({ db, params }) => { aw
 /* ----- teacher ----- */
 on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   const today = kstDate(), game = await getGame(db);
-  const classes = (await db.prepare("SELECT id, name, code, battle, days FROM classes WHERE active=1 ORDER BY name").all()).results;
+  const classes = (await db.prepare("SELECT id, name, code, battle, days, daily_bonus FROM classes WHERE active=1 ORDER BY name").all()).results;
   const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, photo, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const bal = await balances(db, students.map(s => s.id)), pw = await powers(db, students);
   for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = lookOf(s); s.locked = s.locked_until > Date.now(); delete s.locked_until; }
   const quests = (await db.prepare("SELECT id, title, subject, kind, energy, active FROM quests WHERE deleted=0 ORDER BY active DESC, subject, kind, id").all()).results;
-  const requests = (await db.prepare(`SELECT r.id, r.student_id, r.quest_id, r.created_at, q.title, q.energy, q.subject FROM requests r JOIN quests q ON q.id=r.quest_id JOIN students s ON s.id=r.student_id WHERE r.status='pending' AND s.active=1 ORDER BY r.id`).all()).results;
+  const requests = (await db.prepare(`SELECT r.id, r.student_id, r.quest_id, r.created_at, q.title, q.energy + CASE WHEN q.kind='daily' THEN c.daily_bonus ELSE 0 END AS energy, q.subject FROM requests r JOIN quests q ON q.id=r.quest_id JOIN students s ON s.id=r.student_id JOIN classes c ON c.id=s.class_id WHERE r.status='pending' AND s.active=1 ORDER BY r.id`).all()).results;
   const orders = (await db.prepare("SELECT o.id, o.student_id, o.name, o.cost, o.created_at FROM orders o JOIN students s ON s.id=o.student_id WHERE o.status='pending' AND s.active=1 ORDER BY o.id").all()).results;
   const logs = (await db.prepare("SELECT id, student_id, kind, title, energy, points, gold, at FROM logs WHERE date=? ORDER BY id DESC LIMIT 80").bind(today).all()).results;
   const battles = (await db.prepare("SELECT b.id, b.winner, b.attacker, b.delta, b.at, a.nickname AS a_name, d.nickname AS d_name FROM battles b JOIN students a ON a.id=b.attacker JOIN students d ON d.id=b.defender WHERE b.date=? ORDER BY b.id DESC LIMIT 60").bind(today).all()).results;
@@ -656,6 +658,7 @@ on("POST", "/api/t/classes", "teacher", async ({ db, body }) => {
 });
 on("POST", "/api/t/classes/:id/battle", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET battle=? WHERE id=?").bind(body.on ? 1 : 0, params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/days", "teacher", async ({ db, params, body }) => { const days = [...new Set(String(body.days || "").replace(/[^0-6]/g, ""))].sort().join(""); if (!days) throw bad("수업 요일을 하루 이상 골라 주세요"); await db.prepare("UPDATE classes SET days=? WHERE id=?").bind(days, params.id).run(); return { ok: true }; });
+on("POST", "/api/t/classes/:id/bonus", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET daily_bonus=? WHERE id=?").bind(int(body.bonus, 0, 10), params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/delete", "teacher", async ({ db, params }) => {
   await db.batch([db.prepare("DELETE FROM sessions WHERE role='student' AND user_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE classes SET active=0 WHERE id=?").bind(params.id),
     db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE class_id=?").bind(params.id)]); return { ok: true };
