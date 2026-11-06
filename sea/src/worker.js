@@ -21,7 +21,8 @@ const BOSS_QUEST_DMG = 10, BOSS_STAR_DMG = 2, BOSS_TEACHER_DMG = 20, BOSS_IDLE_S
 const GAMES = {
   cannon: { name: "포격 섬", stars: [3, 6, 9], max: 10, minMs: 4000 },
   reef: { name: "암초 해협", stars: [10, 25, 45], max: 400, minMs: 3000 },
-  memory: { name: "보물 동굴", stars: [6, 14, 18], max: 24, minMs: 4000 }
+  memory: { name: "보물 동굴", stars: [6, 14, 18], max: 24, minMs: 4000 },
+  port: { name: "포구 마을", stars: [6, 12, 18], max: 20, minMs: 4000 } // keyed "port" so each sea's port name already serves as the game's title
 };
 const STAR_POINTS = [10, 20, 40, 60], STAR_DROP = [0, 3, 6, 10]; // by stars: points, and % chance of an item
 const DROP_GOLD = { 보통: 40, 희귀: 100, 전설: 240 }; // paid instead when the item is already owned

@@ -355,7 +355,7 @@ function kMap() {
     </svg>${worldShip(me)}</div>
     ${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}`;
 }
-const isleSub = k => ({ port: "배를 사고 면제권을 받는 곳", cannon: ["식을 풀어 안개 속 적함이 있는 칸 쏘기", "빠르기와 시간으로 쏠 거리 계산하기", "조건에 맞는 표적을 계산해 격추하기"][K.map], reef: ["문제를 풀어 정답 통로로 암초 지나기", "안개 속 정답 통로로 빙산 지나기", "기뢰를 피해 정답 통로로 지나기"][K.map], memory: ["값이 같은 카드끼리 짝 맞추기", "수열의 규칙을 찾아 다음 수 누르기", "식을 풀어 기호의 값 알아내기"][K.map], battle: "친구 배와 겨뤄 금화 얻기" })[k];
+const isleSub = k => ({ port: "저울로 짐 무게를 맞추고, 배와 면제권도 챙기는 곳", cannon: ["식을 풀어 안개 속 적함이 있는 칸 쏘기", "빠르기와 시간으로 쏠 거리 계산하기", "조건에 맞는 표적을 계산해 격추하기"][K.map], reef: ["문제를 풀어 정답 통로로 암초 지나기", "안개 속 정답 통로로 빙산 지나기", "기뢰를 피해 정답 통로로 지나기"][K.map], memory: ["값이 같은 카드끼리 짝 맞추기", "수열의 규칙을 찾아 다음 수 누르기", "식을 풀어 기호의 값 알아내기"][K.map], battle: "친구 배와 겨뤄 금화 얻기" })[k];
 // little pictures standing on each island
 const ART = {
   port: (x, y) => `<rect x="${x - 34}" y="${y - 26}" width="26" height="22" fill="#F3E6C8"/><path d="M${x - 38} ${y - 26} L${x - 21} ${y - 42} L${x - 4} ${y - 26} Z" fill="#C2503A"/><rect x="${x + 6}" y="${y - 20}" width="22" height="18" fill="#F3E6C8"/><path d="M${x + 2} ${y - 20} L${x + 17} ${y - 34} L${x + 32} ${y - 20} Z" fill="#1F6F8B"/>`,
@@ -384,8 +384,11 @@ function kIsle() {
     return `<section class="panel" id="islePanel">${head}<p class="small muted">${isleSub(k)}. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배예요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
       <div class="row small muted"><span>별 1개 ${g.stars[0]}점</span><span>· 별 2개 ${g.stars[1]}점</span><span>· 별 3개 ${g.stars[2]}점</span></div>
       <div class="row"><button class="btn primary lg" data-act="kplay" data-v="${s.game}" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button><button class="btn" data-act="khow" data-v="${s.game}">게임 방법</button></div></section>`; }
-  if (k === "port") { const p = d.pass, canPass = !p.bought && d.bal.points >= d.game.passCost;
+  if (k === "port") { const p = d.pass, canPass = !p.bought && d.bal.points >= d.game.passCost, pg = d.games.port, can = d.bal.energy >= d.game.playCost;
     return `<section class="panel" id="islePanel">${head}
+      <div class="port-game"><b>${["항구 저울", "석탄 저울", "보급 저울"][K.map]}</b><p class="small muted">짐 무게를 구해 추로 저울을 맞춰요. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배예요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
+        <div class="row small muted"><span>별 1개 ${pg.stars[0]}점</span><span>· 별 2개 ${pg.stars[1]}점</span><span>· 별 3개 ${pg.stars[2]}점</span></div>
+        <div class="row"><button class="btn primary lg" data-act="kplay" data-v="port" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button><button class="btn" data-act="khow" data-v="port">게임 방법</button></div></div>
       <div class="portrow"><div><b>숙제 면제권</b><p class="small muted">포인트로 한 달에 한 번 살 수 있어요. 산 뒤 선생님이 챙겨 줘요.</p></div>
         ${K.confirm === "pass" ? `<span class="row"><button class="btn sm primary" data-act="kpass">${d.game.passCost}P로 사기</button><button class="btn sm" data-act="kno">취소</button></span>`
         : p.bought ? `<span class="pill ok">이번 달에 받았어요</span>` : `<button class="btn sm ${canPass ? "primary" : ""}" data-act="kpassAsk" ${canPass ? "" : "disabled"}>${canPass ? `${pts(d.game.passCost)} 사기` : `${d.game.passCost - d.bal.points}P 모자라요`}</button>`}</div>
@@ -526,7 +529,7 @@ const TARGETS = ["galleon", "ironclad", "destroyer"];
 const loadImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
 async function gameArt(kind) {
   const me = K.d.me, art = { sea: await loadImg(`/maps/sea${K.map + 1}.webp`) };
-  if (kind === "memory" || !window.Ship3D?.available()) return art;
+  if (kind === "memory" || kind === "port" || !window.Ship3D?.available()) return art;
   try { const v = await Ship3D.get(), s = sail(me.sail);
     if (kind === "reef") art.me = await loadImg((await v.snapshot(me.look, s, me.look.fc != null ? sail(me.look.fc) : s, me.ship, 384, { th: Math.PI, ph: .62 })).url);
     if (kind === "cannon") art.target = await loadImg((await v.snapshot({ hull: "ebony" }, "#8E2A22", "#23262B", TARGETS[K.map], 384, { th: Math.PI / 2, ph: 1.12 })).url);

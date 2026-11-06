@@ -309,6 +309,53 @@ function codebreak({ map, title }) {
     next(); hud();
   });
 }
+/* 포구의 저울: the load's weight has to be worked out from its label, then weights go on the other pan until a weighing balances. The scale is locked until 달아 보기, so it can't be solved by watching it tip.
+   10 loads: 2 points first time, 1 point on the second try, up to 20. Three minutes. */
+const SCALE_LOAD = [
+  `<path d="M-26 70c-6-14-3-30 9-40-3-5-2-9 2-11 5 2 9 3 15 3s10-1 15-3c4 2 5 6 2 11 12 10 15 26 9 40z" fill="#C9AE7C"/><path d="M-11 22c7 3 15 3 22 0l1 5c-8 3-16 3-24 0z" fill="#7B5A2E"/><path d="M4 28c13 8 19 24 14 42h8c6-14 3-30-9-40z" fill="#9A7F50"/>`,
+  `<path d="M-25 34h50l-6 36h-38z" fill="#3B3F46"/><path d="M-25 34h50l-1 6h-48z" fill="#5C626B"/><path d="M-22 52h44l-1 5h-42z" fill="#2A2D32"/><path d="M-22 34l6-8 7 3 7-7 8 5 7-3 8 10z" fill="#17181B"/><path d="M-25 34c0-22 50-22 50 0" fill="none" stroke="#7D838C" stroke-width="2.500"/>`,
+  `<rect x="-27" y="28" width="54" height="42" rx="3" fill="#59663F"/><path d="M-27 40h54M-27 58h54" stroke="#3D472B" stroke-width="2"/><path d="M-27 28h54v6h-54z" fill="#6E7D4F"/><path d="M-13 49h26M13 49l-7-5M13 49l-7 5" fill="none" stroke="#E7E0C2" stroke-width="2.500"/><rect x="-22" y="23" width="9" height="6" fill="#3D472B"/><rect x="13" y="23" width="9" height="6" fill="#3D472B"/>`
+];
+const panSVG = (cls, inner) => `<g class="w-pan ${cls}"><path d="M0 0-38 70M0 0 38 70" stroke="#6D5222" stroke-width="1.600" stroke-dasharray="3 2"/><circle r="3.500" fill="#E8C76A" stroke="#6D5222"/>${inner}<path d="M-46 70h92c-4 12-22 16-46 16s-42-4-46-16z" fill="url(#wBrass)" stroke="#5E4520"/><path d="M-46 70h92" stroke="#FFF0B8" stroke-width="1.500"/></g>`;
+function scales({ map, title }) {
+  return new Promise(done => {
+    const s = shell(title, "무게를 구해서 오른쪽 접시에 추를 올려요."), ROUNDS = 10, TOTAL = 180, PIVOT = [160, 30], ARM = 112;
+    s.el.classList.add("g-mem", "era-" + map); s.stage.style.setProperty("--pic", "url(/maps/sea" + (map + 1) + ".webp)");
+    s.stage.innerHTML = `<div class="weigh"><div class="weigh-tag num" aria-live="polite"></div><i class="code-time"><i></i></i>
+      <svg class="weigh-scale" viewBox="0 0 320 196" role="img" aria-label="왼쪽 접시에 짐, 오른쪽 접시에 추가 올라가는 저울"><defs><linearGradient id="wBrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4DC92"/><stop offset=".55" stop-color="#BE8F36"/><stop offset="1" stop-color="#7C5718"/></linearGradient><linearGradient id="wPost" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8A6520"/><stop offset=".4" stop-color="#F0D484"/><stop offset="1" stop-color="#7C5718"/></linearGradient></defs>
+        <path d="M84 196c2-10 10-14 22-14h108c12 0 20 4 22 14z" fill="#4B2E18"/><path d="M84 196c2-10 10-14 22-14h108c12 0 20 4 22 14" fill="none" stroke="#7E5230" stroke-width="2"/><path d="M155 32h10l3 142c6 2 12 5 14 9h-44c2-4 8-7 14-9z" fill="url(#wPost)" stroke="#5E4520"/>
+        ${panSVG("left", SCALE_LOAD[map])}${panSVG("right", '<g class="w-stack"></g>')}
+        <g class="w-beam"><path d="M46 30c30-7 80-9 114-9s84 2 114 9c-34 3-80 6-114 6s-80-3-114-6z" fill="url(#wBrass)" stroke="#5E4520"/><path d="M157 30l3 34 3-34z" fill="#3A2A10"/><circle cx="48" cy="30" r="4" fill="#E8C76A" stroke="#5E4520"/><circle cx="272" cy="30" r="4" fill="#E8C76A" stroke="#5E4520"/></g><circle cx="160" cy="30" r="9" fill="url(#wBrass)" stroke="#5E4520"/><circle cx="160" cy="30" r="3" fill="#5E4520"/></svg>
+      <p class="sig-say weigh-say" aria-live="polite"></p><div class="weigh-rack"></div><button type="button" class="weigh-go" disabled>달아 보기</button></div>`;
+    const $ = q => s.stage.querySelector(q), tag = $(".weigh-tag"), bar = $(".code-time i"), say = $(".weigh-say"), rack = $(".weigh-rack"), go = $(".weigh-go"), beam = $(".w-beam"), panL = $(".w-pan.left"), panR = $(".w-pan.right"), stack = $(".w-stack"), scaleEl = $(".weigh-scale");
+    let round = 0, score = 0, cur = null, tries = 0, left = TOTAL, lock = true, over = false, lastT = performance.now(), on = [], angle = 0, target = 0, vel = 0, raf = 0;
+    const pose = () => { const r = angle * Math.PI / 180, c = Math.cos(r) * ARM, h = Math.sin(r) * ARM; beam.setAttribute("transform", `rotate(${angle.toFixed(2)} ${PIVOT[0]} ${PIVOT[1]})`); panL.setAttribute("transform", `translate(${(PIVOT[0] - c).toFixed(1)} ${(PIVOT[1] - h).toFixed(1)})`); panR.setAttribute("transform", `translate(${(PIVOT[0] + c).toFixed(1)} ${(PIVOT[1] + h).toFixed(1)})`); };
+    const swing = () => { cancelAnimationFrame(raf); const step = () => { if (over) return; vel = (vel + (target - angle) * .07) * .86; angle += vel; pose(); if (Math.abs(target - angle) > .03 || Math.abs(vel) > .03) raf = requestAnimationFrame(step); else { angle = target; pose(); } }; raf = requestAnimationFrame(step); };
+    const tipTo = a => { target = a; swing(); };
+    const drawStack = () => { let y = 70; stack.innerHTML = on.map(o => { const w = 14 + Math.sqrt(o.g) / 2, h = 6 + Math.sqrt(o.g) / 7; y -= h + 1; return `<rect x="${(-w / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="url(#wBrass)" stroke="#5E4520"/>`; }).join("") + (on.length ? `<circle cy="${(y - 3).toFixed(1)}" r="3" fill="#E8C76A" stroke="#5E4520"/>` : ""); };
+    const hud = () => s.hud.textContent = `점수 ${score} · ${Math.min(round + 1, ROUNDS)}/${ROUNDS} · ${Math.ceil(left)}초`;
+    const end = v => { if (over) return; over = true; clearInterval(tm); cancelAnimationFrame(raf); s.el.remove(); done(v); };
+    const tm = setInterval(() => { const n = performance.now(); left -= (n - lastT) / 1000; lastT = n; bar.style.width = Math.max(0, left / TOTAL * 100) + "%"; hud(); if (left <= 0) end(score); }, 100);
+    s.quit.onclick = () => end(null);
+    const next = () => { cur = MathQ.weigh(map, round); tries = 0; on = []; lock = false; scaleEl.classList.remove("level"); target = 0; swing(); drawStack(); go.disabled = true;
+      tag.innerHTML = `<small>왼쪽 접시의 짐</small><b>${MathQ.html(cur.load)}</b>`; tag.classList.remove("new"); void tag.offsetWidth; tag.classList.add("new");
+      rack.innerHTML = cur.opts.map((o, i) => `<button type="button" class="weigh-w num" data-i="${i}" aria-pressed="false" aria-label="${o.label} 추">${MathQ.html(o.label)}</button>`).join("");
+      say.textContent = round === 3 || round === 7 ? "짐 문제가 더 어려워져요!" : "추를 누르면 접시에 올라가요"; hud(); };
+    const after = async ms => { lock = true; await wait(ms); if (over) return; round++; if (round >= ROUNDS) return end(score); next(); };
+    s.stage.addEventListener("click", e => { if (lock || over) return;
+      const w = e.target.closest(".weigh-w");
+      if (w) { const o = cur.opts[+w.dataset.i], at = on.indexOf(o); if (at < 0) on.push(o); else on.splice(at, 1); w.classList.toggle("on", at < 0); w.setAttribute("aria-pressed", at < 0); window.Sfx?.tick?.(); drawStack(); target = 0; swing(); go.disabled = !on.length; return; }
+      if (!e.target.closest(".weigh-go") || !on.length) return;
+      const got = on.reduce((a, o) => a + o.g, 0), diff = got - cur.T, answer = `${MathQ.html(cur.parts.join(" + "))}`;
+      if (!diff) { score += tries ? 1 : 2; hud(); Sfx.match(); vel = 1.6; scaleEl.classList.add("level"); swing(); say.innerHTML = `수평이에요! 짐은 ${(cur.T / 1000)}kg`; return after(1300); }
+      tipTo(Math.sign(diff) * Math.min(13, 5 + Math.abs(diff) / cur.T * 16)); Sfx.wrong();
+      if (!tries) note(cur.tag, [cur.load], `${cur.T / 1000}kg = ${cur.parts.join(" + ")}`, cur.why);
+      tries++;
+      if (tries < 2) { say.textContent = diff > 0 ? "추가 더 무거워요. 한 번 더 맞춰 봐요" : "짐이 더 무거워요. 한 번 더 맞춰 봐요"; return; }
+      say.innerHTML = `정답 ${cur.T / 1000}kg · ${answer}`; after(3000); });
+    pose(); next();
+  });
+}
 // every sea plays its own game on each island; the score scale of each island stays the same, so the server's stars and rewards still fit
 /* ---------- how each game works: a small drawing, three steps, and the line repeated over the countdown ---------- */
 const WATER = `<rect width="240" height="110" rx="10" fill="#2F7FB0"/><path d="M0 34q20-6 40 0t40 0 40 0 40 0 40 0 40 0M0 74q20-6 40 0t40 0 40 0 40 0 40 0 40 0" fill="none" stroke="#fff" stroke-opacity=".2" stroke-width="2"/>`;
@@ -318,7 +365,15 @@ const rock = (x, y) => `<path d="M${x - 16} ${y + 9}l7-17 8 5 7-10 10 22z" fill=
 const label = (x, y, t, c = "#fff") => `<text x="${x}" y="${y}" fill="${c}" font-size="11" font-weight="700" text-anchor="middle">${t}</text>`;
 const dash = 'fill="none" stroke="#FFE27A" stroke-width="2.5" stroke-dasharray="5 5"';
 const bracket = (x, y, s, c = "#FF5A4F") => `<path d="M${x - s} ${y - s + 6}v-6h6M${x + s - 6} ${y - s}h6v6M${x + s} ${y + s - 6}v6h-6M${x - s + 6} ${y + s}h-6v-6" fill="none" stroke="${c}" stroke-width="2.5"/>`;
+// a weight label for the drawing; fractions stand upright here too
+const weightText = (x, y, t, c) => { const f = t.match(/^(\d+)\/(\d+)(\D*)$/); if (!f) return label(x, y + 4, t, c); const dx = f[3] ? -7 : 0; return `<g fill="${c}" font-size="9.5" font-weight="700" text-anchor="middle"><text x="${x + dx}" y="${y - 2}">${f[1]}</text><rect x="${x + dx - 6}" y="${y}" width="12" height="1.3"/><text x="${x + dx}" y="${y + 10}">${f[2]}</text></g>${f[3] ? `<text x="${x + 8}" y="${y + 4}" fill="${c}" font-size="10" font-weight="700" text-anchor="middle">${f[3]}</text>` : ""}`; };
+const scaleArt = (load, a, b, sky) => `<rect width="240" height="110" rx="10" fill="${sky}"/><path d="M116 22h8l2 70h-12z" fill="#D9B45C"/><rect x="88" y="92" width="64" height="9" rx="3" fill="#5B3A20"/><path d="M36 22h168" stroke="#E8C76A" stroke-width="5" stroke-linecap="round"/><path d="M50 22 28 66M50 22 72 66M190 22 168 66M190 22 212 66" stroke="#E8C76A"/><path d="M22 66h56q-6 11-28 11T22 66zM162 66h56q-6 11-28 11t-28-11z" fill="#D9B45C"/><rect x="20" y="38" width="60" height="26" rx="5" fill="#FFF6E0"/>${weightText(50, 51, load, "#14466F")}<rect x="154" y="38" width="36" height="26" rx="4" fill="#FFE27A"/>${weightText(172, 51, a, "#1B2A33")}<rect x="192" y="38" width="36" height="26" rx="4" fill="#FFE27A"/>${weightText(210, 51, b, "#1B2A33")}${label(120, 15, "달아 보기 전까지 저울은 움직이지 않아요", "#FFE27A")}`;
 const HOW = {
+  port: [
+    { short: "짐 무게를 구해서 추로 저울을 맞춰요. 10번!", steps: ["위에 나온 짐의 무게를 먼저 계산해요. kg과 g을 잘 살펴요. 1kg은 1000g이에요.", "합이 짐과 같아지도록 추를 2개 이상 눌러 올려요. 다시 누르면 내려와요. 맞추는 방법이 여러 가지면 어느 쪽이든 좋아요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 뒤로 가면 평균을 구해요."], art: scaleArt("2.3kg", "1.5kg", "800g", "#2F7FB0") },
+    { short: "분수와 소수로 된 추까지 더해서 맞춰요. 10번!", steps: ["짐 무게를 구해요. 분수의 덧셈, 백분율, 비례배분이 나와요.", "추도 분수와 소수로 적혀 있어요. 합이 짐과 같아지도록 2개 이상 올려요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 저울이 기운 쪽을 보고 고쳐요."], art: scaleArt("7/10kg", "1/2kg", "0.2kg", "#3B4E6D") },
+    { short: "전체 무게와 나머지 무게를 거꾸로 구해요. 10번!", steps: ["짐 무게를 구해요. 소수의 곱셈, 일부로 전체 구하기, 평균으로 나머지 구하기가 나와요.", "추는 g, 소수, 분수로 섞여 있어요. 같은 단위로 바꿔서 더해요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요."], art: scaleArt("4kg", "2.5kg", "1.5kg", "#14251F") }
+  ],
   cannon: [
     { short: "가로와 세로를 계산해서 그 칸을 쏴요. 10발!", steps: ["적함은 안개에 숨어 있어요. 위의 식을 풀면 가로, 세로 칸 번호가 나와요.", "그 칸을 누르면 포탄이 날아가요. 기회는 한 번이에요.", "뒤로 가면 바람이 포탄을 밀어요. 바람이 미는 만큼 반대쪽을 쏴요."], art: `${WATER}${[0, 1, 2, 3].map(i => `<path d="M${60 + i * 40} 18v80M60 ${18 + i * 26.6}h120" stroke="#fff" stroke-opacity=".45"/>`).join("")}<rect x="100" y="44.6" width="40" height="26.6" fill="#FFE27A" fill-opacity=".55"/>${label(120, 13, "가로 2", "#FFE27A")}${label(36, 62, "세로 2", "#FFE27A")}` },
     { short: "적함이 몇 m 남았을 때 쏠지 계산해요. 10발!", steps: ["위에 적함의 빠르기와 어뢰가 도착하는 시간이 나와요.", "어뢰가 가는 동안 적함도 움직여요. 빠르기 × 시간으로 쏠 거리를 구해요.", "그 눈금을 누르면 적함이 거기 왔을 때 어뢰가 나가요. 뒤로 가면 빠르기와 시간부터 구해야 해요."], art: `${WATER}<rect x="44" y="4" width="152" height="18" rx="5" fill="#FFE27A"/>${label(120, 17, "1초에 30m · 4초 뒤 도착", "#1B2A33")}${hull(206, 44, "#5B6470")}<path d="M30 56h190" stroke="#fff" stroke-dasharray="3 6"/><path d="M30 56v46" ${dash}/><circle cx="30" cy="56" r="6" fill="none" stroke="#FFE27A" stroke-width="2"/>${[60, 120, 180].map((m, i) => `<rect x="${44 + i * 54}" y="72" width="46" height="24" rx="5" fill="${m === 120 ? "#FFE27A" : "#0D2233"}"/>${label(67 + i * 54, 88, m, m === 120 ? "#1B2A33" : "#fff")}`).join("")}` },
@@ -342,5 +397,5 @@ const intro = (kind, map, title, stars, ask) => new Promise(done => { const h = 
 // 3-2-1 with the game's one-line reminder, so a game never starts before the child is looking
 const countdown = (title, line) => new Promise(done => { const m = document.createElement("div"); m.className = "game-count"; m.setAttribute("role", "status"); m.innerHTML = `<b>${title}</b><span class="count-n num"></span><p>${line}</p>`; document.body.appendChild(m); const n = m.querySelector(".count-n"); let i = 3;
   const step = () => { if (!i) { m.remove(); done(); return; } n.textContent = i; n.style.animation = "none"; void n.offsetWidth; n.style.animation = ""; window.Sfx?.tick?.(); i--; setTimeout(step, 750); }; step(); });
-window.Games = { intro, missed: () => missed, run: async (kind, opts) => { const map = opts.map || 0; missed = kind === "memory" && !map ? null : []; await countdown(opts.title, HOW[kind][map].short); return ({ cannon: [cannon, torpedo, missile], reef: [reef, reef, reef], memory: [memory, lighthouse, codebreak] })[kind][map](opts); } };
+window.Games = { intro, missed: () => missed, run: async (kind, opts) => { const map = opts.map || 0; missed = kind === "memory" && !map ? null : []; await countdown(opts.title, HOW[kind][map].short); return ({ cannon: [cannon, torpedo, missile], reef: [reef, reef, reef], memory: [memory, lighthouse, codebreak], port: [scales, scales, scales] })[kind][map](opts); } };
 })();

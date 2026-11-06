@@ -393,6 +393,17 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .frac { display: inline-grid; vertical-align: middle; text-align: center; margin: 0 2px; font-size: .86em; line-height: 1.08 } .frac i { font-style: normal; display: block; padding: 0 3px } .frac i:first-child { border-bottom: 2px solid currentColor }
 .code-time { display: block; width: 100%; height: 8px; border-radius: 4px; background: rgb(255 255 255 / .2); overflow: hidden } .code-time i { display: block; width: 100%; height: 100%; background: #FFC93D; transition: width .1s linear }
 .code-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px } .code-keys button { min-height: 58px; border: 1px solid #5A97B8; border-radius: 12px; background: #123F5E; color: #fff; font-size: 1.5rem; font-weight: 700; cursor: pointer } .code-keys button:active { background: #1F6E9A }
+/* the port's scales */
+.port-game { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--line, rgb(0 0 0 / .12)) } .port-game p { margin: 0 }
+.weigh { position: absolute; inset: 8px 10px 10px; z-index: 1; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto auto; gap: 8px }
+.weigh-tag { display: grid; gap: 2px; min-height: 76px; align-content: center; padding: 8px 14px; border-radius: 3px; text-align: center; color: #2A2218; background: linear-gradient(#F6ECD2, #E9DCB8); box-shadow: 0 3px 8px rgb(0 0 0 / .5) } .weigh-tag small { font-size: .78rem; color: #6D5A33 } .weigh-tag b { font-size: 1.15rem; line-height: 1.35; word-break: keep-all }
+.weigh-tag.new { animation: code-new .6s ease-out }
+.weigh-scale { display: block; width: 100%; height: 100%; min-height: 0; filter: drop-shadow(0 4px 6px rgb(0 0 0 / .45)) } .weigh-scale.level { filter: drop-shadow(0 0 12px #FFE27A) }
+.weigh-say { min-height: 1.5em; font-size: 1.05rem } .weigh-say .frac { font-family: inherit }
+.weigh-rack { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px }
+.weigh-w { min-height: 56px; border: 2px solid #5E4520; border-radius: 14px 14px 8px 8px; color: #2A1E08; font-size: 1.25rem; font-weight: 700; cursor: pointer; background: linear-gradient(#F4DC92, #C4963E); box-shadow: inset 0 1px 0 #FFF4C4, 0 4px 0 #5E4520; touch-action: manipulation }
+.weigh-w.on { transform: translateY(4px); color: #F4DC92; background: #2A2F36; border-color: #E8C76A; box-shadow: none }
+.weigh-go { min-height: 52px; border: 0; border-radius: 12px; color: #fff; font-size: 1.15rem; font-weight: 700; cursor: pointer; background: #1F6E9A; touch-action: manipulation } .weigh-go:disabled { opacity: .5; cursor: default } .weigh-go:not(:disabled):active { background: #164F70 }
 /* the class boss */
 .boss { padding: 0; gap: 0; grid-template-columns: minmax(112px, 36%) 1fr; overflow: hidden }
 .boss-sea { position: relative; min-height: 132px; overflow: hidden; background: var(--pic) 62% 94% / 720% auto, #123E66 }

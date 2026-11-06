@@ -147,6 +147,46 @@ function speed(wave) { const level = wave <= 3 ? 0 : wave <= 6 ? 1 : 2;
     if (level === 2) { const u = pick([10, 20, 25, 40, 50]); torpText = `어뢰: 1초에 ${u}m, 만나는 곳까지 ${u * T}m`; second = `${u * T}÷${u}=${T}, `; }
     return { shipText, torpText, S, k, D, why: `${first}${second}${v}×${T}=${D}` }; } }
 
+/* ----- 포구의 저울: work out what the load weighs, then put weights on the other pan until it balances. Everything is counted in grams, so no rounding can creep in.
+   Any set of weights with the right total is accepted; the load's weight is never on the rack, so at least two weights are always needed. ----- */
+const KG = g => `${g / 1000}kg`;
+const list = gs => gs.map(KG).join(", ");
+const FRACS = { 50: [1, 20], 100: [1, 10], 200: [1, 5], 250: [1, 4], 300: [3, 10], 400: [2, 5], 500: [1, 2], 600: [3, 5], 700: [7, 10], 750: [3, 4], 800: [4, 5], 900: [9, 10] };
+const WEIGHTS = [50, 100, 200, 250, 300, 400, 500, 600, 750, 800, 1000, 1200, 1500, 2000, 2500, 3000];
+const fracKg = g => `${frac(...FRACS[g])}kg`;
+const weightLabel = (g, map) => g >= 1000 ? KG(g) : map === 0 ? `${g}g` : map === 1 ? pick([fracKg(g), KG(g)]) : pick([`${g}g`, KG(g), fracKg(g)]);
+const GOODS = [["생선 상자", "쌀 자루", "소금 포대", "밧줄 뭉치"], ["석탄 통", "철판 더미", "화물 상자", "기름통"], ["포탄 상자", "보급 상자", "연료통", "부품 상자"]];
+const ro = n => "36".includes(String(n).slice(-1)) ? "으로" : "로"; // 3:6으로, 3:2로
+// n-1 boxes whose weights leave a sensible last one, for the two average questions
+const boxes = (n, avg) => { for (;;) { const gs = Array.from({ length: n - 1 }, () => ri(6, 40) * 100), last = n * avg - gs.reduce((a, b) => a + b, 0); if (last >= 500 && !gs.includes(last) && new Set(gs).size === n - 1) return { gs, last }; } };
+const WEIGH = [
+  [ // 포구 마을: units, then multiplying and dividing decimals, then the average
+    it => { const T = ri(12, 45) * 100; if (T % 1000 === 0) return null; const k = Math.floor(T / 1000), rest = T - k * 1000, split = Math.random() < .5; return { tag: "무게 단위", T, load: split ? `${it} ${k}kg ${rest}g` : `${it} ${KG(T)}`, why: `${split ? `${k}kg ${rest}g` : KG(T)} = ${T}g` }; },
+    it => { const n = ri(2, 6), one = ri(3, 18) * 100; if (one * n > 6000) return null; return Math.random() < .5 ? { tag: "소수의 나눗셈", T: one, load: `같은 ${it} ${n}개가 ${KG(one * n)}일 때 1개 무게`, why: `${one * n / 1000}÷${n}=${one / 1000}` } : { tag: "곱셈", T: one * n, load: `1개에 ${one}g인 ${it} ${n}개의 무게`, why: `${one}×${n}=${one * n}, ${one * n}g = ${KG(one * n)}` }; },
+    it => { const n = ri(3, 4), T = ri(12, 30) * 100, { gs, last } = boxes(n, T), all = shuffle([...gs, last]); return { tag: "평균", T, load: `${it} ${n}개가 ${list(all)}일 때 평균 무게`, why: `(${all.map(g => g / 1000).join("+")})÷${n}=${T / 1000}` }; }
+  ],
+  [ // 증기 항구: adding unlike fractions, a part of a whole, sharing by a ratio
+    it => { const keys = Object.keys(FRACS).map(Number), a = pick(keys), b = pick(keys), [n1, d1] = FRACS[a], [n2, d2] = FRACS[b]; if (d1 === d2) return null; const L = d1 * d2 / gcd(d1, d2), top = n1 * L / d1 + n2 * L / d2, g = gcd(top, L); return { tag: "분수의 덧셈", T: a + b, avoid: [a, b], load: `${it} ${frac(n1, d1)}kg과 ${frac(n2, d2)}kg을 합한 무게`, why: `${frac(n1, d1)}+${frac(n2, d2)} = ${frac(n1 * L / d1, L)}+${frac(n2 * L / d2, L)} = ${frac(top / g, L / g)}` }; },
+    it => { const N = ri(2, 8); if (Math.random() < .6) { const P = pick([15, 20, 25, 30, 35, 40, 45, 60, 70, 75, 80]); return { tag: "백분율", T: N * 10 * P, load: `${it} ${N}kg의 ${P}%`, why: `${N * 1000}g×${P}÷100=${N * 10 * P}g` }; } const [p, q] = pick([[1, 4], [3, 4], [2, 5], [3, 5], [4, 5], [3, 8], [5, 8], [3, 10], [7, 10]]), T = N * 1000 * p / q; return { tag: "분수의 곱셈", T, load: `${it} ${N}kg의 ${frac(p, q)}`, why: `${N * 1000}g÷${q}×${p}=${T}g` }; },
+    it => { const a = ri(1, 7), b = ri(1, 7), unit = ri(2, 6) * 100, more = Math.random() < .5; if (a === b || gcd(a, b) !== 1) return null; const part = more ? Math.max(a, b) : Math.min(a, b), total = (a + b) * unit; return { tag: "비례배분", T: part * unit, load: `${it} ${KG(total)}을 ${a}:${b}${ro(b)} 나눌 때 더 ${more ? "많은" : "적은"} 쪽`, why: `${total / 1000}×${frac(part, a + b)}=${part * unit / 1000}` }; }
+  ],
+  [ // 해군 기지: decimal times decimal, finding the whole from a part, the missing box from an average
+    it => { const x = ri(4, 30), m = pick([5, 12, 15, 25, 35]), T = x * m * 10; if (T % 50 || T > 6000) return null; return { tag: "소수의 곱셈", T, load: `${it} ${x / 10}kg의 ${m / 10}배`, why: `${x / 10}×${m / 10}=${T / 1000}` }; },
+    it => { const T = ri(10, 60) * 100, wt = g => Math.random() < .5 && g < 1000 ? `${g}g` : KG(g); if (Math.random() < .5) { const [p, q] = pick([[1, 4], [3, 4], [2, 5], [3, 5], [4, 5], [3, 10], [7, 10]]), part = T * p / q; if (part % 100) return null; return { tag: "전체 구하기", T, load: `${it} 무게의 ${frac(p, q)}가 ${wt(part)}일 때 전체 무게`, why: `${part}g÷${p}×${q}=${T}g` }; } const P = pick([10, 20, 25, 30, 40, 50, 60, 75]), part = T * P / 100; if (part % 100) return null; return { tag: "전체 구하기", T, load: `${it} 무게의 ${P}%가 ${wt(part)}일 때 전체 무게`, why: `${part}g÷${P}×100=${T}g` }; },
+    it => { const n = ri(3, 4), A = ri(15, 35) * 100, { gs, last } = boxes(n, A); return { tag: "평균", T: last, load: `${it} ${n}개의 평균이 ${KG(A)}이고, ${n - 1}개가 ${list(gs)}일 때 나머지 1개`, why: `${A / 1000}×${n}−(${gs.map(g => g / 1000).join("+")})=${last / 1000}` }; }
+  ]
+];
+// round runs from 0 to 9. Six different weights on the rack; `parts` is one way to reach the total, for showing the answer
+function weigh(map, round) { const make = WEIGH[map][round < 3 ? 0 : round < 7 ? 1 : 2];
+  for (;;) { const q = make(pick(GOODS[map])); if (!q || q.T % 50 || q.T > 6000) continue;
+    const off = q.avoid || [], usable = WEIGHTS.filter(g => g !== q.T && !off.includes(g)), under = usable.filter(g => g < q.T); let parts = null;
+    for (let t = 0; t < 300 && !parts; t++) { const take = shuffle(under).slice(0, ri(2, 3)); if (take.length >= 2 && take.reduce((a, b) => a + b, 0) === q.T) parts = take; }
+    if (!parts) continue;
+    const others = usable.filter(g => !parts.includes(g)), spare = [...shuffle(others.filter(g => g < q.T)), ...shuffle(others.filter(g => g > q.T))].slice(0, 6 - parts.length);
+    if (spare.length + parts.length !== 6) continue;
+    const opts = shuffle([...parts, ...spare]).map(g => ({ g, label: weightLabel(g, map) }));
+    return { ...q, opts, parts: parts.map(g => opts.find(o => o.g === g).label) }; } }
+
 const html = label => String(label).replace(/(\d+)\/(\d+)/g, '<span class="frac"><i>$1</i><i>$2</i></span>');
-window.MathQ = { pairs, order, cipher, grid, series, speed, html, shuffle };
+window.MathQ = { pairs, order, cipher, grid, series, speed, weigh, html, shuffle };
 })();

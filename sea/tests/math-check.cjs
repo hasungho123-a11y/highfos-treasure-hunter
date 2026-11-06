@@ -64,5 +64,34 @@ for (let i = 0; i < N; i++) { const wave = 1 + i % 10, q = Q.speed(wave); let m,
   if (wave <= 3 && !q.shipText.startsWith("적함: 1초에")) fail("첫 단계가 어려움", q);
   if (wave <= 6 && q.torpText.includes("만나는 곳")) fail("어뢰 계산이 이름", q);
   if (wave > 6 && !q.torpText.includes("만나는 곳")) fail("어뢰 계산 없음", q); }
+// the port's scales: read the weight back from the words on screen, then check the rack can really reach it
+const grams = s => { let m; s = s.trim(); if ((m = s.match(/^(\d+)\/(\d+)kg$/))) return m[1] * 1000 / m[2]; if ((m = s.match(/^([\d.]+)kg$/))) return Math.round(m[1] * 1000); if ((m = s.match(/^(\d+)g$/))) return +m[1]; return NaN; };
+const sum = a => a.reduce((x, y) => x + y, 0);
+const loadWeight = t => { let m;
+  if ((m = t.match(/^같은 .+ (\d+)개가 (\S+)일 때 1개 무게$/))) return grams(m[2]) / m[1];
+  if ((m = t.match(/^1개에 (\d+)g인 .+ (\d+)개의 무게$/))) return m[1] * m[2];
+  if ((m = t.match(/ (\d+)개의 평균이 (\S+)이고, (\d+)개가 (.+)일 때 나머지 1개$/))) { const gs = m[4].split(", ").map(grams); if (gs.length !== m[3] - 0 || m[3] - 0 !== m[1] - 1) return NaN; return m[1] * grams(m[2]) - sum(gs); }
+  if ((m = t.match(/ (\d+)개가 (.+)일 때 평균 무게$/))) { const gs = m[2].split(", ").map(grams); return gs.length === +m[1] ? sum(gs) / m[1] : NaN; }
+  if ((m = t.match(/ (\S+)과 (\S+)을 합한 무게$/))) return grams(m[1]) + grams(m[2]);
+  if ((m = t.match(/ (\S+)을 (\d+):(\d+)(으?로) 나눌 때 더 (많은|적은) 쪽$/))) { if (m[4] !== ("36".includes(m[3].slice(-1)) ? "으로" : "로")) return NaN; return grams(m[1]) * (m[5] === "많은" ? Math.max(+m[2], +m[3]) : Math.min(+m[2], +m[3])) / (+m[2] + +m[3]); }
+  if ((m = t.match(/ (\S+)의 (\d+)%$/))) return grams(m[1]) * m[2] / 100;
+  if ((m = t.match(/ (\S+)의 (\d+)\/(\d+)$/))) return grams(m[1]) * m[2] / m[3];
+  if ((m = t.match(/ (\S+)의 ([\d.]+)배$/))) return Math.round(grams(m[1]) * m[2]);
+  if ((m = t.match(/무게의 (\d+)\/(\d+)가 (\S+)일 때 전체 무게$/))) return grams(m[3]) * m[2] / m[1];
+  if ((m = t.match(/무게의 (\d+)%가 (\S+)일 때 전체 무게$/))) return grams(m[2]) * 100 / m[1];
+  if ((m = t.match(/ (\d+)kg (\d+)g$/))) return m[1] * 1000 + +m[2];
+  if ((m = t.match(/ ([\d.]+)kg$/))) return grams(m[1] + "kg");
+  return NaN; };
+const scaleTags = {};
+for (let i = 0; i < N * 3; i++) { const map = i % 3, round = i % 10, q = Q.weigh(map, round), T = loadWeight(q.load); scaleTags[`${map}:${q.tag}`] = (scaleTags[`${map}:${q.tag}`] || 0) + 1;
+  if (!eq(T, q.T) || !Number.isInteger(q.T)) fail("저울 무게 다름", { q, T });
+  if (q.T < 150 || q.T > 6000) fail("저울 무게 범위", q);
+  if (q.opts.length !== 6 || new Set(q.opts.map(o => o.g)).size !== 6) fail("추 구성", q);
+  q.opts.forEach(o => { if (!eq(grams(o.label), o.g)) fail("추 글자와 무게 다름", o); if (o.g === q.T) fail("한 개로 끝나는 추", q); });
+  if (!eq(sum(q.parts.map(grams)), q.T) || q.parts.length < 2 || !q.parts.every(p => q.opts.some(o => o.label === p))) fail("보여 줄 정답 오류", q);
+  let ways = 0; for (let b = 1; b < 64; b++) if (sum(q.opts.filter((_, k) => b >> k & 1).map(o => o.g)) === q.T) ways++; if (!ways) fail("맞출 방법 없음", q);
+  if (/undefined|NaN/.test(q.load + q.why + q.parts.join())) fail("글자 오류", q);
+  if (map === 0 && q.opts.some(o => o.label.includes("/"))) fail("포구 마을에 분수 추", q); }
+console.log("저울 유형", JSON.stringify(scaleTags));
 console.log("수열 규칙", Object.keys(rules).length, "가지");
 console.log("검사 끝, 실패", bad, "건 / 문제 유형", JSON.stringify(asks)); process.exitCode = bad ? 1 : 0;
