@@ -535,6 +535,9 @@ nav.tabs .snd { margin-left: auto; flex: none; width: 36px; padding: 0; border: 
 .dex-titles { display: grid; gap: 8px } .dex-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
 .dex-title > div { display: grid; gap: 3px; flex: 1; min-width: 0 } .dex-title:not(.got) b { color: var(--muted, #777) } .dex-title.got { border-color: var(--gold); background: var(--gold-soft) }
 .dex-bar { height: 7px; border-radius: 4px; background: var(--sunk); overflow: hidden } .dex-bar i { display: block; height: 100%; background: var(--accent) }
+.class-table th, .class-table td { white-space: nowrap } .class-table td.small { white-space: normal; min-width: 130px }
+.day-pick { display: flex; gap: 3px } .day-pick button { width: 28px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--muted); font-size: .8rem; font-weight: 700; cursor: pointer } .day-pick button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff }
+.day-set { display: flex; gap: 2px; margin-top: 4px } .day-set .btn { white-space: nowrap }
 .deck-more { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); flex-wrap: nowrap; gap: 10px } .deck-more .btn { flex: none }
 .dex-group { display: grid; gap: 6px; margin-top: 8px } .dex-group h3 { margin: 0 } .dex-list { display: flex; flex-wrap: wrap; gap: 6px }
 .dex-c { padding: 3px 9px; border-radius: 999px; font-size: .8rem; background: var(--sunk); color: var(--muted, #777) } .dex-c.got { background: var(--accent-soft); color: var(--accent); font-weight: 700 }

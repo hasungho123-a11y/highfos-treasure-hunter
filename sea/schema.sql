@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS classes (
   name TEXT NOT NULL,
   code TEXT NOT NULL UNIQUE,
   battle INTEGER NOT NULL DEFAULT 1,  -- 0 = battles switched off for this class
+  days TEXT NOT NULL DEFAULT '0123456', -- lesson days as weekday digits, 0 = Sunday; daily missions only open on these
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );

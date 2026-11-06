@@ -61,8 +61,8 @@ function shipSpecs(T) {
   return shipSpecs.c = {
     dinghy: { wm: { u: .76, s: .42 }, L: 5.2, W: .95, D: .6, H0: .6, stern: .12, bow: .25, sailed: true, lookY: 2.1, masts: [{ u: .52, h: 4.6, sails: [[2, 2.6, 1]] }] },
     sloop: { wm: { u: .76, s: .55 }, L: 7.4, W: 1.25, D: .85, H0: .8, stern: .4, bow: .4, sailed: true, lookY: 2.6, masts: [{ u: .55, h: 6.6, sails: [[2.6, 2.4, 1.1], [2, 1.7, 3.8]] }] },
-    brig: { wm: { u: .82, s: .65 }, L: 9, W: 1.55, D: 1.1, H0: .95, stern: .7, cabin: true, sailed: true, lookY: 2.9, masts: [{ u: .66, h: 7, sails: [[3, 2.3, 1.3], [2.4, 1.8, 3.9]] }, { u: .32, h: 7.6, sails: [[3.2, 2.4, 1.3], [2.5, 1.9, 4.1]] }] },
-    galleon: { wm: { u: .84, s: .8 }, L: 11, W: 1.85, D: 1.35, H0: 1.1, cabin: true, sailed: true, masts: [{ u: .7, h: 7.6, sails: [[3.4, 2.4, 1.4], [2.7, 1.9, 4.3]] }, { u: .45, h: 9.2, sails: [[3.9, 2.8, 1.5], [3.1, 2.2, 4.8], [2.3, 1.5, 7.3]] }, { u: .2, h: 6.6, sails: [[2.8, 2, 1.4], [2.1, 1.5, 3.9]] }] },
+    brig: { treasureU: .49, wm: { u: .82, s: .65 }, L: 9, W: 1.55, D: 1.1, H0: .95, stern: .7, cabin: true, sailed: true, lookY: 2.9, masts: [{ u: .66, h: 7, sails: [[3, 2.3, 1.3], [2.4, 1.8, 3.9]] }, { u: .32, h: 7.6, sails: [[3.2, 2.4, 1.3], [2.5, 1.9, 4.1]] }] },
+    galleon: { treasureU: .58, wm: { u: .84, s: .8 }, L: 11, W: 1.85, D: 1.35, H0: 1.1, cabin: true, sailed: true, masts: [{ u: .7, h: 7.6, sails: [[3.4, 2.4, 1.4], [2.7, 1.9, 4.3]] }, { u: .45, h: 9.2, sails: [[3.9, 2.8, 1.5], [3.1, 2.2, 4.8], [2.3, 1.5, 7.3]] }, { u: .2, h: 6.6, sails: [[2.8, 2, 1.4], [2.1, 1.5, 3.9]] }] },
     ironclad: { wm: { u: .69, s: .9 }, L: 13, W: 2, D: 1.3, H0: .85, stern: .1, bow: .3, hull: "#3C3F44", lookY: 2.8, masts: [{ u: .68, h: 6.4, sails: [] }],
       build({ add, M, xAt, deckY }) { const y = deckY(.45); box(add, M, xAt(.45), y + .6, 0, 5, 1.2, 2.7, M.steel); funnel(add, M, xAt(.5), y + 1.2, .36, 2.3); funnel(add, M, xAt(.38), y + 1.2, .36, 2.3); gun(add, M, xAt(.8), deckY(.8), 1.1, 1); gun(add, M, xAt(.14), deckY(.14), 1.1, -1); } },
     destroyer: { wm: { u: .9, s: .95 }, L: 15, W: 1.75, D: 1.2, H0: 1, stern: 0, bow: .9, hull: "#6A737C", lookY: 2.8, masts: [{ u: .58, h: 7, sails: [] }],
@@ -259,6 +259,28 @@ function build() {
   // many copies of one shape, drawn at once; each copy is a matrix from place() or shingle()
   const place = (x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx) => new T.Matrix4().compose(new T.Vector3(x, y, z), new T.Quaternion().setFromEuler(new T.Euler(rx, ry, rz)), new T.Vector3(sx, sy, sz));
   const many = (geo, m, parent, list) => { const o = new T.InstancedMesh(geo, m, list.length); list.forEach((x, i) => o.setMatrixAt(i, x)); o.castShadow = o.receiveShadow = true; o.frustumCulled = false; parent.add(o); return o; };
+  /* ----- sculpted animals: one smooth skin with colour painted on it, and feathers laid over it one by one ----- */
+  const lin = h => new T.Color(h).convertSRGBToLinear();
+  const skin = (rough = .82) => new T.MeshStandardMaterial({ vertexColors: true, roughness: rough, side: T.DoubleSide });
+  const paint = (g, fn) => { const p = g.attributes.position, col = new Float32Array(p.count * 3); for (let i = 0; i < p.count; i++) { const c = fn(i); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; } g.setAttribute("color", new T.BufferAttribute(col, 3)); };
+  const blend = (a, b, k) => a.clone().lerp(b, Math.max(0, Math.min(1, k)));
+  const smooth = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  // a body grown along a spine in the xy plane; each ring is [x, y, half depth in the plane, half width in z]. colour(t, angle, point) paints it
+  const loft = (rings, colour, parent, along = 56, around = 32, rough = .82) => { const spine = new T.CatmullRomCurve3(rings.map(r => new T.Vector3(r[0], r[1], 0))), size = new T.CatmullRomCurve3(rings.map(r => new T.Vector3(r[2], r[3], 0)), false, "catmullrom", .5), pos = [], idx = [];
+    const at = (t, ang) => { const p = spine.getPoint(t), tan = spine.getTangent(t), r = size.getPoint(t), a = Math.max(.0005, r.x), b = Math.max(.0005, r.y), c = Math.cos(ang), s = Math.sin(ang), perp = new T.Vector3(tan.y, -tan.x, 0); return { p: p.clone().addScaledVector(perp, a * c).add(new T.Vector3(0, 0, b * s)), n: perp.clone().multiplyScalar(c * b).add(new T.Vector3(0, 0, s * a)).normalize(), up: tan, a, b }; };
+    for (let j = 0; j <= along; j++) for (let i = 0; i < around; i++) { const f = at(j / along, i / around * Math.PI * 2); pos.push(f.p.x, f.p.y, f.p.z);
+      if (j < along) { const a = j * around + i, b = (j + 1) * around + i, c = (j + 1) * around + (i + 1) % around, d = j * around + (i + 1) % around; idx.push(a, b, d, b, c, d); } }
+    const g = new T.BufferGeometry(); g.setAttribute("position", new T.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    const v = new T.Vector3(); paint(g, n => { v.fromBufferAttribute(g.attributes.position, n); return colour(Math.floor(n / around) / along, (n % around) / around * Math.PI * 2, v); });
+    const o = add(new T.Mesh(g, skin(rough)), parent); o.at = at; return o; };
+  const ringPaint = (o, seg, sides, colour) => { paint(o.geometry, n => colour(Math.floor(n / sides) / seg)); o.material = skin(.7); return o; };
+  // one feather: base at the origin, tip at -y, cupped and lifting away from whatever it lies on, with a quill and barbs drawn on
+  const featherGeo = (() => { const g = new T.PlaneGeometry(1, 1, 4, 10), p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = .5 - p.getY(i), x = p.getX(i), w = Math.pow(Math.sin(Math.PI * Math.min(1, t * .92 + .08)), .55); p.setXYZ(i, x * w, -t, .1 * t - .2 * x * x); } g.computeVertexNormals(); return g; })();
+  const barbs = (g, w, h) => { g.strokeStyle = "rgba(0,0,0,.2)"; g.lineWidth = 1.4; for (let y = -h; y < h * 1.2; y += 7) { g.beginPath(); g.moveTo(0, y + w * .34); g.lineTo(w / 2, y); g.lineTo(w, y + w * .34); g.stroke(); } g.fillStyle = "rgba(0,0,0,.42)"; g.fillRect(w / 2 - 1.6, 0, 3.2, h); const e = g.createLinearGradient(0, 0, w, 0); e.addColorStop(0, "rgba(0,0,0,.3)"); e.addColorStop(.28, "rgba(0,0,0,0)"); e.addColorStop(.72, "rgba(0,0,0,0)"); e.addColorStop(1, "rgba(0,0,0,.3)"); g.fillStyle = e; g.fillRect(0, 0, w, h); };
+  const featherMat = new T.MeshStandardMaterial({ map: canvasTex(64, 128, (g, w, h) => { g.fillStyle = "#fff"; g.fillRect(0, 0, w, h); barbs(g, w, h); }), roughness: .68, side: T.DoubleSide });
+  // a matrix that lays a feather on a surface: quill along "root" (pointing away from the tip), flat against the normal
+  const lay = (p, root, normal, wid, len) => { const Y = root.clone().normalize(), Z = normal.clone().addScaledVector(Y, -normal.dot(Y)).normalize(), X = new T.Vector3().crossVectors(Y, Z); return new T.Matrix4().makeBasis(X.multiplyScalar(wid), Y.multiplyScalar(len), Z.multiplyScalar(Math.max(wid, len))).setPosition(p); };
+  const featherBatch = (list, parent, mat = featherMat) => { const o = many(featherGeo, mat, parent, list.map(f => f.m)); if (mat === featherMat) list.forEach((f, i) => o.setColorAt(i, f.c)); return o; };
   // the way the hull runs at one spot: X points aft, tipped up by "tilt", N points away from the hull
   const hullFrame = (u, drop, s, tilt = 0) => { const P = sideP(u, drop, s), aft = sideP(u - .012, drop, s).sub(sideP(u + .012, drop, s)).normalize(), down = sideP(u, drop + .05, s).sub(sideP(u, drop - .05, s)).normalize(), N = aft.clone().cross(down).normalize(); if (N.z * s < 0) N.negate();
     const X = aft.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(down, -Math.sin(tilt)), Y = N.clone().cross(X).normalize(); return { P, X, Y, N }; };
@@ -352,26 +374,34 @@ function build() {
     add(new T.Mesh(new T.SphereGeometry(.17, 12, 10), new T.MeshStandardMaterial({ color: 0xFFE2A0, emissive: 0xFFB347, emissiveIntensity: 2 })), lamp).position.y = .35;
     add(new T.Mesh(new T.ConeGeometry(.17, .2, 8), M.iron), lamp).position.y = .58;
     const pl = new T.PointLight(0xFFB347, 1.2, 6, 2); pl.position.y = .35; lamp.add(pl); lamps.push(pl); }
-  // the parrot perches on the rail beside the main mast
-  grp("parrot"); const bird = new T.Group(); A.parrot.add(bird); bird.position.copy(sideP(.5, 0, 1)).add(new T.Vector3(0, .26, -.08)); bird.scale.setScalar(1.5);
-  { // a scarlet macaw in profile: leaning forward, wings folded in bands of red, yellow and blue
-    const red = solid(0xD7261E), yel = solid(0xF7C51E), blue = solid(0x1E5FC8), teal = solid(0x1F8F7A), white = solid(0xFBF7EE), ink = solid(0x17130F), horn = solid(0xD8C49A), grey = solid(0x6B6660);
-    const body = lathe([[.001, -.22], [.1, -.17], [.16, -.04], [.15, .08], [.1, .18], [.001, .22]], red, bird); body.rotation.z = -.3; body.scale.z = .85;
-    ball(.125, red, bird, .085, .27, 0);
-    ball(.085, white, bird, .135, .27, 0, .75, .85, 1.25);
-    for (const s of [-1, 1]) { ball(.024, ink, bird, .135, .305, s * .1); ball(.008, white, bird, .153, .316, s * .114);
-      // the wing: three bands laid over each other, ending in long flight feathers
-      const wg = new T.Group(); bird.add(wg); wg.position.set(-.02, .08, s * .125); wg.rotation.z = -.3;
-      ball(.1, red, wg, 0, .06, 0, .9, .8, .3); ball(.1, yel, wg, 0, -.04, s * .012, .85, .8, .3);
-      [[-.052, -.17, blue], [-.018, -.2, blue], [.016, -.19, blue], [.048, -.15, teal]].forEach(([fx, fy, m]) => ball(.045, m, wg, fx, fy, s * .026, 1, 3.3, .25));
-      ball(.03, grey, bird, .012, -.175, s * .055, 1.6, .5, .9);
-      const leg = add(new T.Mesh(new T.CylinderGeometry(.014, .018, .07, 6), grey), bird); leg.position.set(.008, -.145, s * .055); }
-    // hooked beak: horn-coloured top with a dark tip, dark lower half
-    ball(.058, horn, bird, .205, .29, 0, 1, .9, .8);
-    const hook = add(new T.Mesh(new T.ConeGeometry(.05, .11, 12), horn), bird); hook.position.set(.238, .245, 0); hook.rotation.z = Math.PI + .4;
-    ball(.038, ink, bird, .195, .228, 0, 1, .8, .8);
-    [[0, red], [-.05, blue], [.05, blue]].forEach(([z, m]) => { const f = ball(.04, m, bird, -.136 + Math.abs(z) * .25, -.44 + Math.abs(z) * .5, z, 1, 6, .35); f.rotation.z = -.3; f.rotation.x = z * 1.4; }); }
-  grp("treasure"); { const tk = Math.min(1, .6 + W * .22), g = new T.Group(); A.treasure.add(g); g.position.set(xAt(.56), deckY(.56), W * .42); g.rotation.y = .4; g.scale.setScalar(tk);
+  // the parrot stands on its own wooden perch on the rail, so the long tail hangs clear of the hull
+  grp("parrot"); { const rail = sideP(.5, 0, 1), k = 1.2 + W * .12, postH = .54, stand = new T.Group(), bird = new T.Group(); A.parrot.add(stand); stand.position.set(rail.x, rail.y + postH, rail.z); stand.rotation.y = -.35; stand.add(bird); bird.scale.setScalar(k); bird.position.set(-.02 * k, .034 * k, 0);
+    add(new T.Mesh(new T.CylinderGeometry(.028, .04, postH, 12), M.wood), A.parrot).position.set(rail.x, rail.y + postH / 2, rail.z);
+    add(new T.Mesh(new T.CylinderGeometry(.075, .085, .035, 14), M.wood), A.parrot).position.set(rail.x, rail.y + .02, rail.z);
+    const bar = add(new T.Mesh(new T.CylinderGeometry(.03, .03, .44, 12), M.wood), stand); bar.rotation.x = Math.PI / 2;
+    const scarlet = lin(0xD9261C), deep = lin(0xA8140F), blue = lin(0x1A56C4), sky = lin(0x1E86C8), yellow = lin(0xF8C81C), green = lin(0x63AE2E), white = solid(0xFBF6EC, .7), ink = solid(0x15110E, .3), grey = solid(0x57524C, .6), pale = solid(0xF4E6A8, .25);
+    const body = loft([[-.2, .05, .003, .003], [-.165, .09, .055, .047], [-.1, .17, .118, .1], [-.035, .27, .142, .122], [.018, .37, .122, .104], [.055, .46, .082, .078], [.08, .525, .09, .084], [.09, .59, .094, .088], [.085, .65, .058, .06], [.073, .682, .003, .003]], (t, a, v) => blend(scarlet, deep, smooth(.1, -.1, v.x + .1) * .8), bird, 64, 32, .7);
+    // short overlapping breast and back feathers, smaller towards the head, leaving the bare face clear
+    const coat = []; for (let r = 0; r < 20; r++) { const t = .12 + r / 19 * .76; for (let i = 0; i < 20; i++) { const f = body.at(t, (i + (r % 2) / 2) / 20 * Math.PI * 2); if (f.p.x > .085 && f.p.y > .5 && f.p.y < .63 && Math.abs(f.p.z) > .012) continue; const s = .34 + .66 * Math.min(1, f.a / .12); coat.push({ m: lay(f.p.clone().addScaledVector(f.n, -.002), f.up, f.n, .05 * s, .082 * s), c: blend(scarlet, deep, (i * 7 + r * 3) % 5 / 9) }); } }
+    featherBatch(coat, bird);
+    const wing = []; for (const s of [-1, 1]) { ball(.075, solid(0xD9261C, .7), bird, .022, .405, s * .088, 1, 1, .55);
+      [[[blue], 8, [.025, .33], [-.115, .235], .42, .062, [-.5, -.86], .108, .14], [[sky, blue], 7, [.055, .365], [-.06, .285], .28, .066, [-.5, -.86], .119, .08], [[yellow, yellow, green], 8, [.075, .385], [-.05, .315], .165, .054, [-.46, -.88], .128, .04], [[yellow], 8, [.082, .415], [-.038, .35], .105, .046, [-.42, -.9], .134, .02], [[scarlet, deep], 9, [.088, .447], [-.022, .385], .075, .04, [-.36, -.93], .138, 0]].forEach(([cols, n, A0, B0, len, wid, dir, z, curl]) => { for (let i = 0; i < n; i++) { const q = i / (n - 1), fan = (q - .5) * .22, dx = dir[0] + fan, dy = dir[1] + fan * .5; wing.push({ m: lay(new T.Vector3(A0[0] + (B0[0] - A0[0]) * q, A0[1] + (B0[1] - A0[1]) * q, s * (z + i * .0012)), new T.Vector3(-dx, -dy, s * curl), new T.Vector3(0, 0, s), wid, len * (1 - q * .22)), c: cols[i % cols.length] }); } }); }
+    featherBatch(wing, bird);
+    // the tail: red from the root, turning blue at the tip
+    const tailMat = new T.MeshStandardMaterial({ map: canvasTex(64, 256, (g, w, h) => { const c = g.createLinearGradient(0, 0, 0, h); c.addColorStop(0, "#C81B16"); c.addColorStop(.5, "#D9261C"); c.addColorStop(.74, "#1A56C4"); c.addColorStop(1, "#123F9C"); g.fillStyle = c; g.fillRect(0, 0, w, h); barbs(g, w, h); }), roughness: .68, side: T.DoubleSide });
+    const tail = []; for (let i = -3; i <= 3; i++) { const q = Math.abs(i); tail.push({ m: lay(new T.Vector3(-.155, .105, i * .012), new T.Vector3(.34 + i * .004, .94, -i * .055), new T.Vector3(-.94, .34, 0), .05, .46 - q * .035) }); } featherBatch(tail, bird, tailMat);
+    // the head: bare white face with rows of tiny red feathers, a pale eye, and a hooked beak
+    for (const s of [-1, 1]) { ball(.058, white, bird, .122, .565, s * .058, 1, .9, .5);
+      for (let r = 0; r < 3; r++) for (let i = 0; i < 4; i++) ball(.0048, solid(0xC3241C, .7), bird, .092 + i * .019, .53 + r * .017, s * (.0845 - Math.abs(i - 1.5) * .007));
+      add(new T.Mesh(new T.TorusGeometry(.025, .0052, 8, 20), grey), bird).position.set(.115, .592, s * .0815);
+      ball(.023, pale, bird, .115, .592, s * .08, 1, 1, .7); ball(.0145, ink, bird, .117, .592, s * .0935, 1, 1, .4); ball(.0045, solid(0xFFFFFF, .2), bird, .122, .598, s * .099); }
+    const upper = loft([[.125, .598, .05, .04], [.165, .603, .052, .044], [.205, .585, .043, .036], [.226, .54, .027, .022], [.215, .49, .012, .01], [.192, .466, .002, .002]], t => blend(lin(0xE8D9B4), lin(0x3A342D), smooth(.55, .95, t)), bird, 30, 16, .34);
+    const lower = loft([[.122, .538, .034, .033], [.155, .522, .03, .03], [.176, .497, .016, .017], [.178, .48, .002, .002]], () => lin(0x1D1A17), bird, 16, 12, .36);
+    for (const z of [-.052, .052]) { sweep([[-.012, .135, z], [.008, .07, z], [.02, .02, z]], t => .022 - t * .006, grey, bird, 8, 8);
+      // two toes forward and two back, wrapped round the perch, as parrots hold on
+      for (const [fx, dz] of [[1, -.016], [1, .016], [-1, -.012], [-1, .012]]) ringPaint(sweep([[.02, .022, z], [.02 + fx * .034, .018, z + dz], [.02 + fx * .054, -.022, z + dz * 1.3], [.02 + fx * .036, -.058, z + dz * 1.3]], t => .0135 - t * .0105, grey, bird, 10, 8), 10, 8, t => blend(lin(0x57524C), lin(0x17130F), smooth(.68, .9, t))); } }
+  // on the centre line in the clear stretch of deck between the masts, facing the bow: the coins spill further than a small hull is wide when it sits to one side
+  grp("treasure"); { const tk = Math.min(1, .6 + W * .22), tu = spec.treasureU ?? .3, g = new T.Group(); A.treasure.add(g); g.position.set(xAt(tu), deckY(tu), 0); g.rotation.y = 1.4; g.scale.setScalar(tk);
     const wood = solid(0x6B3B1C, .72), woodDark = solid(0x3A1E0E, .85), strap = solid(0x2E3036, .42, .6), gilt = solid(0xF0BE3F, .3, .55), velvet = solid(0x8E1830, .9), pearlBead = solid(0xFFF6EA, .22, .1);
     const w = .86, d = .54, h = .4, box = (sx, sy, sz, m, x, y, z) => { const o = add(new T.Mesh(new T.BoxGeometry(sx, sy, sz), m), g); o.position.set(x, y, z); return o; };
     // the chest: planks, iron straps, gold corners and a lock plate
@@ -460,35 +490,54 @@ function build() {
       const tail = add(new T.Mesh(new T.BoxGeometry(.08, .6, .16), pink), A.bowribbon); tail.position.set(x, y - .38, z * .45); tail.rotation.x = z > 0 ? -.35 : .35; }
     add(new T.Mesh(new T.SphereGeometry(.16, 12, 10), mat(0xE0608F)), A.bowribbon).position.set(x - .02, y + .05, 0);
     A.bowribbon.position.set(x * (1 - decoK), y * (1 - decoK), 0); A.bowribbon.scale.setScalar(decoK); }
-  grp("cat"); { const fur = solid(0xE8852B), dark = solid(0xB0540F), cream = solid(0xFFF1DC), ink = solid(0x241A16), pink = solid(0xF28AA0), white = solid(0xFBFBF6), navy = solid(0x1F3A6E), scarf = solid(0xD9402F), u = spec.sailed ? .8 : spec.catAt?.[0] ?? .04, x = xAt(u), y = flat != null ? railY(u) : deckY(u), c = new T.Group(); A.cat.add(c); c.position.set(x, y, spec.sailed ? .3 : spec.catAt?.[1] ?? 0); c.rotation.y = -.6; c.scale.setScalar(decoK * .85);
-    // sitting up, seen from the side or the front; everything is relative to the deck under its feet, facing +x
-    const body = lathe([[.001, 0], [.2, .01], [.3, .1], [.33, .24], [.29, .42], [.21, .58], [.13, .7], [.001, .74]], fur, c); body.scale.set(1.12, 1, .88);
-    ball(.2, cream, c, .17, .3, 0, .75, 1.25, .95);
-    [[.2, .322], [.34, .298], [.48, .248]].forEach(([by, r]) => { const band = add(new T.Mesh(new T.TorusGeometry(r, .022, 6, 18, Math.PI * .56), dark), c); band.position.y = by; band.rotation.set(Math.PI / 2, 0, Math.PI * .72); band.scale.set(1.12, .88, 1); });
+  grp("cat"); { const fur = lin(0xF0902F), furDeep = lin(0xD9731C), stripe = lin(0xA94F10), creamC = lin(0xFFF0D8), pinkC = lin(0xF590A6), ink = solid(0x201713, .3), iris = solid(0x8FB83A, .22), pink = solid(0xF590A6, .55), cream = solid(0xFFF0D8, .78), white = solid(0xFBFBF6, .55), navy = solid(0x1F3A6E, .62), scarf = solid(0xD9402F, .62), furM = solid(0xF0902F, .82), u = spec.sailed ? .8 : spec.catAt?.[0] ?? .04, x = xAt(u), y = flat != null ? railY(u) : deckY(u), c = new T.Group(); A.cat.add(c); c.position.set(x, y, spec.sailed ? .3 : spec.catAt?.[1] ?? 0); c.rotation.y = -.6; c.scale.setScalar(decoK * .85);
+    // sitting up, facing +x, feet on the deck. One skin for the body: cream down the front, tabby bands round the back and sides
+    loft([[-.04, 0, .003, .003], [-.04, .014, .22, .24], [-.055, .12, .315, .315], [-.05, .27, .3, .29], [-.02, .43, .232, .228], [.002, .58, .168, .17], [.012, .7, .125, .125], [.012, .77, .003, .003]], (t, a, v) => { const front = Math.cos(a), band = Math.pow(Math.max(0, Math.sin(v.y * 27 + .6 + front * .55)), 7) * smooth(.46, -.15, front), base = blend(fur, furDeep, smooth(.2, -.9, front) * .6); return blend(blend(base, stripe, band), creamC, smooth(.42, .78, front)); }, c, 72, 48);
+    // the head: one rounded shape with cheeks and a muzzle pushed out of it, the tabby M on the forehead painted on
+    { const g = new T.SphereGeometry(1, 96, 64), p = g.attributes.position, n = new T.Vector3(), near = (cx, cy, cz, sig) => { const d = (n.x - cx) ** 2 + (n.y - cy) ** 2 + (n.z - cz) ** 2; return Math.exp(-d / (sig * sig)); }, cols = [];
+      for (let i = 0; i < p.count; i++) { n.fromBufferAttribute(p, i).normalize(); const r = 1 + .13 * near(.72, -.42, 0, .38) + .15 * (near(.25, -.36, .84, .42) + near(.25, -.36, -.84, .42)) - .05 * near(.8, .25, 0, .4);
+        let dark = 0; for (const zc of [0, .2, -.2, .4, -.4]) dark = Math.max(dark, Math.exp(-(((n.z - zc) / .05) ** 2)) * smooth(zc ? .34 : .28, zc ? .52 : .44, n.y) * smooth(zc ? -.5 : -.75, -.1, n.x) * (zc ? smooth(.98, .78, n.y) : 1));
+        for (const yc of [.04, -.17]) dark = Math.max(dark, Math.exp(-(((n.y - yc) / .055) ** 2)) * smooth(.62, .84, Math.abs(n.z)) * smooth(.62, .34, n.x));
+        const muzzle = Math.min(1, near(.86, -.42, 0, .5) * 1.7 + near(.72, -.82, 0, .42) * 1.5), brow = near(.86, .22, .32, .16) + near(.86, .22, -.32, .16);
+        cols.push(blend(blend(blend(fur, furDeep, smooth(.1, -.8, n.x) * .55), stripe, dark), creamC, Math.max(muzzle, brow * .55)));
+        p.setXYZ(i, n.x * r * .315, n.y * r * .29, n.z * r * .36); }
+      g.computeVertexNormals(); paint(g, i => cols[i]); add(new T.Mesh(g, skin()), c).position.set(.1, .97, 0); }
     for (const s of [-1, 1]) {
-      ball(.17, fur, c, -.08, .17, s * .2, 1.15, .95, .62); ball(.075, cream, c, .1, .05, s * .25, 1.5, .6, 1);
-      const leg = add(new T.Mesh(new T.CylinderGeometry(.058, .066, .38, 10), fur), c); leg.position.set(.2, .2, s * .09); ball(.07, cream, c, .25, .045, s * .09, 1.3, .65, 1);
-      ball(.13, fur, c, .16, .86, s * .19, .9, .8, 1);
-      ball(.085, cream, c, .33, .86, s * .05, .8, .75, 1);
-      ball(.058, ink, c, .33, .975, s * .125, .55, 1.05, .9); ball(.018, white, c, .362, 1, s * .11);
-      const ear = add(new T.Mesh(new T.ConeGeometry(.11, .2, 12), fur), c); ear.position.set(.05, 1.2, s * .17); ear.rotation.x = s * .28; ear.scale.x = .55;
-      const inner = add(new T.Mesh(new T.ConeGeometry(.065, .13, 10), pink), c); inner.position.set(.085, 1.185, s * .175); inner.rotation.x = s * .28; inner.scale.x = .4;
-      for (const t of [-.14, .14]) { const w = add(new T.Mesh(new T.CylinderGeometry(.004, .004, .22, 4), ink), c); w.position.set(.35, .86 + t * .2, s * .24); w.rotation.x = Math.PI / 2 + s * t; }
-      ball(.03, dark, c, .3, 1.1, s * .085, .35, 1.9, .55).rotation.z = -.55; }
-    ball(.29, fur, c, .1, .95, 0, .95, .88, 1.08);
-    ball(.06, cream, c, .31, .8, 0);
-    ball(.03, pink, c, .385, .895, 0, .6, .7, 1);
-    ball(.03, dark, c, .305, 1.12, 0, .35, 2.1, .6).rotation.z = -.55;
-    // the sailor part: a white cap tipped back and a red-knotted scarf
-    const hat = new T.Group(); c.add(hat); hat.position.set(.06, 1.2, 0); hat.rotation.z = .14;
-    add(new T.Mesh(new T.CylinderGeometry(.125, .13, .06, 16), white), hat).position.y = .02;
-    add(new T.Mesh(new T.CylinderGeometry(.135, .112, .085, 16), white), hat).position.y = .09;
-    add(new T.Mesh(new T.CylinderGeometry(.132, .132, .022, 16), navy), hat).position.y = .05;
-    const collar = add(new T.Mesh(new T.TorusGeometry(.135, .036, 8, 20), navy), c); collar.position.set(.04, .71, 0); collar.rotation.x = Math.PI / 2;
-    ball(.042, scarf, c, .185, .68, 0);
-    const knot = add(new T.Mesh(new T.ConeGeometry(.075, .15, 10), scarf), c); knot.position.set(.205, .58, 0); knot.rotation.z = Math.PI + .12; knot.scale.x = .4;
-    const tail = add(new T.Mesh(new T.TubeGeometry(new T.CatmullRomCurve3([[-.3, .08, -.1], [-.42, .1, .12], [-.3, .06, .36], [-.02, .05, .42], [.16, .07, .36]].map(([a, b, d]) => new T.Vector3(a, b, d))), 24, .05, 8, false), fur), c);
-    ball(.056, dark, c, .16, .07, .36); }
+      // a haunch and big hind foot with toes
+      ball(.18, furM, c, -.1, .165, s * .215, 1.2, .95, .62); ball(.082, cream, c, .11, .05, s * .255, 1.55, .58, 1); for (const k of [-1, 0, 1]) ball(.026, cream, c, .225, .04, s * .255 + k * .04, 1.1, .85, 1);
+      // a front leg in one piece, its paw white, with toes and a couple of tabby bands
+      ringPaint(sweep([[.1, .46, s * .115], [.17, .3, s * .105], [.205, .14, s * .1], [.222, .05, s * .1]], t => .074 - t * .012, furM, c, 18, 14), 18, 14, t => blend(blend(fur, stripe, Math.pow(Math.max(0, Math.sin(t * 15 - 1)), 8) * .85 * smooth(.85, .6, t)), creamC, smooth(.68, .8, t)));
+      ball(.074, cream, c, .245, .042, s * .1, 1.3, .62, 1.05); for (const k of [-1, 0, 1]) ball(.023, cream, c, .325, .034, s * .1 + k * .036, 1.1, .85, 1);
+      // ears with a pink lining and a tuft
+      const ear = add(new T.Mesh(new T.ConeGeometry(.125, .24, 20), furM), c); ear.position.set(.045, 1.225, s * .205); ear.rotation.set(s * .34, 0, -.08); ear.scale.x = .55;
+      const inner = add(new T.Mesh(new T.ConeGeometry(.08, .17, 16), pink), c); inner.position.set(.083, 1.21, s * .21); inner.rotation.set(s * .34, 0, -.08); inner.scale.x = .3;
+      // big glossy eyes: dark rim, green iris, tall pupil and two highlights
+      ball(.086, ink, c, .362, 1.01, s * .146, .36, 1.08, .92);
+      ball(.074, iris, c, .378, 1.01, s * .144, .34, 1.06, .9);
+      ball(.05, ink, c, .395, 1.01, s * .142, .26, 1.24, .6);
+      ball(.022, white, c, .408, 1.045, s * .126, .7, 1, 1); ball(.011, white, c, .406, .978, s * .16, .7, 1, 1);
+      ball(.009, solid(0x8A3F0E, .7), c, .432, .885, s * .098); ball(.009, solid(0x8A3F0E, .7), c, .425, .858, s * .122);
+      // the mouth, a pad on each side, and whiskers that curve out and droop
+      ball(.066, cream, c, .412, .868, s * .052, .85, .78, 1);
+      sweep([[.472, .85, 0], [.476, .818, s * .026], [.462, .815, s * .062]], () => .0065, ink, c, 8, 6);
+      for (const [wy, wz] of [[.885, .18], [.862, .21], [.836, .18]]) sweep([[.42, wy, s * .1], [.39, wy + .015, s * (.1 + wz * .55)], [.33, wy - .025, s * (.1 + wz * 1.2)]], t => .0052 - t * .0036, white, c, 10, 5);
+      // cheek fluff that breaks up the outline
+      for (const [fy, fz] of [[.8, .34], [.87, .4], [.74, .26]]) { const tuft = add(new T.Mesh(new T.ConeGeometry(.045, .13, 8), furM), c); tuft.position.set(.04, fy, s * fz); tuft.rotation.x = s * (2.1 + (fy - .8) * -3); } }
+    ball(.026, pink, c, .478, .9, 0, .7, .6, 1.25); ball(.008, solid(0xFFFFFF, .25), c, .494, .907, .012);
+    
+    // the sailor kit: a deep navy collar with white piping, a red neckerchief, and a white cap tipped to one side
+    const collar = add(new T.Mesh(new T.CylinderGeometry(.14, .215, .13, 32, 1, true), navy.clone()), c); collar.material.side = T.DoubleSide; collar.position.set(.005, .655, 0);
+    for (const [ry, rr] of [[.592, .214], [.615, .191]]) { const pipe = add(new T.Mesh(new T.TorusGeometry(rr, .0085, 8, 40), white), c); pipe.position.set(.005, ry, 0); pipe.rotation.x = Math.PI / 2; }
+    const band = add(new T.Mesh(new T.TorusGeometry(.14, .032, 10, 28), scarf), c); band.position.set(.01, .735, 0); band.rotation.x = Math.PI / 2; band.scale.set(1, 1.05, 1);
+    ball(.052, scarf, c, .17, .69, 0, .9, .85, 1.05);
+    for (const s of [-1, 1]) { const end = add(new T.Mesh(new T.ConeGeometry(.066, .19, 12), scarf), c); end.position.set(.2, .575, s * .04); end.rotation.set(s * .2, 0, Math.PI + .1); end.scale.z = .35; }
+    const hat = new T.Group(); c.add(hat); hat.position.set(.05, 1.235, -.02); hat.rotation.set(-.14, 0, .16);
+    add(new T.Mesh(new T.CylinderGeometry(.128, .134, .05, 28), white), hat).position.y = .03;
+    add(new T.Mesh(new T.CylinderGeometry(.158, .118, .08, 28, 1, true), white), hat).position.y = .092;
+    ball(.112, white, hat, 0, .085, 0, 1.2, .46, 1.2);
+    const rib = add(new T.Mesh(new T.CylinderGeometry(.138, .127, .026, 28, 1, true), navy), hat); rib.position.y = .082;
+    // the tail curls round the feet, ringed, with a dark tip
+    ringPaint(sweep([[-.3, .085, -.08], [-.43, .1, .13], [-.32, .075, .38], [-.05, .06, .45], [.17, .075, .42]], t => t > .92 ? .058 * Math.sqrt(Math.max(.02, (1 - t) / .08)) : .068 - t * .012, furM, c, 34, 12), 34, 12, t => blend(fur, stripe, Math.max(smooth(.84, .9, t), Math.pow(Math.max(0, Math.sin(t * 25)), 6) * .85))); }
   grp("fairylights"); A.fairylights.name = "fpString"; { const bulbs = [0xFFE27A, 0xF7A8C4, 0xA8D8F7, 0xA8E6CF].map(c => new T.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.4 }));
     for (const [a, b] of [[mastTops[mainI], bowEnd], [mastTops[mainI], new T.Vector3(xAt(.01), railY(0) + .3, 0)]]) {
       const mid = a.clone().lerp(b, .5).add(new T.Vector3(0, -.6, 0)), curve = new T.QuadraticBezierCurve3(a.clone().add(new T.Vector3(0, -.3, 0)), mid, b);
