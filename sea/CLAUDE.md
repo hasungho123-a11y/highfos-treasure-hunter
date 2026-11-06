@@ -3,7 +3,7 @@
 학원 학생용 게임 사이트. 전투, 항해, 섬 미니게임, 배 꾸미기가 있습니다.
 같은 저장소의 다른 폴더(루트)에 있는 트레저헌터 사이트와는 **별개**이며, 이 폴더(`sea/`)만 작업합니다.
 
-- 이름은 사용자에게 보이는 곳만 바꿨습니다. 주소, Worker, DB 이름은 그대로 `highfos-sea`입니다. 아이콘 원본은 `public/icons/icon.svg`입니다.
+- 이름은 사용자에게 보이는 곳만 바꿨습니다. 주소, Worker, DB 이름은 그대로 `highfos-sea`입니다. 아이콘 원본은 `public/icons/icon.svg`이고, 깃발의 학원 로고는 저장소의 `tools/logo-mark.png`입니다.
 - 실서버: https://highfos-sea.highfos.workers.dev
 - Cloudflare: Worker `highfos-sea`, D1 `highfos-sea-db`
 - 저장소가 **공개**입니다. 설정 코드, DB ID, 학생 정보를 절대 커밋하지 마세요.
@@ -44,7 +44,7 @@ npx wrangler dev --port 8791
 ## 배포 순서
 처음 한 번 `npx wrangler login`을 합니다. 운영 DB ID는 `npx wrangler d1 list`로 확인합니다.
 
-1. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v29`입니다.
+1. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v30`입니다.
 2. DB가 바뀌면 **코드보다 먼저** 운영 DB에 마이그레이션하고 결과를 확인합니다. 과거에 순서를 바꿔 장애가 났습니다.
 3. `wrangler.toml`의 `REPLACE_WITH_DATABASE_ID`를 실제 ID로 잠시 바꾸고 배포한 뒤 **반드시 되돌립니다.** ID를 커밋하지 않습니다. ID 조회(`d1 list`)가 실패하면 배포하지 말고 다시 조회합니다. 인증 오류가 가끔 나는데, 빈 ID로 배포될 뻔한 적이 있습니다.
 4. 실서버 파일이 새 버전인지 확인하고, 고친 파일만 골라 커밋하고 푸시합니다.
