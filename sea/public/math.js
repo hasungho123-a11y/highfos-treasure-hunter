@@ -297,6 +297,11 @@ const MID = {
 const HOLD = { pairs, order, cipher, grid, series, speed, weigh };
 const either = name => (...a) => (LEVEL ? MID : HOLD)[name](...a);
 const html = label => String(label).replace(/(\d+)\/(\d+)/g, '<span class="frac"><i>$1</i><i>$2</i></span>');
-window.MathQ = { pairs: either("pairs"), order: either("order"), cipher: either("cipher"), grid: either("grid"), series: either("series"), speed: either("speed"), weigh: either("weigh"), html, shuffle,
-  setLevel: n => { LEVEL = n ? 1 : 0; }, level: () => LEVEL, gridSize: () => LEVEL ? 7 : 6, gridLabel: i => LEVEL ? neg(i - 4) : String(i) };
+// practising one kind of question: keep drawing, from easy to hard stages, until that kind comes up. A kind this level doesn't have falls back to the normal questions.
+let FOCUS = null;
+const focused = (name, stages, at) => (...a) => { const make = either(name); if (!FOCUS) return make(...a);
+  for (let i = 0; i < 600; i++) { const b = [...a]; b[at] = stages[i % 3]; const q = make(...b); if (q.tag === FOCUS) return q; }
+  return make(...a); };
+window.MathQ = { pairs: either("pairs"), order: focused("order", [1, 5, 9], 0), cipher: either("cipher"), grid: either("grid"), series: either("series"), speed: either("speed"), weigh: focused("weigh", [0, 4, 8], 1), html, shuffle,
+  setFocus: tag => { FOCUS = tag || null; }, setLevel: n => { LEVEL = n ? 1 : 0; }, level: () => LEVEL, gridSize: () => LEVEL ? 7 : 6, gridLabel: i => LEVEL ? neg(i - 4) : String(i) };
 })();

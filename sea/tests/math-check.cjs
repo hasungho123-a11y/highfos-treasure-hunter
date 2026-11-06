@@ -156,4 +156,10 @@ for (let i = 0; i < N * 3; i++) { const map = i % 3, round = i % 10, q = Q.weigh
 Q.setLevel(0);
 console.log("중등 표적 유형", JSON.stringify(midOrder));
 console.log("수열 규칙", Object.keys(rules).length, "가지");
+// practising one kind of question: every kind a game can ask must come up when it is asked for
+for (const level of [0, 1]) { Q.setLevel(level); const orderTags = new Set(), weighTags = [new Set(), new Set(), new Set()];
+  for (let i = 0; i < 4000; i++) { orderTags.add(Q.order(1 + i % 10, 4).tag); weighTags[i % 3].add(Q.weigh(i % 3, i % 10).tag); }
+  for (const tag of orderTags) { Q.setFocus(tag); for (let i = 0; i < 40; i++) { const q = Q.order(1 + i % 10, 4); if (q.tag !== tag) fail("연습 유형 다름", [tag, q.tag]); } Q.setFocus(null); }
+  weighTags.forEach((tags, map) => { for (const tag of tags) { Q.setFocus(tag); for (let i = 0; i < 40; i++) { const q = Q.weigh(map, i % 10); if (q.tag !== tag) fail("연습 유형 다름", [map, tag, q.tag]); } Q.setFocus(null); } }); }
+Q.setLevel(0);
 console.log("검사 끝, 실패", bad, "건 / 문제 유형", JSON.stringify(asks)); process.exitCode = bad ? 1 : 0;

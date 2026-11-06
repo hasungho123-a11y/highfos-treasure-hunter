@@ -355,6 +355,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
     battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), duelLeft: await duelLeft(db, st.id, game, today), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates), titles: await titlesFor(db, st.id, owned),
     approved: (await db.prepare("SELECT id, title, energy FROM logs WHERE student_id=? AND kind='quest' ORDER BY id DESC LIMIT 20").bind(st.id).all()).results,
+    weak: await weakOf(db, st.id),
     likes: { counts: Object.fromEntries((await db.prepare("SELECT l.target AS id, COUNT(*) AS n FROM likes l JOIN students s ON s.id=l.target WHERE s.class_id=? GROUP BY l.target").bind(st.class_id).all()).results.map(r => [r.id, r.n])), mine: (await db.prepare("SELECT target FROM likes WHERE liker=? AND week=?").bind(st.id, ws).all()).results.map(r => r.target) } };
 });
 on("POST", "/api/kid/title", "student", async ({ db, me, body }) => {
@@ -401,6 +402,22 @@ on("POST", "/api/kid/play/finish/:id", "student", async ({ db, me, params, body 
   const dmg = body.quit || fast ? 0 : Math.max(1, stars * BOSS_STAR_DMG), cls = me.student.class_id, hit = (await hitBosses(db, await getGame(db), [{ sid, cls, dmg, src: "game" }]))[cls];
   return { ok: true, stars, score, points, item, boss: hit ? { ...hit, dmg } : null };
 });
+// what was answered in a game or a practice, for the teacher's report. Only the kind of question, the counts and the wrong questions' own text are kept.
+const MISS_KEEP = 40, ANSWER_DAYS = 180, WEAK_DAYS = 14, clip = (v, n) => String(v ?? "").slice(0, n);
+on("POST", "/api/kid/answers", "student", async ({ db, me, body }) => {
+  const sid = me.student.id, game = String(body.game || ""), now = Date.now(), date = kstDate(now), st = []; if (!GAMES[game]) throw bad("없는 게임이에요");
+  const map = int(body.map || 0, 0, MAPS.length - 1);
+  for (const [t, v] of Object.entries(body.tally || {}).slice(0, 20)) { const tries = int(v?.[0], 1, 200), wrong = int(v?.[1], 0, tries);
+    st.push(db.prepare("INSERT INTO answers (student_id, date, tag, game, map, tries, wrong) VALUES (?,?,?,?,?,?,?) ON CONFLICT(student_id, date, tag, game, map) DO UPDATE SET tries=tries+excluded.tries, wrong=wrong+excluded.wrong").bind(sid, date, clip(t, 20), game, map, tries, wrong)); }
+  for (const m of [].concat(body.missed || []).slice(0, 20)) st.push(db.prepare("INSERT INTO misses (student_id, tag, lines, answer, how, at) VALUES (?,?,?,?,?,?)").bind(sid, clip(m?.tag, 20), JSON.stringify([].concat(m?.lines || []).slice(0, 4).map(l => clip(l, 200))), clip(m?.answer, 120), clip(m?.how, 200), now));
+  if (!st.length) return { ok: true };
+  st.push(db.prepare("DELETE FROM misses WHERE student_id=? AND id NOT IN (SELECT id FROM misses WHERE student_id=? ORDER BY id DESC LIMIT ?)").bind(sid, sid, MISS_KEEP), db.prepare("DELETE FROM answers WHERE student_id=? AND date<?").bind(sid, kstDate(now - ANSWER_DAYS * 864e5)));
+  await db.batch(st); return { ok: true };
+});
+// the kinds of question a child has been missing lately, and which game asked them, so they can be practised
+async function weakOf(db, sid) { const by = {};
+  for (const r of (await db.prepare("SELECT tag, game, map, tries, wrong FROM answers WHERE student_id=? AND date>=? ORDER BY date").bind(sid, kstDate(Date.now() - WEAK_DAYS * 864e5)).all()).results) { const b = by[r.tag] || (by[r.tag] = { tag: r.tag, tries: 0, wrong: 0 }); b.tries += r.tries; b.wrong += r.wrong; b.game = r.game; b.map = r.map; }
+  return Object.values(by).filter(b => b.wrong).sort((a, b) => b.wrong / b.tries - a.wrong / a.tries || b.wrong - a.wrong).slice(0, 6); }
 // gold shop
 on("POST", "/api/kid/deco/buy", "student", async ({ db, me, body }) => {
   const d = itemOf(String(body.key || "")); if (!d || d.dropOnly) throw bad("살 수 없는 꾸미기예요");
@@ -615,6 +632,12 @@ on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
     bosses.push({ classId: c.id, name: BOSSES[b.kind].name, hp: b.hp, left: Math.max(0, b.hp - tot.reduce((n, x) => n + x.dmg, 0)), down: !!b.defeated_at, gold: b.gold, hits: tot.filter(x => x.id).sort((x, y) => y.dmg - x.dmg) }); }
   return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, logs, battles, bosses, teacherDmg: BOSS_TEACHER_DMG, ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
 });
+// the wrong-answer report: every child's counts per kind of question over the last few days; the page adds them up by class
+on("GET", "/api/t/report/:days", "teacher", async ({ db, params }) => {
+  const days = int(params.days, 1, ANSWER_DAYS);
+  return { days, rows: (await db.prepare("SELECT a.student_id AS id, a.tag, SUM(a.tries) AS tries, SUM(a.wrong) AS wrong FROM answers a JOIN students s ON s.id=a.student_id WHERE s.active=1 AND a.date>=? GROUP BY a.student_id, a.tag").bind(kstDate(Date.now() - (days - 1) * 864e5)).all()).results };
+});
+on("GET", "/api/t/report/student/:id", "teacher", async ({ db, params }) => ({ misses: (await db.prepare("SELECT tag, lines, answer, how, at FROM misses WHERE student_id=? ORDER BY id DESC LIMIT 20").bind(params.id).all()).results.map(m => ({ ...m, lines: JSON.parse(m.lines) })) }));
 // the teacher's own shot, for a class that did well in the lesson or a boss set too strong
 on("POST", "/api/t/classes/:id/bossfire", "teacher", async ({ db, params }) => {
   const cls = Number(params.id), hit = (await hitBosses(db, await getGame(db), [{ sid: 0, cls, dmg: BOSS_TEACHER_DMG, src: "teacher" }]))[cls];
@@ -662,7 +685,8 @@ on("POST", "/api/t/classes/:id/days", "teacher", async ({ db, params, body }) =>
 on("POST", "/api/t/classes/:id/bonus", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET daily_bonus=? WHERE id=?").bind(int(body.bonus, 0, 10), params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/level", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET level=? WHERE id=?").bind(body.level ? 1 : 0, params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/delete", "teacher", async ({ db, params }) => {
-  await db.batch([db.prepare("DELETE FROM sessions WHERE role='student' AND user_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE classes SET active=0 WHERE id=?").bind(params.id),
+  await db.batch([db.prepare("DELETE FROM answers WHERE student_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("DELETE FROM misses WHERE student_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id),
+    db.prepare("DELETE FROM sessions WHERE role='student' AND user_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE classes SET active=0 WHERE id=?").bind(params.id),
     db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id IN (SELECT id FROM students WHERE class_id=?)").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE class_id=?").bind(params.id)]); return { ok: true };
 });
 async function newStudent(db, classId, nickname, pin, mustChange) {
@@ -680,7 +704,7 @@ on("POST", "/api/t/students/:id/reset-pin", "teacher", async ({ db, params }) =>
   const pin = randomPin(), h = await hashSecret(pin);
   await db.batch([db.prepare("UPDATE students SET pin_hash=?, salt=?, must_change=1, failed=0, locked_until=0 WHERE id=?").bind(h.hash, h.salt, params.id), db.prepare("DELETE FROM sessions WHERE role='student' AND user_id=?").bind(params.id)]); return { ok: true, pin };
 });
-on("POST", "/api/t/students/:id/delete", "teacher", async ({ db, params }) => { await db.batch([db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id=?").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE id=?").bind(params.id), db.prepare("DELETE FROM sessions WHERE role='student' AND user_id=?").bind(params.id)]); return { ok: true }; });
+on("POST", "/api/t/students/:id/delete", "teacher", async ({ db, params }) => { await db.batch([db.prepare("DELETE FROM answers WHERE student_id=?").bind(params.id), db.prepare("DELETE FROM misses WHERE student_id=?").bind(params.id), db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id=?").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE id=?").bind(params.id), db.prepare("DELETE FROM sessions WHERE role='student' AND user_id=?").bind(params.id)]); return { ok: true }; });
 on("POST", "/api/t/quests", "teacher", async ({ db, body }) => {
   const d = [str(body.title, 40), SUBJECTS.includes(body.subject) ? body.subject : "공통", KINDS.includes(body.kind) ? body.kind : "daily", int(body.energy, 0, 50)];
   if (body.id) await db.prepare("UPDATE quests SET title=?, subject=?, kind=?, energy=? WHERE id=?").bind(...d, int(body.id, 1)).run();

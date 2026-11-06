@@ -583,3 +583,9 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .miss li { display: grid; gap: 5px; padding-top: 10px; border-top: 1px solid var(--line) } .miss li small { color: var(--muted); font-weight: 600 }
 .miss-q { display: grid; gap: 4px; padding: 9px 11px; border-radius: 8px; background: #16302B; color: #fff; font-weight: 600 } .miss-q > div { display: flex; flex-wrap: wrap; align-items: center; gap: 4px } .miss-q .code-ic { width: 24px; height: 24px }
 .miss-a, .miss-how { margin: 0 } .miss-a b { display: inline-flex; align-items: center; gap: 4px; padding: 0 2px } .miss-a .code-ic { width: 24px; height: 24px; border-radius: 6px; background: #0B2233 } .miss-how { font-size: .9rem; color: var(--muted) }
+
+/* wrong-answer report */
+.rep-table td { vertical-align: middle } .rep-table .num, .rep-table td:first-child, .rep-table th { white-space: nowrap } .rep-table td.small { min-width: 170px }
+.rate { display: flex; align-items: center; gap: 8px; min-width: 120px } .rate b { min-width: 3em; text-align: right; font-size: .9rem }
+.rate-bar { flex: 1 1 70px; height: 8px; border-radius: 99px; background: var(--sunk); overflow: hidden; display: block } .rate-bar i { display: block; height: 100%; border-radius: 99px; background: var(--sea1) }
+.rep-miss { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px } .rep-miss li { display: grid; gap: 5px } .rep-miss small { color: var(--muted); font-weight: 600 }

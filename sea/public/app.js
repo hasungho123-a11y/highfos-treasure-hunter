@@ -379,18 +379,19 @@ const ERA_ART = {
     memory: (x, y) => `<path d="M${x - 22} ${y + 2} A22 22 0 0 1 ${x + 22} ${y + 2} Z" fill="#F2F2E8"/><path d="M${x + 8} ${y - 12} L${x + 26} ${y - 46} M${x + 18} ${y - 12} L${x + 26} ${y - 46}" stroke="#C9D3DC" stroke-width="3"/><circle cx="${x + 26}" cy="${y - 48}" r="4" fill="#D9402F"/>`
   }
 };
+const PRACTICE_NOTE = `<p class="small muted">연습은 행동력이 들지 않아요. 대신 포인트, 아이템, 보스 피해가 없어요.</p>`;
 function kIsle() {
   const d = K.d, k = K.isle, s = ISLES[k], g = s.game && d.games[s.game], m = d.maps[K.map], nm = m.isles[k];
   const head = `<div class="row between"><h2>${esc(nm)}</h2><button class="btn ghost sm" data-act="kisle" data-v="">닫기</button></div>`;
   if (g) { const can = d.bal.energy >= d.game.playCost;
     return `<section class="panel" id="islePanel">${head}<p class="small muted">${isleSub(k)}. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배예요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
       <div class="row small muted"><span>별 1개 ${g.stars[0]}점</span><span>· 별 2개 ${g.stars[1]}점</span><span>· 별 3개 ${g.stars[2]}점</span></div>
-      <div class="row"><button class="btn primary lg" data-act="kplay" data-v="${s.game}" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button><button class="btn" data-act="khow" data-v="${s.game}">게임 방법</button></div></section>`; }
+      <div class="row"><button class="btn primary lg" data-act="kplay" data-v="${s.game}" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button><button class="btn" data-act="kpractice" data-v="${s.game}|${K.map}|">연습</button><button class="btn" data-act="khow" data-v="${s.game}">게임 방법</button></div>${PRACTICE_NOTE}</section>`; }
   if (k === "port") { const p = d.pass, canPass = !p.bought && d.bal.points >= d.game.passCost, pg = d.games.port, can = d.bal.energy >= d.game.playCost;
     return `<section class="panel" id="islePanel">${head}
       <div class="port-game"><b>${["항구 저울", "석탄 저울", "보급 저울"][K.map]}</b><p class="small muted">짐 무게를 구해 추로 저울을 맞춰요. 별을 많이 받을수록 포인트가 많아요.${m.mult > 1 ? ` 이 바다는 포인트가 ${m.mult}배예요.` : ""} 낮은 확률로 치장품이나 ${esc(m.era)} 무기를 발견해요.</p>
         <div class="row small muted"><span>별 1개 ${pg.stars[0]}점</span><span>· 별 2개 ${pg.stars[1]}점</span><span>· 별 3개 ${pg.stars[2]}점</span></div>
-        <div class="row"><button class="btn primary lg" data-act="kplay" data-v="port" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button><button class="btn" data-act="khow" data-v="port">게임 방법</button></div></div>
+        <div class="row"><button class="btn primary lg" data-act="kplay" data-v="port" ${can ? "" : "disabled"}>${can ? `행동력 ${d.game.playCost} 쓰고 시작` : "행동력이 모자라요"}</button><button class="btn" data-act="kpractice" data-v="port|${K.map}|">연습</button><button class="btn" data-act="khow" data-v="port">게임 방법</button></div>${PRACTICE_NOTE}</div>
       <div class="portrow"><div><b>숙제 면제권</b><p class="small muted">포인트로 한 달에 한 번 살 수 있어요. 산 뒤 선생님이 챙겨 줘요.</p></div>
         ${K.confirm === "pass" ? `<span class="row"><button class="btn sm primary" data-act="kpass">${d.game.passCost}P로 사기</button><button class="btn sm" data-act="kno">취소</button></span>`
         : p.bought ? `<span class="pill ok">이번 달에 받았어요</span>` : `<button class="btn sm ${canPass ? "primary" : ""}" data-act="kpassAsk" ${canPass ? "" : "disabled"}>${canPass ? `${pts(d.game.passCost)} 사기` : `${d.game.passCost - d.bal.points}P 모자라요`}</button>`}</div>
@@ -521,7 +522,8 @@ function kCrew() { const d = K.d, me = d.me, friends = d.mates.filter(m => m.id 
       ${friends.length ? `<div class="deco-grid">${order.map(m => `<div class="deco-item ${K.mate === m.id ? "sel" : ""}" data-act="kmate" data-v="${m.id}">${shipBox(m.ship, m.look, m.sail, "", "tiny")}<b>${online.has(m.id) ? `<i class="on-dot" title="접속 중"></i>` : ""}${esc(m.nickname)}</b><span class="small muted">${esc(shipName(m.ship))}${titleName(m.look) ? ` · ${esc(titleName(m.look))}` : ""}</span><span class="row">${hearts(count(m.id))}${heart(m)}${duelBtn(m)}</span></div>`).join("")}</div>` : `<p class="muted small">아직 같은 반 친구가 없어요.</p>`}</section>`; }
 function kLog() {
   const d = K.d;
-  return `${d.orders.length ? `<section class="panel"><h3>선생님이 챙겨 줄 것</h3><div class="plist">${d.orders.map(o => `<div class="prow"><span>${esc(o.name)}</span><span class="small muted">${fmtTime(o.created_at)}</span><span class="pill wait">준비 중</span></div>`).join("")}</div></section>` : ""}
+  return `${d.weak?.length ? `<section class="panel"><h3>다시 풀어 볼 유형</h3><p class="small muted">최근 2주 동안 틀린 적이 있는 유형이에요. 연습은 행동력이 들지 않아요. 대신 포인트, 아이템, 보스 피해가 없어요.</p><div class="plist">${d.weak.map(w => `<div class="prow"><span><b>${esc(w.tag)}</b></span><span class="small muted num">${w.tries}문제 중 ${w.wrong}개 틀림</span><button class="btn sm primary" data-act="kpractice" data-v="${esc(`${w.game}|${w.map}|${w.tag}`)}">연습</button></div>`).join("")}</div></section>` : ""}
+    ${d.orders.length ? `<section class="panel"><h3>선생님이 챙겨 줄 것</h3><div class="plist">${d.orders.map(o => `<div class="prow"><span>${esc(o.name)}</span><span class="small muted">${fmtTime(o.created_at)}</span><span class="pill wait">준비 중</span></div>`).join("")}</div></section>` : ""}
     <section class="panel feed"><h3>항해 일지</h3>${d.log.length ? `<ul>${d.log.map(l => `<li><time class="num">${fmtTime(l.at)}</time><span>${esc(l.title)}</span><span class="small">${l.energy ? `<span class="nrg num">${l.energy > 0 ? "+" : ""}${l.energy}</span> ` : ""}${l.points ? `<span class="pt num">${l.points > 0 ? "+" : ""}${l.points}</span> ` : ""}${l.gold ? `<span class="gold num">${l.gold > 0 ? "+" : ""}${l.gold}</span>` : ""}</span></li>`).join("")}</ul>` : `<p class="muted small">아직 기록이 없어요.</p>`}</section>
     <section class="panel"><h3>내 계정</h3><div class="row"><button class="btn ghost" data-act="logout">로그아웃</button></div></section>`;
 }
@@ -529,30 +531,63 @@ async function kDo(fn, msg) { try { const r = await fn(); if (msg) toast(msg); a
 // pictures for a mini-game: the water from this sea's map, plus 3D stills of my ship seen from behind (reef) or the target seen from the side (cannon)
 const TARGETS = ["galleon", "ironclad", "destroyer"];
 const loadImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
-async function gameArt(kind) {
-  const me = K.d.me, art = { sea: await loadImg(`/maps/sea${K.map + 1}.webp`) };
+async function gameArt(kind, map = K.map) {
+  const me = K.d.me, art = { sea: await loadImg(`/maps/sea${map + 1}.webp`) };
   if (kind === "memory" || kind === "port" || !window.Ship3D?.available()) return art;
   try { const v = await Ship3D.get(), s = sail(me.sail);
     if (kind === "reef") art.me = await loadImg((await v.snapshot(me.look, s, me.look.fc != null ? sail(me.look.fc) : s, me.ship, 384, { th: Math.PI, ph: .62 })).url);
-    if (kind === "cannon") art.target = await loadImg((await v.snapshot({ hull: "ebony" }, "#8E2A22", "#23262B", TARGETS[K.map], 384, { th: Math.PI / 2, ph: 1.12 })).url);
+    if (kind === "cannon") art.target = await loadImg((await v.snapshot({ hull: "ebony" }, "#8E2A22", "#23262B", TARGETS[map], 384, { th: Math.PI / 2, ph: 1.12 })).url);
   } catch (e) {}
   return art;
 }
+// a game seen for the first time explains itself before any energy is spent; false if the child backs out
+async function introOnce(kind, map) {
+  const seen = `hs_intro4_${kind}_${map}${K.d.level ? "_m" : ""}`; // raise the number when a game's rules change, so everyone sees the new rules once
+  if (ls.get(seen)) return true;
+  const go = await Games.intro(kind, map, K.d.maps[map].isles[kind], K.d.games[kind].stars, true); if (go) ls.set(seen, "1"); return go;
+}
+const artSoon = (kind, map) => Promise.race([gameArt(kind, map), sleep(1800).then(() => null)]); // never make a child wait long for pictures: the plain drawings are the fallback
+// what was answered goes to the teacher's report, whether the game was finished or not; a lost report never gets in the child's way
+function sendAnswers(game, map) { const tally = Games.tally(); if (!Object.keys(tally).length) return Promise.resolve();
+  return api("/api/kid/answers", { game, map, tally, missed: (Games.missed() || []).map(m => ({ tag: m.tag, lines: m.plain?.lines || m.lines, answer: m.plain?.answer || m.answer, how: m.how })) }).catch(() => {}); }
 // a mini-game from the first tap to the reward card
 async function playGame(kind) {
   if (K.busy) return; K.busy = true;
-  try { // a game seen for the first time explains itself before any energy is spent
+  try {
     MathQ.setLevel(K.d.level);
-    const seen = `hs_intro4_${kind}_${K.map}${K.d.level ? "_m" : ""}`; // raise the number when a game's rules change, so everyone sees the new rules once
-    if (!ls.get(seen)) { const go = await Games.intro(kind, K.map, K.d.maps[K.map].isles[kind], K.d.games[kind].stars, true); if (!go) { K.busy = false; return; } ls.set(seen, "1"); }
+    if (!await introOnce(kind, K.map)) { K.busy = false; return; }
     const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
-    const art = await Promise.race([gameArt(kind), sleep(1800).then(() => null)]); // never make a child wait long for pictures: the plain drawings are the fallback
+    const art = await artSoon(kind, K.map);
     const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], art });
+    await sendAnswers(kind, K.map);
     if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0, quit: true }).catch(() => {}); toast("다음에 다시 도전해요"); }
     else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r, Games.missed()); }
     await kidLoad(); kidRender();
   } catch (e) { toast(e.message); }
   K.busy = false; kidNotices();
+}
+// practice: no energy, and no points, items or boss damage, because the server never hears of it as a play. tag narrows the questions to one kind.
+async function practice(v) {
+  if (K.busy) return; K.busy = true;
+  const [kind, m, tag] = v.split("|"), map = Number(m); let again = false;
+  try {
+    MathQ.setLevel(K.d.level);
+    if (await introOnce(kind, map)) {
+      MathQ.setFocus(tag);
+      const art = await artSoon(kind, map), score = await Games.run(kind, { map, title: `연습 · ${tag || K.d.maps[map].isles[kind]}`, art });
+      await sendAnswers(kind, map);
+      if (score === null) toast("다음에 또 연습해요"); else again = await practiceCard(score, Games.missed());
+      await kidLoad(); kidRender();
+    }
+  } catch (e) { toast(e.message); }
+  MathQ.setFocus(null); K.busy = false;
+  if (again) return practice(v);
+  kidNotices();
+}
+function practiceCard(score, miss) {
+  return new Promise(done => { const m = document.createElement("div"); m.className = "modal"; m.setAttribute("role", "dialog"); m.setAttribute("aria-modal", "true");
+    m.innerHTML = `<div class="panel reward"><h2>연습 끝!</h2><p class="num">점수 ${score}</p><p class="small muted">연습이라 포인트와 보스 피해는 없어요.</p>${missHTML(miss)}<div class="row how-go"><button class="btn primary lg" data-again>한 번 더</button><button class="btn" data-close>닫기</button></div></div>`;
+    document.body.appendChild(m); const end = v => { m.remove(); done(v); }; m.querySelector("[data-again]").onclick = () => end(true); m.querySelector("[data-close]").onclick = () => end(false); m.querySelector("[data-again]").focus(); });
 }
 const foundHTML = it => `<div class="found r-${esc(it.rarity)}"><span class="rar r-${esc(it.rarity)}">${esc(it.rarity)}</span>${it.slot === "weapon" ? `<div class="found-w">${weaponImg(it.key.split(".")[1])}</div>` : ""}<b>${esc(it.name)} 발견!</b><small>${it.dup ? `이미 있어서 금화 ${it.gold}개로 바꿨어요` : it.slot === "weapon" ? (K.d.deco.find(x => x.key === it.key).era > K.d.ships.find(s => s.id === K.d.me.ship).era ? `${K.d.ships.find(s => s.era === K.d.deco.find(x => x.key === it.key).era).name}부터 장착할 수 있어요` : "장비 → 무기에서 장착할 수 있어요") : "장비에서 쓸 수 있어요"}</small></div>`;
 async function openBox(mapId) {
@@ -566,7 +601,7 @@ async function openBox(mapId) {
   } catch (e) { toast(e.message); kidRender(); }
   K.busy = false;
 }
-// the questions missed in this game, kept for the card only: nothing is sent to the server
+// the questions missed in this game, for the card
 function missHTML(miss) { if (!miss) return "";
   if (!miss.length) return `<p class="miss-none">틀린 문제가 없어요!</p>`;
   const counts = {}; for (const m of miss) counts[m.tag] = (counts[m.tag] || 0) + 1;
@@ -710,7 +745,7 @@ const KID_ACTS = {
   khow: v => (MathQ.setLevel(K.d.level), Games.intro)(v, K.map, K.d.maps[K.map].isles[v], K.d.games[v].stars, false),
   ktab: v => { K.tab = v; K.mate = null; K.confirm = null; K.tryKey = null; K.tryShip = null; K.crop = null; K.photoDraft = null; kidRender(); scrollTo(0, 0); },
   kisle: v => { K.confirm = null; if (!v) { K.isle = null; return kidRender(); } K.isle = v; const el = $("#wship"); if (el) el.style.cssText += ";" + shipAt(v); K.at = v; setTimeout(() => { kidRender(); $("#islePanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, el ? 620 : 0); },
-  kplay: playGame, kfight: playFight,
+  kplay: playGame, kpractice: practice, kfight: playFight,
   ksea: v => { const m = K.d.maps[Number(v)]; if (!seaOpen(m)) return toast(`${m.name}는 전투력 ${m.power}부터 열려요. 지금은 ${K.d.me.power}이에요`); K.map = m.id; K.isle = null; K.at = "port"; K.confirm = null; kidRender(); },
   kpassAsk: () => { K.confirm = "pass"; kidRender(); }, kno: () => { K.confirm = null; kidRender(); },
   kpass: () => { K.confirm = null; return kDo(() => api("/api/kid/pass", {}), "숙제 면제권을 샀어요! 선생님이 챙겨 줄 거예요"); },
@@ -746,8 +781,8 @@ const KID_FORMS = {
 /* =====================================================================
    TEACHER
    ===================================================================== */
-const T = { d: null, tab: "grant", cls: "all", selQ: null, selS: new Set(), selR: new Set(), created: null, editQ: null, detail: null };
-const TTABS = [["grant", "미션 지급"], ["photo", "사진 승인"], ["crew", "반·선원"], ["quests", "미션 관리"], ["give", "건네줄 것"], ["battle", "전투·설정"], ["log", "오늘 기록"]];
+const T = { d: null, tab: "grant", cls: "all", selQ: null, selS: new Set(), selR: new Set(), created: null, editQ: null, detail: null, rep: null, repDays: 7, repKid: null, repMiss: null };
+const TTABS = [["grant", "미션 지급"], ["photo", "사진 승인"], ["crew", "반·선원"], ["quests", "미션 관리"], ["give", "건네줄 것"], ["report", "오답 리포트"], ["battle", "전투·설정"], ["log", "오늘 기록"]];
 async function tLoad() { T.d = await api("/api/t/state"); }
 async function teacherStart() { await tLoad(); tRender(); setInterval(async () => { if (document.hidden) return; const a = document.activeElement; if (a && a.matches("input,select,textarea")) return; try { await tLoad(); tRender(); } catch (e) {} }, 15000); }
 const sname = id => T.d.students.find(s => s.id === id)?.nickname || "삭제된 학생";
@@ -758,7 +793,7 @@ function tRender() {
   const d = T.d, keep = keepInputs(app);
   app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>선생님 · ${esc(d.teacher)}</small></div></div><div class="hright"><button class="btn ghost sm" data-act="logout">로그아웃</button></div></div>
     <nav class="tabs" aria-label="화면">${TTABS.map(([k, l]) => `<button data-act="ttab" data-v="${k}" aria-current="${T.tab === k}">${l}${k === "grant" && d.requests.length ? `<span class="cnt">${d.requests.length}</span>` : ""}${k === "give" && d.orders.length ? `<span class="cnt">${d.orders.length}</span>` : ""}${k === "photo" && d.photos.length ? `<span class="cnt">${d.photos.length}</span>` : ""}</button>`).join("")}</nav></header>
-    <main>${({ grant: tGrant, photo: tPhoto, crew: tCrew, quests: tQuests, give: tGive, battle: tBattle, log: tLog })[T.tab]()}</main>`;
+    <main>${({ grant: tGrant, photo: tPhoto, crew: tCrew, quests: tQuests, give: tGive, report: tReport, battle: tBattle, log: tLog })[T.tab]()}</main>`;
   restoreInputs(keep);
 }
 function tGrant() {
@@ -805,6 +840,25 @@ function tGive() {
   const d = T.d;
   return `<section class="panel"><h2>건네줄 것</h2><p class="small muted">아이들이 포인트로 산 숙제 면제권이에요. 실제로 적용한 뒤 '줬어요'를 눌러요.</p>${d.orders.length ? `<div class="plist">${d.orders.map(o => `<div class="prow"><span><b>${esc(sname(o.student_id))}</b> · ${esc(o.name)} <span class="small muted">${fmtTime(o.created_at)}</span></span><button class="btn sm ghost" data-act="tcancelOrder" data-v="${o.id}">취소(환불)</button><button class="btn sm primary" data-act="tdeliver" data-v="${o.id}">줬어요</button></div>`).join("")}</div>` : `<p class="muted small">지금 건네줄 것이 없어요.</p>`}</section>`;
 }
+// the wrong-answer report: which kinds of question a class misses most, then each child. The bars and the counts beside them say the same thing, so a kind asked only once or twice doesn't look alarming.
+const rateOf = x => x.tries ? Math.round(x.wrong / x.tries * 100) : 0;
+const rateBar = x => `<span class="rate"><i class="rate-bar"><i style="width:${rateOf(x)}%"></i></i><b class="num">${rateOf(x)}%</b></span>`;
+async function tReportLoad() { try { T.rep = await api(`/api/t/report/${T.repDays}`); } catch (e) { toast(e.message); } if (T.tab === "report") tRender(); }
+function tReport() {
+  const list = tList(), ids = new Set(list.map(s => s.id)), tags = {}, kids = {};
+  for (const r of (T.rep?.rows || []).filter(r => ids.has(r.id))) {
+    const t = tags[r.tag] || (tags[r.tag] = { tag: r.tag, tries: 0, wrong: 0, who: 0 }), k = kids[r.id] || (kids[r.id] = { id: r.id, tries: 0, wrong: 0, tags: [] });
+    t.tries += r.tries; t.wrong += r.wrong; if (r.wrong) t.who++; k.tries += r.tries; k.wrong += r.wrong; k.tags.push(r); }
+  const worst = (a, b) => b.wrong - a.wrong || rateOf(b) - rateOf(a), tagRows = Object.values(tags).sort(worst), kidRows = Object.values(kids).sort(worst), idle = list.filter(s => !kids[s.id]), open = kids[T.repKid];
+  const weakText = k => k.tags.filter(t => t.wrong).sort(worst).slice(0, 3).map(t => `${esc(t.tag)} <span class="num">${t.wrong}/${t.tries}</span>`).join(" · ") || "틀린 문제 없음";
+  const head = `<div class="row between"><h2>오답 리포트</h2><div class="chips">${[[7, "최근 7일"], [30, "최근 30일"]].map(([n, l]) => `<button class="chip" data-act="trepDays" data-v="${n}" aria-pressed="${T.repDays === n}">${l}</button>`).join("")}</div></div>${tChips()}<p class="small muted">미니게임과 연습에서 푼 문제를 세요. 범선의 바다 보물 동굴(짝 맞추기)과 친구 대결은 빠져 있어요.</p>`;
+  if (!T.rep) return `<section class="panel">${head}<p class="muted small">불러오는 중…</p></section>`;
+  if (!tagRows.length) return `<section class="panel">${head}<p class="muted small">이 기간에 쌓인 기록이 없어요. 아이들이 미니게임을 하면 여기에 쌓여요.</p></section>`;
+  return `<section class="panel">${head}<h3>많이 틀린 유형</h3><div class="tablewrap"><table class="rep-table"><thead><tr><th>유형</th><th>틀린 비율</th><th>틀림 / 푼 문제</th><th>틀린 학생</th></tr></thead><tbody>${tagRows.map(t => `<tr><td><b>${esc(t.tag)}</b></td><td>${rateBar(t)}</td><td class="num">${t.wrong} / ${t.tries}</td><td class="num">${t.who}명</td></tr>`).join("")}</tbody></table></div></section>
+    <section class="panel"><h2>학생별</h2><p class="small muted">이름을 누르면 최근에 틀린 문제를 볼 수 있어요. 틀린 수가 많은 학생부터 보여요.</p><div class="tablewrap"><table class="rep-table"><thead><tr><th>이름</th><th>틀린 비율</th><th>틀림 / 푼 문제</th><th>많이 틀린 유형</th></tr></thead><tbody>${kidRows.map(k => `<tr class="click" data-act="trepKid" data-v="${k.id}" aria-selected="${k.id === T.repKid}"><td><b>${esc(sname(k.id))}</b></td><td>${rateBar(k)}</td><td class="num">${k.wrong} / ${k.tries}</td><td class="small">${weakText(k)}</td></tr>`).join("")}</tbody></table></div>
+      ${idle.length ? `<p class="small muted">이 기간에 문제를 풀지 않은 학생: ${idle.map(s => esc(s.nickname)).join(", ")}</p>` : ""}</section>
+    ${open ? `<section class="panel"><div class="row between"><h2>${esc(sname(open.id))}의 최근 틀린 문제</h2><button class="btn sm ghost" data-act="trepKid" data-v="${open.id}">닫기</button></div>${T.repMiss === null ? `<p class="muted small">불러오는 중…</p>` : T.repMiss.length ? `<ol class="rep-miss">${T.repMiss.map(m => `<li><small>${esc(m.tag)} · ${fmtTime(m.at)}</small><div class="miss-q num">${m.lines.map(l => `<div>${MathQ.html(esc(l))}</div>`).join("")}</div><p class="miss-a">정답 <b class="num">${MathQ.html(esc(m.answer))}</b></p>${m.how ? `<p class="miss-how num">${MathQ.html(esc(m.how))}</p>` : ""}</li>`).join("")}</ol>` : `<p class="muted small">저장된 틀린 문제가 없어요.</p>`}</section>` : ""}`;
+}
 function tBattle() {
   const d = T.d, g = d.game, n = (id, label, v, max = 100000) => `<label class="f">${label}<input type="number" id="${id}" min="0" max="${max}" value="${v}" data-keep="no"></label>`;
   const bossRow = b => `<div class="t-boss"><div class="row between"><span><b>${esc(cname(b.classId))}</b> · ${esc(b.name)}</span>${b.down ? `<span class="pill ok">격파</span>` : `<button class="btn sm" data-act="tbossfire" data-v="${b.classId}">선생님 포격 -${d.teacherDmg}</button>`}</div><div class="boss-hp"><i style="width:${b.left / b.hp * 100}%"></i><b class="num">${b.left} / ${b.hp}</b></div><p class="small muted">공격한 학생 ${b.hits.length}명 / ${d.students.filter(s => s.class_id === b.classId).length}명${b.hits.length ? ` · ${b.hits.slice(0, 8).map(h => `${esc(sname(h.id))} ${h.dmg}`).join(", ")}` : ""}</p></div>`;
@@ -824,7 +878,10 @@ const T_ACTS = {
   tphotoOk: v => tDo(() => api(`/api/t/photos/${v}/approve`, {}), "승인했어요. 아이의 배에 달렸어요"),
   tphotoNo: v => tDo(() => api(`/api/t/photos/${v}/reject`, {}), "반려했어요. 사진을 지우고 금화를 돌려줬어요"),
   tphotoOff: v => { if (T.photoArm !== v) { T.photoArm = v; return toast("한 번 더 누르면 사진을 내리고 지워요"); } T.photoArm = null; return tDo(() => api(`/api/t/photos/${v}/remove`, {}), "사진을 내렸어요"); },
-  ttab: v => { T.tab = v; tRender(); scrollTo(0, 0); }, tcls: v => { T.cls = v === "all" ? "all" : Number(v); tRender(); },
+  ttab: v => { T.tab = v; tRender(); scrollTo(0, 0); if (v === "report") tReportLoad(); },
+  trepDays: v => { T.repDays = Number(v); T.rep = null; tRender(); return tReportLoad(); },
+  trepKid: async v => { const id = Number(v); if (T.repKid === id) { T.repKid = null; return tRender(); } T.repKid = id; T.repMiss = null; tRender(); try { const r = await api(`/api/t/report/student/${id}`); if (T.repKid === id) { T.repMiss = r.misses; tRender(); } } catch (e) { toast(e.message); } },
+  tcls: v => { T.cls = v === "all" ? "all" : Number(v); tRender(); },
   tselr: v => { const i = Number(v); T.selR.has(i) ? T.selR.delete(i) : T.selR.add(i); tRender(); }, tselrAll: () => { T.d.requests.forEach(r => T.selR.add(r.id)); tRender(); },
   tapprove: async () => { const ids = [...T.selR]; T.selR.clear(); const r = await tDo(() => api("/api/t/requests/approve", { ids })); if (r) toast(`${r.given}개 승인했어요${r.skipped.length ? ` · ${r.skipped.length}개는 이미 받은 미션이에요` : ""}`); },
   treject: () => { const ids = [...T.selR]; T.selR.clear(); return tDo(() => api("/api/t/requests/reject", { ids }), "반려했어요"); },
