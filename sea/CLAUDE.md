@@ -9,7 +9,7 @@
 - 저장소가 **공개**입니다. 설정 코드, DB ID, 학생 정보를 절대 커밋하지 마세요.
 
 ## 다른 컴퓨터에서 이어갈 때
-`git pull`로 최신 코드를 받고 `sea/` 폴더를 엽니다. 지금 쓰지 않는 이전 작업물은 저장소의 `archive/`에 있습니다.
+`git pull`로 최신 코드를 받고 `sea/` 폴더를 엽니다. 운영자 컴퓨터의 작업 원본은 `내 문서\highfos-treasure-hunter`입니다. 임시 폴더에서 작업하지 않습니다. 지금 쓰지 않는 이전 작업물은 저장소의 `archive/`에 있습니다.
 
 ## 꼭 지킬 것
 - 답변은 항상 한국어로. 코드 작업이나 배포 중에도 영어로 바꾸지 않습니다.
@@ -24,8 +24,8 @@
 - `public/app.js`: 화면 전체. 템플릿 문자열과 `data-act` 이벤트 방식이며 빌드 단계가 없습니다.
 - `public/ship3d.js`: three.js r147(CDN) 3D. `makeShip`이 배와 부착물을 만들고, `fight`가 전투 연출을 합니다.
 - `public/voyage.js`, `games.js`, `sound.js`, `style.css`, `sw.js`: 지도·2D 배, 미니게임, 효과음, 스타일, 오프라인 캐시.
-- `public/math.js`: 미니게임 수학 문제 생성기. 문제를 저장하지 않고 매번 만듭니다. 고치면 `sea/` 폴더에서 `node tests/math-check.cjs`로 정답을 다시 검사합니다.
-- `schema.sql`: 전체 스키마(새 DB용). `migrations/`: 운영 DB에 순서대로 적용한 변경분(001~006 적용 완료).
+- `public/math.js`: 미니게임 수학 문제 생성기. 문제는 매번 새로 만들고, 틀린 문제의 글자만 오답 리포트용으로 저장합니다. 고치면 `sea/` 폴더에서 `node tests/math-check.cjs`로 정답을 다시 검사합니다.
+- `schema.sql`: 전체 스키마(새 DB용). `migrations/`: 운영 DB에 순서대로 적용한 변경분(001~007 적용 완료).
 
 ## 로컬 실행 (`sea/` 폴더에서)
 `.dev.vars` 파일을 만들고 `SETUP_CODE=아무-로컬-값`을 적습니다. 이 파일은 커밋되지 않습니다.
@@ -38,25 +38,48 @@ npx wrangler d1 execute highfos-sea-db --local --file schema.sql
 npx wrangler dev --port 8791
 ```
 
-새 로컬 DB는 비어 있습니다. 처음 접속하면 위의 로컬 설정 코드로 교사 계정을 만들고, 반과 학생을 테스트용으로 추가합니다.
+운영자 컴퓨터의 시험 데이터는 `--persist-to .wrangler\hs-local`로 씁니다. 커밋되지 않습니다. 새 로컬 DB는 비어 있습니다. 처음 접속하면 위의 로컬 설정 코드로 교사 계정을 만들고, 반과 학생을 테스트용으로 추가합니다.
 로컬 DB에서는 `wrangler.toml`의 `REPLACE_WITH_DATABASE_ID`를 그대로 둡니다. 바꾸면 다른 DB 파일을 보게 됩니다.
 
 ## 배포 순서
-처음 한 번 `npx wrangler login`을 합니다. 운영 DB ID는 `npx wrangler d1 list`로 확인합니다.
-
-1. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v43`입니다.
-2. DB가 바뀌면 **코드보다 먼저** 운영 DB에 마이그레이션하고 결과를 확인합니다. 과거에 순서를 바꿔 장애가 났습니다.
-3. `wrangler.toml`의 `REPLACE_WITH_DATABASE_ID`를 실제 ID로 잠시 바꾸고 배포한 뒤 **반드시 되돌립니다.** ID를 커밋하지 않습니다. ID 조회(`d1 list`)가 실패하면 배포하지 말고 다시 조회합니다. 인증 오류가 가끔 나는데, 빈 ID로 배포될 뻔한 적이 있습니다.
-4. 실서버 파일이 새 버전인지 확인하고, 고친 파일만 골라 커밋하고 푸시합니다.
-
-운영 DB 변경과 배포 명령 형식:
+처음 한 번 `npx wrangler login`을 합니다. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v44`입니다. 그다음 `sea/` 폴더에서 실행합니다.
 
 ```bash
-npx wrangler d1 execute highfos-sea-db --remote -y --file migrations/파일이름.sql
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\deploy.ps1 -Message "커밋 메시지"
+```
+
+DB가 바뀌면 `-Migration migrations\파일이름.sql`을 붙입니다. 스크립트가 검사, 운영 DB 백업, 마이그레이션, 배포, 실서버 파일 비교, 커밋과 푸시를 차례로 합니다.
+
+- 운영 DB는 **코드보다 먼저** 바꿉니다. 과거에 순서를 바꿔 장애가 났습니다.
+- `wrangler.toml`의 `REPLACE_WITH_DATABASE_ID`는 스크립트가 배포 중에만 바꾸고 되돌립니다. ID 조회가 실패하면 배포하지 않습니다. 인증 오류가 가끔 나는데, 빈 ID로 배포될 뻔한 적이 있습니다.
+
+## 백업과 복구
+백업 파일은 저장소 밖 `내 문서\highfos-backups`에 쌓입니다. 학생 이름과 비밀번호 해시가 들어 있으니 커밋하거나 메신저로 보내지 않습니다. 오래된 파일은 자동으로 지우지 않습니다.
+
+배포할 때 자동으로 백업합니다. 따로 받거나 파일을 검사할 때는 `sea/` 폴더에서 실행합니다. 검사는 파일을 임시 로컬 DB에 넣어 보고 운영 DB와 줄 수를 비교합니다. 운영 DB를 바꾸지 않습니다.
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\backup.ps1
 ```
 
 ```bash
-npx wrangler deploy
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\backup-check.ps1 -File 백업파일경로
+```
+
+**어떻게 복구할지 먼저 고릅니다.** 복구는 DB 전체를 그 시점으로 되돌려서, 그 뒤의 모든 학생 기록이 함께 사라집니다.
+
+1. 학생 몇 명의 포인트나 행동력 실수: 복구하지 않고 '반·선원'의 조정으로 고칩니다.
+2. 반 삭제, 잘못된 마이그레이션처럼 큰 사고: Cloudflare Time Travel로 사고 직전으로 되돌립니다. 무료 요금제는 7일, 유료는 30일 안에서 가능합니다. 수업이 없는 시간에 합니다.
+3. 그보다 오래된 사고: 백업 파일을 새 DB에 넣어 필요한 내용을 확인하고 옮깁니다. 운영 DB에 바로 넣지 않습니다. 절차를 미리 시험하지 않았으니 먼저 로컬에서 해 봅니다.
+
+Time Travel 명령은 `wrangler.toml`이 없는 폴더(내 문서 등)에서 실행합니다. 시각은 UTC입니다. 복구 전에 백업을 한 번 더 받고, 복구 결과에 나오는 되돌리기용 책갈피를 적어 둡니다.
+
+```bash
+npx wrangler d1 time-travel info highfos-sea-db --timestamp=2026-01-31T05:00:00+00:00
+```
+
+```bash
+npx wrangler d1 time-travel restore highfos-sea-db --timestamp=2026-01-31T05:00:00+00:00
 ```
 
 ## 부착물 분류

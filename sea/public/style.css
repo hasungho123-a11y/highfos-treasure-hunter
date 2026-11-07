@@ -591,3 +591,4 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .rep-miss { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px } .rep-miss li { display: grid; gap: 5px } .rep-miss small { color: var(--muted); font-weight: 600 }
 #kidDetail { scroll-margin-top: 120px }
 .crew-table th, .crew-table td { white-space: nowrap }
+.btn.armed { background: var(--danger); border-color: var(--danger); color: #fff }
