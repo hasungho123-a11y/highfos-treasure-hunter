@@ -69,11 +69,11 @@ const rich = (g, x, y, text, size, face, weight = 700, outline = false) => { con
   const put = (t, cx, cy) => { if (outline) g.strokeText(t, cx, cy); g.fillText(t, cx, cy); };
   for (const p of parts) { const cx = px + p.w / 2; if (p.s) { g.font = `${weight} ${size}px ${face}`; put(p.s, cx, y + 1); } else { g.font = `${weight} ${size * .8}px ${face}`; put(p.n, cx, y - size * .5); put(p.d, cx, y + size * .54); const bar = Math.max(2, size * .09); if (outline) g.strokeRect(cx - p.w / 2 + 1, y - bar / 2 + 1, p.w - 2, bar); g.fillRect(cx - p.w / 2 + 1, y - bar / 2 + 1, p.w - 2, bar); } px += p.w; } g.textBaseline = "alphabetic"; };
 const plate = (g, x, y, text, size, bg, ink) => { const face = uiFont(), tw = richWidth(g, richParts(text), size, face, 700) + size * .9, th = size * (/\d\/\d/.test(text) ? 2.15 : 1.55); g.fillStyle = bg; g.beginPath(); if (g.roundRect) g.roundRect(x - tw / 2, y - th / 2, tw, th, 8); else g.rect(x - tw / 2, y - th / 2, tw, th); g.fill(); g.fillStyle = ink; rich(g, x, y, text, size, face); };
-/* 범선의 바다 포격: the ship hides in the fog on a 6-by-6 sea. Two sums give its column and row; from shot 7 a wind pushes the ball, so aim the other way. 10 shots; score = hits. */
+/* 범선의 바다 포격: the ship hides in the fog on a 6-by-6 sea. Two sums give its column and row; from shot 4 a wind pushes the ball, so aim the other way. 5 shots, at most 2 minutes; score = hits. */
 function cannon({ map, title, art }) {
   return new Promise(done => {
-    const s = shell(title, "식을 풀어 안개 속 적함이 있는 칸을 쏴요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
-    const SHOTS = 10, N = MathQ.gridSize(), TOP = 128, timeOf = n => 24 - n * .6; // time to work out both sums: 23.4 seconds, down to 18
+    const s = shell(title, "식을 풀어 안개 속 적함이 있는 칸을 쏴요. 5발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    const SHOTS = 5, N = MathQ.gridSize(), TOP = 128, timeOf = n => 21 - n * .6; // time to work out both sums: 20.4 seconds, down to 18
     const mid = MathQ.level(), lab = MathQ.gridLabel, where = q => mid ? `x좌표 ${lab(q.x)}, y좌표 ${lab(q.y)}` : `가로 ${q.x}, 세로 ${q.y}`; // 중등반 reads a coordinate plane, -3 to 3 on both axes
     let shot = 0, hits = 0, t = 0, last = performance.now(), q = null, left = 0, ball = null, reveal = null, pause = .3, msg = null, over = false, kick = 0;
     const layout = (w, h) => { const c = Math.floor(Math.min((w - 58) / N, (h - TOP - 118) / N)); return { c, ox: (w - c * N) / 2 + 12, oy: TOP }; };
@@ -87,7 +87,7 @@ function cannon({ map, title, art }) {
     (function tick(now) { if (over) return;
       const dt = Math.min(.05, (now - last) / 1000); last = now; t += dt; const w = cv.w, h = cv.h, l = layout(w, h), { c, ox, oy } = l;
       sea(g, w, h, t * .3, art); g.fillStyle = "rgba(6,28,46,.34)"; g.fillRect(0, 0, w, h);
-      if (!q && !reveal && shot < SHOTS) { pause -= dt; if (pause <= 0) { shot++; q = MathQ.grid(shot); left = timeOf(shot); } }
+      if (!q && !reveal && shot < SHOTS) { pause -= dt; if (pause <= 0) { shot++; q = MathQ.grid(shot * 2); left = timeOf(shot); } }
       if (q && !ball && !reveal) { left -= dt; if (left <= 0) { say(`시간 초과 · ${where(q)}`, false); Sfx.splash(); finish(false, 2.2); } }
       // the sea chart
       for (let i = 1; i <= N; i++) for (let j = 1; j <= N; j++) { const [x, y] = spot(l, i, j); g.fillStyle = (i + j) % 2 ? "rgba(255,255,255,.1)" : "rgba(255,255,255,.03)"; g.fillRect(x - c / 2, y - c / 2, c, c); }
@@ -111,11 +111,11 @@ function cannon({ map, title, art }) {
 }
 /* 암초 해협: a line of rocks with three channels comes down; the question is on top and each channel carries an answer. Steer into the right one.
    Each sea keeps its own trouble: a current that pushes the ship, fog that hides the answers until late, mines lit only by the sonar with the channels coming faster.
-   Score = 3 for each channel, the same scale as before; three wrong channels and it's over; 20 channels at most. */
+   Score = 3 for each channel, the same scale as before; three wrong channels and it's over; 10 channels at most, about 1.5 minutes. */
 function reef({ map, title, art }) {
   return new Promise(done => {
     const s = shell(title, ["문제를 풀어 정답 통로로 배를 몰아요. 해류가 배를 옆으로 밀어요.", "문제를 먼저 풀어 둬요. 안개 때문에 통로의 답이 늦게 보여요.", "문제를 풀어 정답 통로로 배를 몰아요. 기뢰는 소나가 지날 때만 보여요."][map]), cv = canvasIn(s.stage), { g } = cv, fx = bits();
-    const GATES = 20, POINT = 3, LANES = 3, thing = ["암초", "빙산", "기뢰"][map];
+    const GATES = 10, POINT = 3, LANES = 3, thing = ["암초", "빙산", "기뢰"][map];
     let x = .5, t = 0, last = performance.now(), gate = null, gap = .5, count = 0, passed = 0, lives = 3, over = false, ending = false, ping = 0, msg = null;
     const move = e => { const r = s.stage.getBoundingClientRect(); x = Math.min(.95, Math.max(.05, (e.clientX - r.left) / r.width)); };
     s.stage.addEventListener("pointerdown", move); s.stage.addEventListener("pointermove", move);
@@ -123,9 +123,9 @@ function reef({ map, title, art }) {
     const say = (text, good) => { msg = { text, good, a: good ? 1 : 2.6 }; };
     s.quit.onclick = () => end(null);
     (function tick(now) { if (over) return;
-      const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; t += dt; const w = cv.w, h = cv.h, py = h - 70, travel = Math.max(6, 11 - count * .25) / [1, 1, 1.15][map], speed = (h + 20) / travel; // seconds from the top of the screen to the ship
+      const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; t += dt; const w = cv.w, h = cv.h, py = h - 70, travel = Math.max(6, 11 - count * .5) / [1, 1, 1.15][map], speed = (h + 20) / travel; // seconds from the top of the screen to the ship
       sea(g, w, h, t * 3, art);
-      if (!gate && !ending) { gap -= dt; if (gap <= 0) { count++; gate = { q: MathQ.order(Math.min(10, count), LANES, "통로"), y: -30, rocks: [0, 1, 2, 3].map(i => ({ i, x: 0, y: 0, r: i % 3 ? 19 : 15 })) }; } }
+      if (!gate && !ending) { gap -= dt; if (gap <= 0) { count++; gate = { q: MathQ.order(count, LANES, "통로"), y: -30, rocks: [0, 1, 2, 3].map(i => ({ i, x: 0, y: 0, r: i % 3 ? 19 : 15 })) }; } }
       const push = map === 0 && !ending ? (Math.sin(t * .62 + 1) * .065 + Math.sin(t * .27) * .035) * Math.min(1.5, 1 + count * .03) : 0, px = Math.min(.96, Math.max(.04, x + push)) * w, lane = Math.min(LANES - 1, Math.floor(px / w * LANES));
       if (map === 0) { windArrow(g, w - 72, h - 26, Math.max(-1, Math.min(1, push * 8)), "해류"); if (Math.random() < dt * 22) fx.add(Math.random() * w, Math.random() * h, 1, () => ({ vx: push * 1600, vy: speed * .5, life: .5, c: "#DDF2FF", a: .4, r0: 1.5, r1: .5 })); }
       g.fillStyle = "rgba(255,255,255,.07)"; g.fillRect(lane * w / LANES, 0, w / LANES, h); // the channel the ship is lined up with
@@ -167,11 +167,11 @@ function memory({ map, title }) {
   });
 }
 /* 증기의 바다 포격: while the torpedo runs, the ship keeps sailing. Work out how far away the ship must be when the torpedo is fired and press that key on the bridge console.
-   Buoys mark the distances on the water and everything plays out at true scale, so a wrong answer shows by how much it missed. 10 shots; score = hits. */
+   Buoys mark the distances on the water and everything plays out at true scale, so a wrong answer shows by how much it missed. 5 shots, at most 2 minutes; score = hits. */
 function torpedo({ map, title, art }) {
   return new Promise(done => {
-    const s = shell(title, "적함이 몇 m 남았을 때 쏠지 계산해서 눌러요. 10발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits(), face = uiFont();
-    const SHOTS = 10, MARKS = 6, START = MARKS + .6, FLIGHT = 1.3, timeOf = n => 31 - n; // time to work it out: 30 seconds, down to 21
+    const s = shell(title, "적함이 몇 m 남았을 때 쏠지 계산해서 눌러요. 5발!"), cv = canvasIn(s.stage), { g } = cv, fx = bits(), face = uiFont();
+    const SHOTS = 5, MARKS = 6, START = MARKS + .6, FLIGHT = 1.3, RUN_IN = 3, timeOf = n => 19.5 - n * .5; // time to work it out: 19 seconds, down to 17
     let shot = 0, hits = 0, t = 0, last = performance.now(), q = null, left = 0, shipAt = START, run = null, pause = .3, rest = 0, gone = false, msg = null, over = false, kick = 0;
     const layout = (w, h) => { const x0 = Math.max(44, w * .12), step = (w - x0 - 34) / START, con = h - Math.min(172, h * .28); return { x0, step, con, ty: 104 + (con - 104) * .52 }; };
     const say = (a, b, good) => { msg = { a, b, good }; if (!good) note("속력·거리·시간", [q.shipText, q.torpText], `${q.D}m`, q.why); else gotIt("속력·거리·시간"); };
@@ -198,13 +198,13 @@ function torpedo({ map, title, art }) {
     (function tick(now) { if (over) return;
       const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now; t += dt; const w = cv.w, h = cv.h, l = layout(w, h), { x0, step, con, ty } = l, X = k => x0 + k * step;
       sea(g, w, h, t * .3, art); g.fillStyle = "rgba(6,28,46,.18)"; g.fillRect(0, 0, w, h);
-      if (!q && rest <= 0 && shot < SHOTS) { pause -= dt; if (pause <= 0) { shot++; q = MathQ.speed(shot); left = timeOf(shot); shipAt = START; gone = false; run = null; msg = null; } }
-      if (q && !run && rest <= 0) { left -= dt; if (left <= 0) { say("시간 초과 · " + q.D + "m에서 쏴요", q.why, false); Sfx.splash(); rest = 3.2; } }
-      // the ship sails at its true speed on the buoys' scale, and covers the right distance in exactly the torpedo's flight
-      if (run) { shipAt -= dt * q.k / FLIGHT; if (!gone) fx.add(x0 + shipAt * step + Math.min(150, w * .4) * .42, ty + 8, 1, () => ({ vx: 26 + Math.random() * 18, vy: (Math.random() - .5) * 8, life: .7, c: "#F2FAFF", a: .6, r0: 3, r1: 8 })); }
-      if (run && !run.fired && shipAt <= run.k) { run.fired = true; kick = 1; Sfx.shot("torpedo"); }
+      if (!q && rest <= 0 && shot < SHOTS) { pause -= dt; if (pause <= 0) { shot++; q = MathQ.speed(shot * 2); left = timeOf(shot); shipAt = START; gone = false; run = null; msg = null; } }
+      if (q && !run && rest <= 0) { left -= dt; if (left <= 0) { say("시간 초과 · " + q.D + "m에서 쏴요", q.why, false); Sfx.splash(); rest = 3; } }
+      // the ship hurries up to the chosen mark, then sails at its true speed on the buoys' scale while the torpedo runs, covering the right distance in exactly the torpedo's flight
+      if (run) { shipAt -= dt * q.k / FLIGHT * (run.fired ? 1 : RUN_IN); if (!gone) fx.add(x0 + shipAt * step + Math.min(150, w * .4) * .42, ty + 8, 1, () => ({ vx: 26 + Math.random() * 18, vy: (Math.random() - .5) * 8, life: .7, c: "#F2FAFF", a: .6, r0: 3, r1: 8 })); }
+      if (run && !run.fired && shipAt <= run.k) { shipAt = run.k; run.fired = true; kick = 1; Sfx.shot("torpedo"); }
       if (run && run.fired && run.p < 1) { run.p += dt / FLIGHT;
-        if (run.p >= 1) { if (run.k === q.k) { hits++; gone = true; blast(fx, x0, ty); Sfx.boom(); say("명중!", q.why, true); rest = 1.8; } else { spray(fx, x0, ty + 6); Sfx.splash(); say(q.D + "m에서 쏴야 해요", q.why, false); rest = 3.2; } } }
+        if (run.p >= 1) { if (run.k === q.k) { hits++; gone = true; blast(fx, x0, ty); Sfx.boom(); say("명중!", q.why, true); rest = 1.8; } else { spray(fx, x0, ty + 6); Sfx.splash(); say(q.D + "m에서 쏴야 해요", q.why, false); rest = 3; } } }
       // the torpedo's lane, the meeting point and the distance buoys
       g.strokeStyle = "rgba(255,255,255,.45)"; g.setLineDash([4, 8]); g.lineWidth = 2; g.beginPath(); g.moveTo(x0, ty + 8); g.lineTo(x0, con - 30); g.stroke();
       for (let k = 1; k <= MARKS; k++) { const on = run && !run.fired && run.k === k; g.strokeStyle = on ? "#FFE27A" : "rgba(255,255,255,.2)"; g.lineWidth = on ? 2 : 1; g.beginPath(); g.moveTo(X(k), ty + 18); g.lineTo(X(k), con); g.stroke(); } g.setLineDash([]);
@@ -224,13 +224,13 @@ function torpedo({ map, title, art }) {
       requestAnimationFrame(tick); })(last);
   });
 }
-/* 현대의 바다 포격: the order names one target by a math condition; press and hold it until the lock closes. Nothing else tells it from the rest. 10 waves; score = kills. */
+/* 현대의 바다 포격: the order names one target by a math condition; press and hold it until the lock closes. Nothing else tells it from the rest. 5 waves; score = kills. */
 function missile({ map, title, art }) {
   return new Promise(done => {
-    const s = shell(title, "명령에 맞는 표적을 계산해서 꾹 눌러요. 10번!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
-    const WAVES = 10, HOLD = .42, timeOf = w => 15 - w * .5; // time to work it out: 14.5 seconds, down to 10
+    const s = shell(title, "명령에 맞는 표적을 계산해서 꾹 눌러요. 5번!"), cv = canvasIn(s.stage), { g } = cv, fx = bits();
+    const WAVES = 5, HOLD = .42, timeOf = w => 15 - w * .5; // time to work it out: 14.5 seconds, down to 12.5
     let wave = 0, hits = 0, t = 0, last = performance.now(), cs = [], left = 0, lock = null, shot = null, pause = .5, msg = null, over = false, q = null;
-    const spawn = (w, h) => { wave++; const n = 2 + Math.min(2, Math.floor(wave / 4)); q = MathQ.order(wave, n); cs = []; left = timeOf(wave);
+    const spawn = (w, h) => { wave++; const n = 2 + Math.min(2, Math.floor(wave / 2)); q = MathQ.order(wave * 2, n); cs = []; left = timeOf(wave);
       for (let i = 0; i < n; i++) { let x, y, tries = 0; do { x = 66 + Math.random() * (w - 132); y = h * .24 + Math.random() * h * .42; } while (cs.some(c => Math.abs(c.x - x) < 125 && Math.abs(c.y - y) < 96) && ++tries < 40); cs.push({ x, y, label: q.opts[i], real: q.opts[i] === q.real, vx: (Math.random() - .5) * 12 }); } };
     const say = (text, good) => { msg = { text, good, a: good ? 1 : 2.4 }; }; // a wrong answer stays up longer, so the right one can be read
     const closeWave = () => { cs = []; lock = null; pause = msg && !msg.good ? 1.5 : .55; if (wave >= WAVES) { over = "ending"; setTimeout(() => end(hits), 1000); } };    const at = e => { const r = s.stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
@@ -263,10 +263,10 @@ function missile({ map, title, art }) {
 }
 const wait = ms => new Promise(r => setTimeout(r, ms));
 /* 암호 등대: the lighthouse sends five numbers of a series. Find the rule, then press the lamp with the next number, three times over. A wrong lamp costs a chance and shows the rule.
-   Score = 1 for each right lamp, 8 rounds, up to 24, the same scale as before; three misses or three minutes end it. */
+   Score = 2 for each right lamp, 4 rounds, up to 24, the same scale as the other games on this island; three misses or two minutes end it. */
 function lighthouse({ map, title }) {
   return new Promise(done => {
-    const s = shell(title, "수가 변하는 규칙을 찾아 다음 수가 적힌 등을 눌러요."), ROUNDS = 8, TOTAL = 180;
+    const s = shell(title, "수가 변하는 규칙을 찾아 다음 수가 적힌 등을 눌러요."), ROUNDS = 4, TOTAL = 120;
     s.el.classList.add("g-mem", "era-" + map); s.stage.style.setProperty("--pic", "url(/maps/sea" + (map + 1) + ".webp)");
     s.stage.innerHTML = '<div class="sig seq"><div class="seq-tape num" aria-live="polite"></div><i class="code-time"><i></i></i><svg class="seq-scene" viewBox="0 0 240 150" preserveAspectRatio="xMidYMax meet" aria-hidden="true"><defs><linearGradient id="lhBeam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--beam, #FFF3B8)" stop-opacity=".75"/><stop offset="1" stop-color="var(--beam, #FFF3B8)" stop-opacity="0"/></linearGradient><clipPath id="lhTower"><path d="M108 124 112 52h16l4 72z"/></clipPath></defs><g class="seq-beams"><path d="M120 40 340 4V76z" fill="url(#lhBeam)"/><path d="M120 40-100 4V76z" fill="url(#lhBeam)"/></g><path d="M-400 136H640V400H-400z" fill="#0A1E33"/><path d="M-400 136q20-5 40 0t40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0 40 0" fill="none" stroke="#2A5478" stroke-width="1.5"/><path d="M62 150c6-20 22-30 40-30h36c18 0 34 10 40 30z" fill="#2C2F35"/><path d="M84 132c8-8 18-12 28-12l-8 30H74c1-7 5-13 10-18z" fill="#3D4148"/><g clip-path="url(#lhTower)"><rect x="100" y="50" width="40" height="76" fill="#F2EAD8"/><rect x="100" y="66" width="40" height="15" fill="#B9352A"/><rect x="100" y="96" width="40" height="15" fill="#B9352A"/><rect x="120" y="50" width="20" height="76" fill="#0B1A2B" opacity=".24"/></g><rect x="107" y="49" width="26" height="4" rx="1" fill="#23262B"/><path d="M108 49v-5m24 5v-5m-12 5v-5m-6 5v-5m12 5v-5M106 44h28" stroke="#23262B" stroke-width="1.4"/><rect class="seq-lantern" x="112" y="30" width="16" height="14" fill="var(--beam, #FFE9A1)"/><path d="M112 30v14m5.300-14v14m5.400-14v14m5.300-14v14" stroke="#23262B" stroke-width="1.2"/><path d="M109 30h22l-11-10z" fill="#B9352A"/><circle cx="120" cy="18" r="1.800" fill="#C9A24A"/></svg><p class="sig-say" aria-live="polite"></p><div class="lamps">' + ["red", "amber", "green", "blue"].map((c, i) => '<button type="button" class="lamp l-' + c + '" data-i="' + i + '"><b class="num"></b></button>').join("") + "</div></div>";
     const tape = s.stage.querySelector(".seq-tape"), bar = s.stage.querySelector(".code-time i"), say = s.stage.querySelector(".sig-say"), lamps = [...s.stage.querySelectorAll(".lamp")], words = lamps.map(b => b.querySelector("b"));
@@ -280,26 +280,26 @@ function lighthouse({ map, title }) {
     const chip = (text, cls = "") => { const e = document.createElement("span"); e.className = cls; e.innerHTML = MathQ.html(text); tape.appendChild(e); return e; };
     const blank = () => { tape.querySelector(".blank")?.remove(); chip("?", "blank"); };
     const deal = () => { cur.asks[step].opts.forEach((o, i) => { words[i].innerHTML = MathQ.html(o); lamps[i].setAttribute("aria-label", o); }); blank(); say.textContent = "다음 수가 적힌 등을 눌러요"; lock = false; };
-    const show = async () => { lock = true; step = 0; cur = MathQ.series(round); tape.innerHTML = ""; words.forEach(w => w.innerHTML = ""); say.textContent = round === 2 || round === 5 ? "규칙이 더 어려워져요!" : "신호를 받는 중이에요"; await wait(500); for (const label of cur.shown) { if (over) return; chip(label); await flash(Math.floor(Math.random() * 4), 230); await wait(90); } if (!over) deal(); };
+    const show = async () => { lock = true; step = 0; cur = MathQ.series(round * 2); tape.innerHTML = ""; words.forEach(w => w.innerHTML = ""); say.textContent = round === 1 || round === 3 ? "규칙이 더 어려워져요!" : "신호를 받는 중이에요"; await wait(500); for (const label of cur.shown) { if (over) return; chip(label); await flash(Math.floor(Math.random() * 4), 230); await wait(90); } if (!over) deal(); };
     s.stage.addEventListener("click", async e => { const b = e.target.closest(".lamp"); if (!b || lock || over) return; const i = Number(b.dataset.i), ask = cur.asks[step], got = ask.opts[i]; lock = true; flash(i, 170);
       if (got !== ask.real) { note("수열", [[...cur.shown, ...cur.asks.slice(0, step).map(a => a.real), "?"].join(", ")], ask.real, cur.rule); lives--; hud(); Sfx.wrong(); tape.querySelector(".blank")?.remove(); chip(ask.real, "fix"); say.innerHTML = MathQ.html("정답 " + ask.real + " · " + cur.rule); await wait(3000); if (over) return; if (!lives) return end(score); round++; if (round >= ROUNDS) return end(score); return show(); }
-      score++; gotIt("수열"); hud(); tape.querySelector(".blank")?.remove(); chip(ask.real, "got"); step++;
+      score += 2; gotIt("수열"); hud(); tape.querySelector(".blank")?.remove(); chip(ask.real, "got"); step++;
       if (step < cur.asks.length) return deal();
       Sfx.match(); say.textContent = "수신 완료! " + cur.rule; await wait(1300); if (over) return; round++; if (round >= ROUNDS) return end(score); show(); });
     hud(); show();
   });
 }
 /* 통신 기지: work out what a symbol is worth from the clues. Right answers bring harder messages, worth more:
-   the first 3 give 1 point each, the next 3 give 2, the rest give 3. Score = points, up to 24. */
+   the first 2 give 1 point each, the next 2 give 2, the rest give 3. Score = points, up to 24, in 100 seconds. */
 function codebreak({ map, title }) {
   return new Promise(done => {
-    const s = shell(title, "식을 풀어 기호의 값을 알아내요. 틀리면 5초가 줄어요."), ids = ["star", "anchor", "compass", "moon", "flame", "shell"], MAX = 24, TOTAL = 120;
+    const s = shell(title, "식을 풀어 기호의 값을 알아내요. 틀리면 5초가 줄어요."), ids = ["star", "anchor", "compass", "moon", "flame", "shell"], MAX = 24, TOTAL = 100;
     s.el.classList.add("g-mem", `era-${map}`); s.stage.style.setProperty("--pic", `url(/maps/sea${map + 1}.webp)`);
     const icon = id => `<svg class="code-ic" viewBox="0 0 100 100" aria-hidden="true">${V.embSVG(id, 50, 50, 86, "#FFFFFF", "#0B2233")}</svg>`;
     s.stage.innerHTML = `<div class="cipher"><div class="code-clues" aria-live="polite"></div><div class="code-in"><p class="code-ask num"></p><i class="code-time"><i></i></i><p class="sig-say" aria-live="polite"></p></div><div class="code-keys nine">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button type="button" data-n="${n}" class="num">${n}</button>`).join("")}</div></div>`;
     const clues = s.stage.querySelector(".code-clues"), ask = s.stage.querySelector(".code-ask"), bar = s.stage.querySelector(".code-time i"), say = s.stage.querySelector(".sig-say");
     let cur = null, solved = 0, wrong = 0, score = 0, left = TOTAL, over = false, wait2 = false, lastT = performance.now();
-    const levelOf = n => n < 3 ? 0 : n < 6 ? 1 : 2, HAN = { a: "가", b: "나", c: "다" }, plainCipher = c => ({ lines: c.clues.map(l => l.map(t => HAN[t] || t).join("")), answer: `${HAN[c.ask]} = ${c.answer}` });
+    const levelOf = n => n < 2 ? 0 : n < 4 ? 1 : 2, HAN = { a: "가", b: "나", c: "다" }, plainCipher = c => ({ lines: c.clues.map(l => l.map(t => HAN[t] || t).join("")), answer: `${HAN[c.ask]} = ${c.answer}` });
     const next = () => { cur = MathQ.cipher(levelOf(solved)); wrong = 0; const pick = MathQ.shuffle(ids), sym = { a: pick[0], b: pick[1], c: pick[2] }, tok = t => sym[t] ? icon(sym[t]) : `<b>${t}</b>`;
       cur.shownClues = cur.clues.map(c => c.map(tok).join("")); cur.askIcon = icon(sym[cur.ask]); clues.innerHTML = cur.shownClues.map(c => `<div class="num">${c}</div>`).join(""); clues.classList.remove("new"); clues.offsetWidth; clues.classList.add("new");
       ask.innerHTML = `${icon(sym[cur.ask])}<b>= ?</b>`; };
@@ -308,13 +308,13 @@ function codebreak({ map, title }) {
     const tm = setInterval(() => { const n = performance.now(); left -= (n - lastT) / 1000; lastT = n; bar.style.width = Math.max(0, left / TOTAL * 100) + "%"; hud(); if (left <= 0) end(score); }, 100);
     s.quit.onclick = () => end(null);
     s.stage.addEventListener("click", e => { const b = e.target.closest("[data-n]"); if (!b || over || wait2) return;
-      if (Number(b.dataset.n) === cur.answer) { if (!wrong) gotIt("기호 식"); score = Math.min(MAX, score + levelOf(solved) + 1); solved++; Sfx.match(); say.textContent = solved === 3 || solved === 6 ? "더 어려운 암호가 들어와요!" : "해독 성공!"; if (score >= MAX) return end(score); next(); }
+      if (Number(b.dataset.n) === cur.answer) { if (!wrong) gotIt("기호 식"); score = Math.min(MAX, score + levelOf(solved) + 1); solved++; Sfx.match(); say.textContent = solved === 2 || solved === 4 ? "더 어려운 암호가 들어와요!" : "해독 성공!"; if (score >= MAX) return end(score); next(); }
       else { if (!wrong) note("기호 식", cur.shownClues, `${cur.askIcon} = ${cur.answer}`, "", plainCipher(cur)); left -= 5; wrong++; Sfx.wrong(); if (wrong < 2) say.textContent = "틀렸어요! 5초 감소"; else { say.textContent = `정답은 ${cur.answer}이었어요. 다음 암호로 넘어가요`; wait2 = true; setTimeout(() => { wait2 = false; if (!over) { say.textContent = ""; next(); } }, 1800); } } hud(); });
     next(); hud();
   });
 }
 /* 포구의 저울: the load's weight has to be worked out from its label, then weights go on the other pan until a weighing balances. The scale is locked until 달아 보기, so it can't be solved by watching it tip.
-   10 loads: 2 points first time, 1 point on the second try, up to 20. Three minutes. */
+   6 loads: 2 points first time, 1 point on the second try, up to 12. Two minutes. */
 const SCALE_LOAD = [
   `<path d="M-26 70c-6-14-3-30 9-40-3-5-2-9 2-11 5 2 9 3 15 3s10-1 15-3c4 2 5 6 2 11 12 10 15 26 9 40z" fill="#C9AE7C"/><path d="M-11 22c7 3 15 3 22 0l1 5c-8 3-16 3-24 0z" fill="#7B5A2E"/><path d="M4 28c13 8 19 24 14 42h8c6-14 3-30-9-40z" fill="#9A7F50"/>`,
   `<path d="M-25 34h50l-6 36h-38z" fill="#3B3F46"/><path d="M-25 34h50l-1 6h-48z" fill="#5C626B"/><path d="M-22 52h44l-1 5h-42z" fill="#2A2D32"/><path d="M-22 34l6-8 7 3 7-7 8 5 7-3 8 10z" fill="#17181B"/><path d="M-25 34c0-22 50-22 50 0" fill="none" stroke="#7D838C" stroke-width="2.500"/>`,
@@ -323,7 +323,7 @@ const SCALE_LOAD = [
 const panSVG = (cls, inner) => `<g class="w-pan ${cls}"><path d="M0 0-38 70M0 0 38 70" stroke="#6D5222" stroke-width="1.600" stroke-dasharray="3 2"/><circle r="3.500" fill="#E8C76A" stroke="#6D5222"/>${inner}<path d="M-46 70h92c-4 12-22 16-46 16s-42-4-46-16z" fill="url(#wBrass)" stroke="#5E4520"/><path d="M-46 70h92" stroke="#FFF0B8" stroke-width="1.500"/></g>`;
 function scales({ map, title }) {
   return new Promise(done => {
-    const s = shell(title, "무게를 구해서 오른쪽 접시에 추를 올려요."), ROUNDS = 10, TOTAL = 180, PIVOT = [160, 30], ARM = 112;
+    const s = shell(title, "무게를 구해서 오른쪽 접시에 추를 올려요."), ROUNDS = 6, TOTAL = 120, STAGE = [0, 1, 3, 4, 7, 8], PIVOT = [160, 30], ARM = 112;
     s.el.classList.add("g-mem", "era-" + map); s.stage.style.setProperty("--pic", "url(/maps/sea" + (map + 1) + ".webp)");
     s.stage.innerHTML = `<div class="weigh"><div class="weigh-tag num" aria-live="polite"></div><i class="code-time"><i></i></i>
       <svg class="weigh-scale" viewBox="0 0 320 196" role="img" aria-label="왼쪽 접시에 짐, 오른쪽 접시에 추가 올라가는 저울"><defs><linearGradient id="wBrass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F4DC92"/><stop offset=".55" stop-color="#BE8F36"/><stop offset="1" stop-color="#7C5718"/></linearGradient><linearGradient id="wPost" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8A6520"/><stop offset=".4" stop-color="#F0D484"/><stop offset="1" stop-color="#7C5718"/></linearGradient></defs>
@@ -341,10 +341,10 @@ function scales({ map, title }) {
     const end = v => { if (over) return; over = true; clearInterval(tm); cancelAnimationFrame(raf); s.el.remove(); done(v); };
     const tm = setInterval(() => { const n = performance.now(); left -= (n - lastT) / 1000; lastT = n; bar.style.width = Math.max(0, left / TOTAL * 100) + "%"; hud(); if (left <= 0) end(score); }, 100);
     s.quit.onclick = () => end(null);
-    const next = () => { cur = MathQ.weigh(map, round); tries = 0; on = []; lock = false; scaleEl.classList.remove("level"); target = 0; swing(); drawStack(); go.disabled = true;
+    const next = () => { cur = MathQ.weigh(map, STAGE[round]); tries = 0; on = []; lock = false; scaleEl.classList.remove("level"); target = 0; swing(); drawStack(); go.disabled = true;
       tag.innerHTML = `<small>왼쪽 접시의 짐</small><b>${MathQ.html(cur.load)}</b>`; tag.classList.remove("new"); void tag.offsetWidth; tag.classList.add("new");
       rack.innerHTML = cur.opts.map((o, i) => `<button type="button" class="weigh-w num" data-i="${i}" aria-pressed="false" aria-label="${o.label} 추">${MathQ.html(o.label)}</button>`).join("");
-      say.textContent = round === 3 || round === 7 ? "짐 문제가 더 어려워져요!" : "추를 누르면 접시에 올라가요"; hud(); };
+      say.textContent = round === 2 || round === 4 ? "짐 문제가 더 어려워져요!" : "추를 누르면 접시에 올라가요"; hud(); };
     const after = async ms => { lock = true; await wait(ms); if (over) return; round++; if (round >= ROUNDS) return end(score); next(); };
     s.stage.addEventListener("click", e => { if (lock || over) return;
       const w = e.target.closest(".weigh-w");
@@ -374,14 +374,14 @@ const weightText = (x, y, t, c) => { const f = t.match(/^(\d+)\/(\d+)(\D*)$/); i
 const scaleArt = (load, a, b, sky) => `<rect width="240" height="110" rx="10" fill="${sky}"/><path d="M116 22h8l2 70h-12z" fill="#D9B45C"/><rect x="88" y="92" width="64" height="9" rx="3" fill="#5B3A20"/><path d="M36 22h168" stroke="#E8C76A" stroke-width="5" stroke-linecap="round"/><path d="M50 22 28 66M50 22 72 66M190 22 168 66M190 22 212 66" stroke="#E8C76A"/><path d="M22 66h56q-6 11-28 11T22 66zM162 66h56q-6 11-28 11t-28-11z" fill="#D9B45C"/><rect x="20" y="38" width="60" height="26" rx="5" fill="#FFF6E0"/>${weightText(50, 51, load, "#14466F")}<rect x="154" y="38" width="36" height="26" rx="4" fill="#FFE27A"/>${weightText(172, 51, a, "#1B2A33")}<rect x="192" y="38" width="36" height="26" rx="4" fill="#FFE27A"/>${weightText(210, 51, b, "#1B2A33")}${label(120, 15, "달아 보기 전까지 저울은 움직이지 않아요", "#FFE27A")}`;
 const HOW = {
   port: [
-    { short: "짐 무게를 구해서 추로 저울을 맞춰요. 10번!", steps: ["위에 나온 짐의 무게를 먼저 계산해요. kg과 g을 잘 살펴요. 1kg은 1000g이에요.", "합이 짐과 같아지도록 추를 2개 이상 눌러 올려요. 다시 누르면 내려와요. 맞추는 방법이 여러 가지면 어느 쪽이든 좋아요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 뒤로 가면 평균을 구해요."], art: scaleArt("2.3kg", "1.5kg", "800g", "#2F7FB0") },
-    { short: "분수와 소수로 된 추까지 더해서 맞춰요. 10번!", steps: ["짐 무게를 구해요. 분수의 덧셈, 백분율, 비례배분이 나와요.", "추도 분수와 소수로 적혀 있어요. 합이 짐과 같아지도록 2개 이상 올려요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 저울이 기운 쪽을 보고 고쳐요."], art: scaleArt("7/10kg", "1/2kg", "0.2kg", "#3B4E6D") },
-    { short: "전체 무게와 나머지 무게를 거꾸로 구해요. 10번!", steps: ["짐 무게를 구해요. 소수의 곱셈, 일부로 전체 구하기, 평균으로 나머지 구하기가 나와요.", "추는 g, 소수, 분수로 섞여 있어요. 같은 단위로 바꿔서 더해요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요."], art: scaleArt("4kg", "2.5kg", "1.5kg", "#14251F") }
+    { short: "짐 무게를 구해서 추로 저울을 맞춰요. 6번!", steps: ["위에 나온 짐의 무게를 먼저 계산해요. kg과 g을 잘 살펴요. 1kg은 1000g이에요.", "합이 짐과 같아지도록 추를 2개 이상 눌러 올려요. 다시 누르면 내려와요. 맞추는 방법이 여러 가지면 어느 쪽이든 좋아요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 뒤로 가면 평균을 구해요."], art: scaleArt("2.3kg", "1.5kg", "800g", "#2F7FB0") },
+    { short: "분수와 소수로 된 추까지 더해서 맞춰요. 6번!", steps: ["짐 무게를 구해요. 분수의 덧셈, 백분율, 비례배분이 나와요.", "추도 분수와 소수로 적혀 있어요. 합이 짐과 같아지도록 2개 이상 올려요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 저울이 기운 쪽을 보고 고쳐요."], art: scaleArt("7/10kg", "1/2kg", "0.2kg", "#3B4E6D") },
+    { short: "전체 무게와 나머지 무게를 거꾸로 구해요. 6번!", steps: ["짐 무게를 구해요. 소수의 곱셈, 일부로 전체 구하기, 평균으로 나머지 구하기가 나와요.", "추는 g, 소수, 분수로 섞여 있어요. 같은 단위로 바꿔서 더해요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요."], art: scaleArt("4kg", "2.5kg", "1.5kg", "#14251F") }
   ],
   cannon: [
-    { short: "가로와 세로를 계산해서 그 칸을 쏴요. 10발!", steps: ["적함은 안개에 숨어 있어요. 위의 식을 풀면 가로, 세로 칸 번호가 나와요.", "그 칸을 누르면 포탄이 날아가요. 기회는 한 번이에요.", "뒤로 가면 바람이 포탄을 밀어요. 바람이 미는 만큼 반대쪽을 쏴요."], art: `${WATER}${[0, 1, 2, 3].map(i => `<path d="M${60 + i * 40} 18v80M60 ${18 + i * 26.6}h120" stroke="#fff" stroke-opacity=".45"/>`).join("")}<rect x="100" y="44.6" width="40" height="26.6" fill="#FFE27A" fill-opacity=".55"/>${label(120, 13, "가로 2", "#FFE27A")}${label(36, 62, "세로 2", "#FFE27A")}` },
-    { short: "적함이 몇 m 남았을 때 쏠지 계산해요. 10발!", steps: ["위에 적함의 빠르기와 어뢰가 도착하는 시간이 나와요.", "어뢰가 가는 동안 적함도 움직여요. 빠르기 × 시간으로 쏠 거리를 구해요.", "그 눈금을 누르면 적함이 거기 왔을 때 어뢰가 나가요. 뒤로 가면 빠르기와 시간부터 구해야 해요."], art: `${WATER}<rect x="44" y="4" width="152" height="18" rx="5" fill="#FFE27A"/>${label(120, 17, "1초에 30m · 4초 뒤 도착", "#1B2A33")}${hull(206, 44, "#5B6470")}<path d="M30 56h190" stroke="#fff" stroke-dasharray="3 6"/><path d="M30 56v46" ${dash}/><circle cx="30" cy="56" r="6" fill="none" stroke="#FFE27A" stroke-width="2"/>${[60, 120, 180].map((m, i) => `<rect x="${44 + i * 54}" y="72" width="46" height="24" rx="5" fill="${m === 120 ? "#FFE27A" : "#0D2233"}"/>${label(67 + i * 54, 88, m, m === 120 ? "#1B2A33" : "#fff")}`).join("")}` },
-    { short: "명령에 맞는 표적을 계산해서 꾹! 10번!", steps: ["위에 나온 명령을 읽어요. 수나 식이 조건에 맞는 표적이 진짜예요.", "진짜 표적을 손가락으로 꾹 누르고 있으면 미사일이 날아가요.", "틀린 표적을 누르거나 시간이 지나면 놓쳐요. 뒤로 갈수록 어려워져요."], art: `${WATER}<rect x="66" y="4" width="108" height="20" rx="5" fill="#FFE27A"/>${label(120, 18, "3의 배수인 표적", "#1B2A33")}${hull(70, 52, "#5B6470")}${bracket(70, 50, 24)}${label(70, 84, "27", "#FFF3B8")}${hull(176, 52, "#5B6470")}${label(176, 84, "35", "#FFF3B8")}` }
+    { short: "가로와 세로를 계산해서 그 칸을 쏴요. 5발!", steps: ["적함은 안개에 숨어 있어요. 위의 식을 풀면 가로, 세로 칸 번호가 나와요.", "그 칸을 누르면 포탄이 날아가요. 기회는 한 번이에요.", "뒤로 가면 바람이 포탄을 밀어요. 바람이 미는 만큼 반대쪽을 쏴요."], art: `${WATER}${[0, 1, 2, 3].map(i => `<path d="M${60 + i * 40} 18v80M60 ${18 + i * 26.6}h120" stroke="#fff" stroke-opacity=".45"/>`).join("")}<rect x="100" y="44.6" width="40" height="26.6" fill="#FFE27A" fill-opacity=".55"/>${label(120, 13, "가로 2", "#FFE27A")}${label(36, 62, "세로 2", "#FFE27A")}` },
+    { short: "적함이 몇 m 남았을 때 쏠지 계산해요. 5발!", steps: ["위에 적함의 빠르기와 어뢰가 도착하는 시간이 나와요.", "어뢰가 가는 동안 적함도 움직여요. 빠르기 × 시간으로 쏠 거리를 구해요.", "그 눈금을 누르면 적함이 거기 왔을 때 어뢰가 나가요. 뒤로 가면 빠르기와 시간부터 구해야 해요."], art: `${WATER}<rect x="44" y="4" width="152" height="18" rx="5" fill="#FFE27A"/>${label(120, 17, "1초에 30m · 4초 뒤 도착", "#1B2A33")}${hull(206, 44, "#5B6470")}<path d="M30 56h190" stroke="#fff" stroke-dasharray="3 6"/><path d="M30 56v46" ${dash}/><circle cx="30" cy="56" r="6" fill="none" stroke="#FFE27A" stroke-width="2"/>${[60, 120, 180].map((m, i) => `<rect x="${44 + i * 54}" y="72" width="46" height="24" rx="5" fill="${m === 120 ? "#FFE27A" : "#0D2233"}"/>${label(67 + i * 54, 88, m, m === 120 ? "#1B2A33" : "#fff")}`).join("")}` },
+    { short: "명령에 맞는 표적을 계산해서 꾹! 5번!", steps: ["위에 나온 명령을 읽어요. 수나 식이 조건에 맞는 표적이 진짜예요.", "진짜 표적을 손가락으로 꾹 누르고 있으면 미사일이 날아가요.", "틀린 표적을 누르거나 시간이 지나면 놓쳐요. 뒤로 갈수록 어려워져요."], art: `${WATER}<rect x="66" y="4" width="108" height="20" rx="5" fill="#FFE27A"/>${label(120, 18, "3의 배수인 표적", "#1B2A33")}${hull(70, 52, "#5B6470")}${bracket(70, 50, 24)}${label(70, 84, "27", "#FFF3B8")}${hull(176, 52, "#5B6470")}${label(176, 84, "35", "#FFF3B8")}` }
   ],
   reef: [
     { short: "정답 통로로 배를 몰아요. 해류를 버텨요!", steps: ["위의 문제를 풀고 정답이 적힌 통로로 배를 몰아요.", "해류가 배를 옆으로 밀어요. 반대로 버텨요.", "통로 하나에 3점이에요. 틀린 통로에 들어가면 기회가 줄어요. 기회는 3번이에요."], art: `${WATER}${rock(40, 28)}${rock(120, 28)}${rock(200, 28)}${label(80, 32, "24", "#FFE27A")}${label(160, 32, "27", "#FFE27A")}${hull(80, 78)}<path d="M150 86h34m-9-6 9 6-9 6" fill="none" stroke="#BFE8FF" stroke-width="3"/>${label(166, 104, "해류", "#BFE8FF")}` },
@@ -390,20 +390,20 @@ const HOW = {
   ],
   memory: [
     { short: "값이 같은 카드끼리 짝을 찾아요!", steps: ["카드를 두 장씩 뒤집어요.", "값이 같으면 짝이에요. 3/4과 75%, 2+3×2와 8처럼요.", "적게 뒤집을수록 점수가 높아요. 어디에 뭐가 있었는지 기억해요."], art: `<rect width="240" height="110" rx="10" fill="#3C3430"/>${[0, 1, 2, 3].flatMap(c => [0, 1].map(r => { const x = 42 + c * 42, y = 12 + r * 46, t = c === 0 && r === 0 ? "3/4" : c === 2 && r === 1 ? "75%" : ""; return `<rect x="${x}" y="${y}" width="34" height="40" rx="6" fill="${t ? "#FFF6E0" : "#8A5A3B"}"/>${t ? (t === "3/4" ? `<g font-size="13" font-weight="700" fill="#14466F" text-anchor="middle"><text x="${x + 17}" y="${y + 17}">3</text><text x="${x + 17}" y="${y + 34}">4</text><rect x="${x + 10}" y="${y + 20}" width="14" height="2"/></g>` : `<text x="${x + 17}" y="${y + 25}" font-size="13" font-weight="700" fill="#14466F" text-anchor="middle">${t}</text>`) : ""}`; })).join("")}` },
-    { short: "규칙을 찾아 다음 수가 적힌 등을 눌러요!", steps: ["등대가 수를 차례로 보내요. 수가 변하는 규칙을 찾아요.", "다음 수가 적힌 등을 눌러요. 한 라운드에 세 수를 이어 가요. 맞힌 수마다 1점이에요.", "뒤로 갈수록 규칙이 어려워져요. 세 번 틀리거나 3분이 지나면 끝나요."], art: `<rect width="240" height="110" rx="10" fill="#1E2C44"/>${[2, 5, 8, 11, "?"].map((n, i) => `<rect x="${24 + i * 40}" y="10" width="34" height="28" rx="6" fill="${n === "?" ? "none" : "#0D2233"}" stroke="${n === "?" ? "#FFE27A" : "none"}" stroke-dasharray="4 3" stroke-width="2"/>${label(41 + i * 40, 29, n, n === "?" ? "#FFE27A" : "#fff")}`).join("")}${[13, 14, 16].map((n, i) => { const x = 60 + i * 60; return `<circle cx="${x}" cy="74" r="23" fill="${n === 14 ? "#FFE27A" : "#3B4E6D"}"/>${label(x, 79, n, n === 14 ? "#1B2A33" : "#fff")}`; }).join("")}` },
-    { short: "식을 풀어 기호의 값을 찾아요. 틀리면 5초 줄어요!", steps: ["위의 식을 보고 물어본 기호의 값을 구해요. 값은 1부터 9까지예요.", "맞힐수록 어려운 암호가 와요. 어려운 암호는 점수가 커요.", "틀리면 5초가 줄고, 두 번 틀리면 다음 암호로 넘어가요. 2분 동안 풀어요."], art: `<rect width="240" height="110" rx="10" fill="#14251F"/><text x="120" y="30" font-size="19" font-weight="700" fill="#fff" text-anchor="middle">★ + ★ = 8</text><text x="120" y="58" font-size="19" font-weight="700" fill="#fff" text-anchor="middle">★ + ☾ = 7</text><text x="96" y="92" font-size="21" font-weight="700" fill="#FFE27A" text-anchor="middle">☾ = ?</text><rect x="146" y="70" width="34" height="32" rx="8" fill="#9DF2C7"/><text x="163" y="93" font-size="21" font-weight="700" fill="#14251F" text-anchor="middle">3</text>` }
+    { short: "규칙을 찾아 다음 수가 적힌 등을 눌러요!", steps: ["등대가 수를 차례로 보내요. 수가 변하는 규칙을 찾아요.", "다음 수가 적힌 등을 눌러요. 한 라운드에 세 수를 이어 가요. 맞힌 수마다 2점이에요.", "뒤로 갈수록 규칙이 어려워져요. 세 번 틀리거나 2분이 지나면 끝나요."], art: `<rect width="240" height="110" rx="10" fill="#1E2C44"/>${[2, 5, 8, 11, "?"].map((n, i) => `<rect x="${24 + i * 40}" y="10" width="34" height="28" rx="6" fill="${n === "?" ? "none" : "#0D2233"}" stroke="${n === "?" ? "#FFE27A" : "none"}" stroke-dasharray="4 3" stroke-width="2"/>${label(41 + i * 40, 29, n, n === "?" ? "#FFE27A" : "#fff")}`).join("")}${[13, 14, 16].map((n, i) => { const x = 60 + i * 60; return `<circle cx="${x}" cy="74" r="23" fill="${n === 14 ? "#FFE27A" : "#3B4E6D"}"/>${label(x, 79, n, n === 14 ? "#1B2A33" : "#fff")}`; }).join("")}` },
+    { short: "식을 풀어 기호의 값을 찾아요. 틀리면 5초 줄어요!", steps: ["위의 식을 보고 물어본 기호의 값을 구해요. 값은 1부터 9까지예요.", "맞힐수록 어려운 암호가 와요. 어려운 암호는 점수가 커요.", "틀리면 5초가 줄고, 두 번 틀리면 다음 암호로 넘어가요. 1분 40초 동안 풀어요."], art: `<rect width="240" height="110" rx="10" fill="#14251F"/><text x="120" y="30" font-size="19" font-weight="700" fill="#fff" text-anchor="middle">★ + ★ = 8</text><text x="120" y="58" font-size="19" font-weight="700" fill="#fff" text-anchor="middle">★ + ☾ = 7</text><text x="96" y="92" font-size="21" font-weight="700" fill="#FFE27A" text-anchor="middle">☾ = ?</text><rect x="146" y="70" width="34" height="32" rx="8" fill="#9DF2C7"/><text x="163" y="93" font-size="21" font-weight="700" fill="#14251F" text-anchor="middle">3</text>` }
   ]
 };
 // what changes for 중등반; every other game's words fit both levels
 const coordArt = `${WATER}${[0, 1, 2, 3, 4].map(i => `<path d="M${72 + i * 24} 20v80M72 ${20 + i * 20}h96" stroke="#fff" stroke-opacity=".45"/>`).join("")}<path d="M120 20v80M72 60h96" stroke="#fff" stroke-width="2"/><rect x="144" y="40" width="24" height="20" fill="#FFE27A" fill-opacity=".6"/>${label(120, 14, "x좌표 2, y좌표 1", "#FFE27A")}${label(180, 66, "x", "#FFE27A")}${label(130, 30, "y", "#FFE27A")}`;
 const cardArt = `<rect width="240" height="110" rx="10" fill="#3C3430"/>${[["2(x+3)", 28], ["2x+6", 128]].map(([t, x]) => `<rect x="${x}" y="24" width="84" height="62" rx="8" fill="#FFF6E0"/><text x="${x + 42}" y="61" font-size="16" font-weight="700" fill="#14466F" text-anchor="middle">${t}</text>`).join("")}`;
 const HOW_MID = {
-  cannon: [{ short: "x좌표와 y좌표를 계산해서 그 칸을 쏴요. 10발!", steps: ["적함은 안개에 숨어 있어요. 위의 식을 풀면 x좌표와 y좌표가 나와요. 좌표는 −3부터 3까지예요.", "그 칸을 누르면 포탄이 날아가요. 기회는 한 번이에요.", "뒤로 가면 방정식의 해가 좌표가 되고, 바람이 포탄을 밀어요. 바람이 미는 만큼 반대쪽을 쏴요."], art: coordArt }],
+  cannon: [{ short: "x좌표와 y좌표를 계산해서 그 칸을 쏴요. 5발!", steps: ["적함은 안개에 숨어 있어요. 위의 식을 풀면 x좌표와 y좌표가 나와요. 좌표는 −3부터 3까지예요.", "그 칸을 누르면 포탄이 날아가요. 기회는 한 번이에요.", "뒤로 가면 방정식의 해가 좌표가 되고, 바람이 포탄을 밀어요. 바람이 미는 만큼 반대쪽을 쏴요."], art: coordArt }],
   memory: [{ short: "값이 같은 카드끼리 짝을 찾아요!", steps: ["카드를 두 장씩 뒤집어요.", "값이나 식이 같으면 짝이에요. 2(x+3)과 2x+6, (−2)³과 −8처럼요.", "적게 뒤집을수록 점수가 높아요. 어디에 뭐가 있었는지 기억해요."], art: cardArt }],
   port: [
-    { short: "방정식을 풀어 추로 저울을 맞춰요. 10번!", steps: ["위의 방정식을 풀어 짐의 무게 x를 구해요. 1kg은 1000g이에요.", "합이 짐과 같아지도록 추를 2개 이상 눌러 올려요. 다시 누르면 내려와요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 뒤로 가면 직접 식을 세워야 해요."], art: scaleArt("2.3kg", "1.5kg", "800g", "#2F7FB0") },
-    { short: "방정식을 풀어 분수와 소수 추로 맞춰요. 10번!", steps: ["위의 방정식을 풀어 짐의 무게 x를 구해요. 분수가 있는 방정식도 나와요.", "추도 분수와 소수로 적혀 있어요. 합이 짐과 같아지도록 2개 이상 올려요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 뒤로 가면 직접 식을 세워야 해요."], art: scaleArt("7/10kg", "1/2kg", "0.2kg", "#3B4E6D") },
-    { short: "식을 세워 짐 무게를 구해요. 10번!", steps: ["방정식을 풀어 짐의 무게 x를 구해요. 뒤로 가면 문장을 읽고 직접 식을 세워요.", "추는 g, 소수, 분수로 섞여 있어요. 같은 단위로 바꿔서 더해요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요."], art: scaleArt("4kg", "2.5kg", "1.5kg", "#14251F") }
+    { short: "방정식을 풀어 추로 저울을 맞춰요. 6번!", steps: ["위의 방정식을 풀어 짐의 무게 x를 구해요. 1kg은 1000g이에요.", "합이 짐과 같아지도록 추를 2개 이상 눌러 올려요. 다시 누르면 내려와요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 뒤로 가면 직접 식을 세워야 해요."], art: scaleArt("2.3kg", "1.5kg", "800g", "#2F7FB0") },
+    { short: "방정식을 풀어 분수와 소수 추로 맞춰요. 6번!", steps: ["위의 방정식을 풀어 짐의 무게 x를 구해요. 분수가 있는 방정식도 나와요.", "추도 분수와 소수로 적혀 있어요. 합이 짐과 같아지도록 2개 이상 올려요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요. 뒤로 가면 직접 식을 세워야 해요."], art: scaleArt("7/10kg", "1/2kg", "0.2kg", "#3B4E6D") },
+    { short: "식을 세워 짐 무게를 구해요. 6번!", steps: ["방정식을 풀어 짐의 무게 x를 구해요. 뒤로 가면 문장을 읽고 직접 식을 세워요.", "추는 g, 소수, 분수로 섞여 있어요. 같은 단위로 바꿔서 더해요.", "달아 보기를 눌러요. 한 번에 맞히면 2점, 두 번째에 맞히면 1점이에요."], art: scaleArt("4kg", "2.5kg", "1.5kg", "#14251F") }
   ]
 };
 const howOf = (kind, map) => (MathQ.level() && HOW_MID[kind]?.[map]) || HOW[kind][map];

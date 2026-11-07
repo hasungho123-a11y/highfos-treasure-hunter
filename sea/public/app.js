@@ -542,7 +542,7 @@ async function gameArt(kind, map = K.map) {
 }
 // a game seen for the first time explains itself before any energy is spent; false if the child backs out
 async function introOnce(kind, map) {
-  const seen = `hs_intro4_${kind}_${map}${K.d.level ? "_m" : ""}`; // raise the number when a game's rules change, so everyone sees the new rules once
+  const seen = `hs_intro5_${kind}_${map}${K.d.level ? "_m" : ""}`; // raise the number when a game's rules change, so everyone sees the new rules once
   if (ls.get(seen)) return true;
   const go = await Games.intro(kind, map, K.d.maps[map].isles[kind], K.d.games[kind].stars, true); if (go) ls.set(seen, "1"); return go;
 }
