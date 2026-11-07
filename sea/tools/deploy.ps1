@@ -10,6 +10,7 @@ $u8 = [Text.Encoding]::UTF8
 $g = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $g) { $g = Get-ChildItem "$env:LOCALAPPDATA\GitHubDesktop\app-*\resources\app\git\cmd\git.exe" -ErrorAction SilentlyContinue | Sort-Object FullName | Select-Object -Last 1 -ExpandProperty FullName }
 if (-not $g) { Write-Output "git을 찾지 못했어요"; exit 1 }
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$PSScriptRoot\git-check.ps1" -Git $g -Repo $repo; if ($LASTEXITCODE) { exit 1 }
 
 # 로컬 시험 세션은 지웁니다.
 if (Test-Path ".wrangler\hs-local") { cmd /c "npx.cmd -y wrangler d1 execute highfos-sea-db --local --persist-to .wrangler\hs-local --command `"DELETE FROM sessions`" > nul 2>&1" }

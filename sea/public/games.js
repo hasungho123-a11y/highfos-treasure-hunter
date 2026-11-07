@@ -12,8 +12,8 @@ function shell(title, help) {
   const el = document.createElement("div"); el.className = "game";
   el.innerHTML = `<div class="game-top"><b>${title}</b><span class="game-hud num"></span><button type="button" class="btn sm" data-quit>그만하기</button></div><p class="game-help">${help}</p><div class="game-stage"></div>`;
   document.body.appendChild(el);
-  const quit = el.querySelector("[data-quit]"); let asked = false;
-  quit.addEventListener("click", e => { if (asked) return; e.stopImmediatePropagation(); asked = true; quit.textContent = "정말 그만하기"; quit.classList.add("danger"); setTimeout(() => { asked = false; quit.textContent = "그만하기"; quit.classList.remove("danger"); }, 3000); }, true);
+  const quit = el.querySelector("[data-quit]"); let asked = 0;
+  quit.addEventListener("click", e => { if (asked && Date.now() - asked >= 500) return; e.stopImmediatePropagation(); if (asked) return; asked = Date.now(); quit.textContent = "정말 그만하기"; quit.classList.add("danger"); setTimeout(() => { asked = 0; quit.textContent = "그만하기"; quit.classList.remove("danger"); }, 3000); }, true);
   return { el, hud: el.querySelector(".game-hud"), stage: el.querySelector(".game-stage"), quit };
 }
 function canvasIn(stage) {

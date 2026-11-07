@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS logs (
   at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_logs_student ON logs(student_id);
+CREATE INDEX IF NOT EXISTS idx_logs_date ON logs(date);
 -- decorations, weapons and ships a student owns; log_id is the purchase, empty when it dropped from a game
 CREATE TABLE IF NOT EXISTS owned (
   student_id INTEGER NOT NULL,
@@ -207,9 +208,10 @@ CREATE TABLE IF NOT EXISTS answers (
   tag TEXT NOT NULL,
   game TEXT NOT NULL,
   map INTEGER NOT NULL DEFAULT 0,
+  level INTEGER NOT NULL DEFAULT 0,
   tries INTEGER NOT NULL DEFAULT 0,
   wrong INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (student_id, date, tag, game, map)
+  PRIMARY KEY (student_id, date, tag, game, map, level)
 );
 CREATE INDEX IF NOT EXISTS idx_answers_date ON answers(date);
 CREATE TABLE IF NOT EXISTS misses (
@@ -219,6 +221,7 @@ CREATE TABLE IF NOT EXISTS misses (
   lines TEXT NOT NULL,
   answer TEXT NOT NULL,
   how TEXT NOT NULL DEFAULT '',
-  at INTEGER NOT NULL
+  at INTEGER NOT NULL,
+  level INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_misses_student ON misses(student_id, id);
