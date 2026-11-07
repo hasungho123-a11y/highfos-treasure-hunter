@@ -355,7 +355,7 @@ function kMap() {
       <path d="${art ? art.routes.map(r => route(...r)).join(" ") : `${route("port", "memory", 30)} ${route("port", "cannon", 20)} ${route("cannon", "reef", 40)} ${route("reef", "battle", 30)} ${route("port", "battle", -30)}`}" fill="none" stroke="#fff" stroke-width="3.5" stroke-dasharray="2 13" stroke-linecap="round" opacity=".55"/>
       ${Object.entries(ISLES).map(([k, s]) => isle(k, s)).join("")}
     </svg>${worldShip(me)}</div>
-    ${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}`;
+    <div id="isleSlot">${K.isle ? kIsle() : `<p class="small muted" style="text-align:center">섬을 눌러 보세요.</p>`}</div>`;
 }
 const isleSub = k => ({ port: "저울로 짐 무게를 맞추고, 배와 면제권도 챙기는 곳", cannon: ["식을 풀어 안개 속 적함이 있는 칸 쏘기", "빠르기와 시간으로 쏠 거리 계산하기", "조건에 맞는 표적을 계산해 격추하기"][K.map], reef: ["문제를 풀어 정답 통로로 암초 지나기", "안개 속 정답 통로로 빙산 지나기", "기뢰를 피해 정답 통로로 지나기"][K.map], memory: ["값이 같은 카드끼리 짝 맞추기", "수열의 규칙을 찾아 다음 수 누르기", "식을 풀어 기호의 값 알아내기"][K.map], battle: "친구 배와 겨뤄 금화 얻기" })[k];
 // little pictures standing on each island
@@ -531,7 +531,9 @@ async function kDo(fn, msg) { try { const r = await fn(); if (msg) toast(msg); a
 // pictures for a mini-game: the water from this sea's map, plus 3D stills of my ship seen from behind (reef) or the target seen from the side (cannon)
 const TARGETS = ["galleon", "ironclad", "destroyer"];
 const loadImg = src => new Promise(res => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
-async function gameArt(kind, map = K.map) {
+const artMade = {};
+function gameArt(kind, map = K.map) { const me = K.d.me, key = `${kind}|${map}|${kind === "reef" ? JSON.stringify([me.look, me.sail, me.ship]) : ""}`; return artMade[key] || (artMade[key] = makeArt(kind, map)); }
+async function makeArt(kind, map) {
   const me = K.d.me, art = { sea: await loadImg(`/maps/sea${map + 1}.webp`) };
   if (kind === "memory" || kind === "port" || !window.Ship3D?.available()) return art;
   try { const v = await Ship3D.get(), s = sail(me.sail);
@@ -556,9 +558,8 @@ async function playGame(kind) {
   try {
     MathQ.setLevel(K.d.level);
     if (!await introOnce(kind, K.map)) { K.busy = false; return; }
-    const { playId } = await api("/api/kid/play/start", { game: kind, map: K.map });
-    const art = await artSoon(kind, K.map);
-    const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], art });
+    let playId; const ready = Promise.all([api("/api/kid/play/start", { game: kind, map: K.map }), artSoon(kind, K.map)]).then(([r, art]) => { playId = r.playId; return art; });
+    const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], ready });
     await sendAnswers(kind, K.map);
     if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0, quit: true }).catch(() => {}); toast("다음에 다시 도전해요"); }
     else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r, Games.missed()); }
@@ -574,7 +575,7 @@ async function practice(v) {
     MathQ.setLevel(K.d.level);
     if (await introOnce(kind, map)) {
       MathQ.setFocus(tag);
-      const art = await artSoon(kind, map), score = await Games.run(kind, { map, title: `연습 · ${tag || K.d.maps[map].isles[kind]}`, art });
+      const score = await Games.run(kind, { map, title: `연습 · ${tag || K.d.maps[map].isles[kind]}`, ready: artSoon(kind, map) });
       await sendAnswers(kind, map);
       if (score === null) toast("다음에 또 연습해요"); else again = await practiceCard(score, Games.missed());
       await kidLoad(); kidRender();
@@ -744,7 +745,8 @@ const KID_ACTS = {
   ktitle: v => kDo(() => api("/api/kid/title", { id: v }), v ? "칭호를 달았어요!" : "칭호를 뗐어요"),
   khow: v => (MathQ.setLevel(K.d.level), Games.intro)(v, K.map, K.d.maps[K.map].isles[v], K.d.games[v].stars, false),
   ktab: v => { K.tab = v; K.mate = null; K.confirm = null; K.tryKey = null; K.tryShip = null; K.crop = null; K.photoDraft = null; kidRender(); scrollTo(0, 0); },
-  kisle: v => { K.confirm = null; if (!v) { K.isle = null; return kidRender(); } K.isle = v; const el = $("#wship"); if (el) el.style.cssText += ";" + shipAt(v); K.at = v; setTimeout(() => { kidRender(); $("#islePanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, el ? 620 : 0); },
+  kisle: v => { K.confirm = null; if (!v) { K.isle = null; return kidRender(); } K.isle = v; const el = $("#wship"); if (el) el.style.cssText += ";" + shipAt(v); K.at = v; const slot = $("#isleSlot"); if (!slot) return kidRender(); slot.innerHTML = kIsle(); document.querySelectorAll(".isle").forEach(g => g.classList.toggle("on", g.dataset.v === v));
+    const game = ISLES[v]?.game || (v === "port" ? "port" : null); setTimeout(() => { if (K.isle === v) $("#islePanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, el ? 400 : 0); setTimeout(() => { if (K.isle === v && game) gameArt(game); }, 1100); },
   kplay: playGame, kpractice: practice, kfight: playFight,
   ksea: v => { const m = K.d.maps[Number(v)]; if (!seaOpen(m)) return toast(`${m.name}는 전투력 ${m.power}부터 열려요. 지금은 ${K.d.me.power}이에요`); K.map = m.id; K.isle = null; K.at = "port"; K.confirm = null; kidRender(); },
   kpassAsk: () => { K.confirm = "pass"; kidRender(); }, kno: () => { K.confirm = null; kidRender(); },
