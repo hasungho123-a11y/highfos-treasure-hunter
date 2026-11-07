@@ -13,10 +13,10 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const val = id => (document.getElementById(id)?.value ?? "").trim();
 async function api(path, body) {
   const opt = body === undefined ? {} : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
-  let r; try { r = await fetch(path, { credentials: "same-origin", ...opt }); } catch (e) { throw new Error("인터넷 연결을 확인해 주세요"); }
+  let r; try { r = await fetch(path, { credentials: "same-origin", ...opt }); } catch (e) { throw Object.assign(new Error("인터넷 연결을 확인해 주세요"), { retry: true }); }
   const d = await r.json().catch(() => ({ error: "서버 응답을 읽지 못했어요" }));
   if (r.status === 401 && !/login|setup/.test(path)) { toast("다시 로그인해 주세요"); setTimeout(() => location.reload(), 900); }
-  if (!r.ok) throw new Error(d.error || "문제가 생겼어요");
+  if (!r.ok) throw Object.assign(new Error(d.error || "문제가 생겼어요"), { retry: r.status !== 400 });
   return d;
 }
 function toast(msg) { let t = $("#toast"); if (!t) { t = document.createElement("div"); t.id = "toast"; t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); } t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => t.hidden = true, 3600); }
@@ -202,8 +202,8 @@ async function kidLoad() { K.d = await api("/api/kid/state");
   if (seen && open > seen) { K.map = open - 1; K.isle = null; K.at = "port"; toast(`새 바다가 열렸어요! ${K.d.maps[open - 1].name}`); }
   if (open > seen) ls.set(mem, open); }
 async function kidStart() {
-  document.body.classList.add("kid"); await kidLoad(); kidRender(); kidNotices();
-  setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight") || $(".modal")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await kidLoad(); kidRender(); kidNotices(); } catch (e) {} }, 20000);
+  document.body.classList.add("kid"); await kidLoad(); kidRender(); flushResults().then(kidNotices); addEventListener("online", flushResults);
+  setInterval(async () => { if (document.hidden || K.busy || K.crop || $(".game") || $(".fight") || $(".modal")) return; const a = document.activeElement; if (a && a.matches("input,select")) return; try { await flushResults(); await kidLoad(); kidRender(); kidNotices(); } catch (e) {} }, 20000);
   setInterval(duelPoll, 3000); duelPoll();
 }
 /* ---------- the class boss ---------- */
@@ -552,6 +552,28 @@ const artSoon = (kind, map) => Promise.race([gameArt(kind, map), sleep(1800).the
 // what was answered goes to the teacher's report, whether the game was finished or not; a lost report never gets in the child's way
 function sendAnswers(game, map) { const tally = Games.tally(); if (!Object.keys(tally).length) return Promise.resolve();
   return api("/api/kid/answers", { game, map, tally, missed: (Games.missed() || []).map(m => ({ tag: m.tag, lines: m.plain?.lines || m.lines, answer: m.plain?.answer || m.answer, how: m.how })) }).catch(() => {}); }
+// a game's result is written down before it is sent, so a bad connection can't lose it: it goes out again by itself once the app can reach the server. The server takes each game's result only once.
+const unsentKey = () => `hs_unsent_${K.d.me.id}`;
+const unsent = () => { try { return JSON.parse(ls.get(unsentKey()) || "[]"); } catch (e) { return []; } };
+const unsentAdd = (id, body) => ls.set(unsentKey(), JSON.stringify([...unsent().filter(x => x.id !== id), { id, body }]));
+const unsentDrop = id => ls.set(unsentKey(), JSON.stringify(unsent().filter(x => x.id !== id)));
+// the answer, or null if it still couldn't be sent and stays written down
+async function sendResult(id, body) {
+  for (let i = 0; ; i++) {
+    try { const r = await api(`/api/kid/play/finish/${id}`, body); unsentDrop(id); return r; }
+    catch (e) { if (!e.retry) { unsentDrop(id); throw e; } if (i === 2) return null; toast("결과를 보내는 중이에요"); await sleep(1500 * (i + 1)); }
+  }
+}
+async function flushResults() {
+  if (K.busy || !K.d || K.d.me.mustChange || $(".modal") || $(".game") || $(".fight")) return; const list = unsent(); if (!list.length) return;
+  K.busy = true; let sent = false;
+  try {
+    for (const x of list) { let r; try { r = await api(`/api/kid/play/finish/${x.id}`, x.body); } catch (e) { if (e.retry) break; unsentDrop(x.id); continue; } unsentDrop(x.id); sent = true;
+      if (!x.body.quit) { toast("지난 게임 결과가 도착했어요"); await rewardCard(r, null); } }
+    if (sent) { await kidLoad(); kidRender(); }
+  } catch (e) {}
+  K.busy = false;
+}
 // a mini-game from the first tap to the reward card
 async function playGame(kind) {
   if (K.busy) return; K.busy = true;
@@ -560,10 +582,13 @@ async function playGame(kind) {
     if (!await introOnce(kind, K.map)) { K.busy = false; return; }
     let playId; const ready = Promise.all([api("/api/kid/play/start", { game: kind, map: K.map }), artSoon(kind, K.map)]).then(([r, art]) => { playId = r.playId; return art; });
     const score = await Games.run(kind, { map: K.map, title: K.d.maps[K.map].isles[kind], ready });
+    const body = score === null ? { score: 0, quit: true } : { score }; unsentAdd(playId, body);
     await sendAnswers(kind, K.map);
-    if (score === null) { await api(`/api/kid/play/finish/${playId}`, { score: 0, quit: true }).catch(() => {}); toast("다음에 다시 도전해요"); }
-    else { const r = await api(`/api/kid/play/finish/${playId}`, { score }); await rewardCard(r, Games.missed()); }
-    await kidLoad(); kidRender();
+    const r = await sendResult(playId, body);
+    if (score === null) toast("다음에 다시 도전해요");
+    else if (r) await rewardCard(r, Games.missed());
+    else toast("인터넷이 끊겨 결과를 아직 못 보냈어요. 연결되면 저절로 보내져요");
+    if (r) { await kidLoad(); kidRender(); }
   } catch (e) { toast(e.message); }
   K.busy = false; kidNotices();
 }
@@ -791,12 +816,14 @@ const sname = id => T.d.students.find(s => s.id === id)?.nickname || "삭제된 
 const cname = id => T.d.classes.find(c => c.id === id)?.name || "";
 const tList = () => T.d.students.filter(s => T.cls === "all" || s.class_id === T.cls);
 const tChips = () => T.d.classes.length < 2 ? "" : `<div class="chips">${[["all", "전체"], ...T.d.classes.map(c => [c.id, c.name])].map(([v, n]) => `<button class="chip" data-act="tcls" data-v="${v}" aria-pressed="${T.cls === v}">${esc(n)}</button>`).join("")}</div>`;
+// what the teacher has typed but not saved: it lives through the 15-second refresh and any other button, until T.fresh says the form should start over
+const editedInputs = root => [...root.querySelectorAll("[data-keep=no][id]")].filter(el => el.value !== (el.tagName === "SELECT" ? ([...el.options].find(o => o.defaultSelected) || el.options[0])?.value : el.defaultValue)).map(el => [el.id, el.value]);
 function tRender() {
-  const d = T.d, keep = keepInputs(app);
+  const d = T.d, keep = keepInputs(app), edited = T.fresh ? [] : editedInputs(app), wide = T.tab === T.shownTab ? [...app.querySelectorAll(".tablewrap")].map(w => w.scrollLeft) : []; T.fresh = false; T.shownTab = T.tab;
   app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>선생님 · ${esc(d.teacher)}</small></div></div><div class="hright"><button class="btn ghost sm" data-act="logout">로그아웃</button></div></div>
     <nav class="tabs" aria-label="화면">${TTABS.map(([k, l]) => `<button data-act="ttab" data-v="${k}" aria-current="${T.tab === k}">${l}${k === "grant" && d.requests.length ? `<span class="cnt">${d.requests.length}</span>` : ""}${k === "give" && d.orders.length ? `<span class="cnt">${d.orders.length}</span>` : ""}${k === "photo" && d.photos.length ? `<span class="cnt">${d.photos.length}</span>` : ""}</button>`).join("")}</nav></header>
     <main>${({ grant: tGrant, photo: tPhoto, crew: tCrew, quests: tQuests, give: tGive, report: tReport, battle: tBattle, log: tLog })[T.tab]()}</main>`;
-  restoreInputs(keep);
+  restoreInputs(keep); restoreInputs(edited); app.querySelectorAll(".tablewrap").forEach((w, i) => { w.scrollLeft = wide[i] || 0; });
 }
 function tGrant() {
   const d = T.d, rs = d.requests, q = d.quests.find(x => x.id === T.selQ);
@@ -813,7 +840,7 @@ function tPhoto() {
   return `<section class="panel"><h2>확인을 기다리는 사진</h2><p class="small muted">승인하면 같은 반 친구들에게 보여요. 반려하면 사진은 지워지고 금화 150개는 아이에게 돌아가요.</p>
     ${d.photos.length ? `<div class="photo-grid">${d.photos.map(p => `<div class="photo-card"><img src="/api/photo/${p.id}" alt="신청한 사진"><div>${who(p.student_id)}</div><span class="small muted">${fmtTime(p.created_at)}</span><div class="row"><button class="btn sm primary" data-act="tphotoOk" data-v="${p.id}">승인</button><button class="btn sm danger" data-act="tphotoNo" data-v="${p.id}">반려</button></div></div>`).join("")}</div>` : `<p class="muted small">새 신청이 없어요.</p>`}</section>
     <section class="panel"><h2>지금 배에 달린 사진</h2><p class="small muted">내리면 사진이 지워져요. 금화는 돌아가지 않아요.</p>
-    ${onShips.length ? `<div class="photo-grid">${onShips.map(s => `<div class="photo-card"><img src="/api/photo/${s.photo}" alt="달려 있는 사진"><div>${who(s.id)}</div><div class="row"><button class="btn sm ghost" data-act="tphotoOff" data-v="${s.photo}">내리기</button></div></div>`).join("")}</div>` : `<p class="muted small">달려 있는 사진이 없어요.</p>`}</section>`;
+    ${onShips.length ? `<div class="photo-grid">${onShips.map(s => `<div class="photo-card"><img src="/api/photo/${s.photo}" alt="달려 있는 사진"><div>${who(s.id)}</div><div class="row">${armBtn(`photo${s.photo}`, "tphotoOff", s.photo, "내리기")}</div></div>`).join("")}</div>` : `<p class="muted small">달려 있는 사진이 없어요.</p>`}</section>`;
 }
 function tCrew() {
   const d = T.d, base = location.origin, s = d.students.find(x => x.id === T.detail);
@@ -822,14 +849,14 @@ function tCrew() {
       <td><div class="day-pick level-pick" role="group" aria-label="${esc(c.name)} 문제 난이도">${[[0, "초등"], [1, "중등"]].map(([n, l]) => `<button data-act="tlevel" data-v="${c.id}|${n}" aria-pressed="${(c.level || 0) === n}">${l}</button>`).join("")}</div></td>
       <td><div class="day-pick" role="group" aria-label="${esc(c.name)} 수업 요일">${DAY_ORDER.map(([n, l]) => `<button data-act="tdayFlip" data-v="${c.id}|${n}" aria-pressed="${(c.days ?? "").includes(n)}">${l}</button>`).join("")}</div><div class="day-set">${[["135", "월수금"], ["24", "화목"], ["0123456", "매일"]].map(([v, l]) => `<button class="btn sm ghost" data-act="tdaySet" data-v="${c.id}|${v}">${l}</button>`).join("")}</div></td>
       <td><div class="bonus-step" role="group" aria-label="${esc(c.name)} 매일 미션 추가 행동력"><button class="btn sm" data-act="tbonus" data-v="${c.id}|-1" aria-label="1 줄이기" ${c.daily_bonus > 0 ? "" : "disabled"}>-</button><b class="num">+${c.daily_bonus}</b><button class="btn sm" data-act="tbonus" data-v="${c.id}|1" aria-label="1 늘리기" ${c.daily_bonus < 10 ? "" : "disabled"}>+</button></div></td>
-      <td class="num">${d.students.filter(x => x.class_id === c.id).length}명</td><td><button class="btn sm ${c.battle ? "primary" : ""}" data-act="tbattleOn" data-v="${c.id}">${c.battle ? "켜짐" : "꺼짐"}</button></td><td><span class="code">${esc(c.code)}</span></td><td class="small muted">${esc(base)}/?c=${esc(c.code)}</td><td><button class="btn sm ghost" data-act="tdelClass" data-v="${c.id}">삭제</button></td></tr>`).join("")}</tbody></table></div>` : ""}
+      <td class="num">${d.students.filter(x => x.class_id === c.id).length}명</td><td><button class="btn sm ${c.battle ? "primary" : ""}" data-act="tbattleOn" data-v="${c.id}">${c.battle ? "켜짐" : "꺼짐"}</button></td><td><span class="code">${esc(c.code)}</span></td><td class="small muted">${esc(base)}/?c=${esc(c.code)}</td><td>${armBtn(`class${c.id}`, "tdelClass", c.id, "삭제")}</td></tr>`).join("")}</tbody></table></div>` : ""}
       ${d.classes.length ? `<p class="small muted">아이들은 수업 요일에만 미션을 신청할 수 있어요. 선생님의 승인과 직접 지급은 요일과 상관없어요. 추가 행동력은 그 반의 매일 미션 하나마다 더 주며, 승인과 직접 지급에 모두 붙어요.</p>` : ""}
       <form class="row" data-form="addClass"><label class="f">새 반 이름<input type="text" id="nc-name" maxlength="20" required></label><label class="f">문제 난이도<select id="nc-level"><option value="0">초등</option><option value="1">중등</option></select></label><button class="btn primary" style="align-self:end">반 만들기</button>${d.classes.length ? "" : `<button type="button" class="btn" style="align-self:end" data-act="tdemo">시연용 예시 반 만들기</button>`}</form></section>
     ${d.classes.length ? `<section class="panel"><h2>선원 등록</h2><form class="stack" style="gap:10px" data-form="addStudents"><label class="f">반<select id="ns-class">${d.classes.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label><label class="f">닉네임 (여러 명이면 줄을 바꿔서)<textarea id="ns-names" rows="3"></textarea></label><div><button class="btn primary">등록하고 임시 비밀번호 만들기</button></div></form></section>` : ""}
     <section class="panel"><div class="row between"><h2>선원 현황</h2>${tChips()}</div>${tList().length ? `<div class="tablewrap"><table><thead><tr><th>이름</th><th>반</th><th>배</th><th>전투력</th><th>행동력</th><th>포인트</th><th>금화</th></tr></thead><tbody>${tList().map(x => `<tr class="click" data-act="tdetail" data-v="${x.id}" aria-selected="${x.id === T.detail}"><td style="--sail:${sail(x.sail)}"><b><i class="dot"></i> ${esc(x.nickname)}</b></td><td class="muted">${esc(cname(x.class_id))}</td><td class="small">${esc(d.ships.find(z => z.id === x.ship)?.name)}</td><td class="num">${x.power}</td><td class="num">${x.bal.energy}</td><td class="num">${x.bal.points}</td><td class="num">${x.bal.gold}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">아직 선원이 없어요.</p>`}</section>
     ${s ? `<section class="panel"><div class="row between"><h2>${esc(s.nickname)}</h2><button class="btn sm ghost" data-act="tdetail" data-v="${s.id}">닫기</button></div>
-      <form class="row" data-form="adjust"><label class="f">종류<select id="adj-type"><option value="energy">행동력</option><option value="points">포인트</option><option value="gold">금화</option></select></label><label class="f">양<input type="number" id="adj-amt" placeholder="+5 / -5" required></label><label class="f" style="flex:1 1 150px">사유<input type="text" id="adj-why" maxlength="40"></label><button class="btn" style="align-self:end">반영</button></form>
-      <div class="row"><button class="btn" data-act="tresetPin" data-v="${s.id}">비밀번호 새로 발급</button><button class="btn ghost" data-act="tdelStudent" data-v="${s.id}">선원 삭제</button></div></section>` : ""}`;
+      <form class="row" data-form="adjust"><label class="f">종류<select id="adj-type" data-keep="no"><option value="energy">행동력</option><option value="points">포인트</option><option value="gold">금화</option></select></label><label class="f">양<input type="number" id="adj-amt" placeholder="+5 / -5" required data-keep="no"></label><label class="f" style="flex:1 1 150px">사유<input type="text" id="adj-why" maxlength="40" data-keep="no"></label><button class="btn" style="align-self:end">반영</button></form>
+      <div class="row"><button class="btn" data-act="tresetPin" data-v="${s.id}">비밀번호 새로 발급</button>${armBtn(`student${s.id}`, "tdelStudent", s.id, "선원 삭제")}</div></section>` : ""}`;
 }
 function tQuests() {
   const d = T.d, e = d.quests.find(q => q.id === T.editQ);
@@ -874,41 +901,44 @@ function tLog() {
   const d = T.d;
   return `<section class="panel feed"><h2>오늘 기록</h2>${d.logs.length ? `<ul>${d.logs.map(l => `<li><time class="num">${fmtTime(l.at)}</time><span><b>${esc(sname(l.student_id))}</b> · ${esc(l.title)} <span class="small">${l.energy ? `행동력 ${l.energy} ` : ""}${l.points ? `포인트 ${l.points} ` : ""}${l.gold ? `금화 ${l.gold}` : ""}</span></span><button class="btn sm ghost" data-act="tundo" data-v="${l.id}">취소</button></li>`).join("")}</ul>` : `<p class="muted small">오늘 기록이 없어요.</p>`}</section>`;
 }
+const ARM_MS = 5000, armed = (key, msg) => { clearTimeout(T.armH); if (T.arm === key) { T.arm = null; return true; } T.arm = key; T.armH = setTimeout(() => { T.arm = null; const a = document.activeElement; if (!(a && a.matches("input,select,textarea"))) tRender(); }, ARM_MS); toast(msg); tRender(); return false; };
+const armBtn = (key, act, v, plain) => `<button class="btn sm ${T.arm === key ? "danger" : "ghost"}" data-act="${act}" data-v="${v}">${T.arm === key ? plain + " 확인" : plain}</button>`;
 async function tDo(fn, msg) { try { const r = await fn(); if (msg) toast(msg); await tLoad(); tRender(); return r; } catch (e) { toast(e.message); } }
 const T_ACTS = {
   tbossfire: v => tDo(() => api(`/api/t/classes/${v}/bossfire`, {}), "포격했어요! 아이들 화면에서 체력이 줄어요"),
   tphotoOk: v => tDo(() => api(`/api/t/photos/${v}/approve`, {}), "승인했어요. 아이의 배에 달렸어요"),
   tphotoNo: v => tDo(() => api(`/api/t/photos/${v}/reject`, {}), "반려했어요. 사진을 지우고 금화를 돌려줬어요"),
-  tphotoOff: v => { if (T.photoArm !== v) { T.photoArm = v; return toast("한 번 더 누르면 사진을 내리고 지워요"); } T.photoArm = null; return tDo(() => api(`/api/t/photos/${v}/remove`, {}), "사진을 내렸어요"); },
+  tphotoOff: v => { if (!armed(`photo${v}`, "한 번 더 누르면 사진을 내리고 지워요")) return; return tDo(() => api(`/api/t/photos/${v}/remove`, {}), "사진을 내렸어요"); },
   ttab: v => { T.tab = v; tRender(); scrollTo(0, 0); if (v === "report") tReportLoad(); },
   trepDays: v => { T.repDays = Number(v); T.rep = null; tRender(); return tReportLoad(); },
   trepKid: async v => { const id = Number(v); if (T.repKid === id) { T.repKid = null; return tRender(); } T.repKid = id; T.repMiss = null; tRender(); try { const r = await api(`/api/t/report/student/${id}`); if (T.repKid === id) { T.repMiss = r.misses; tRender(); } } catch (e) { toast(e.message); } },
-  tcls: v => { T.cls = v === "all" ? "all" : Number(v); tRender(); },
+  tcls: v => { T.cls = v === "all" ? "all" : Number(v); const shown = new Set(tList().map(s => s.id)); T.selS = new Set([...T.selS].filter(i => shown.has(i))); tRender(); },
   tselr: v => { const i = Number(v); T.selR.has(i) ? T.selR.delete(i) : T.selR.add(i); tRender(); }, tselrAll: () => { T.d.requests.forEach(r => T.selR.add(r.id)); tRender(); },
   tapprove: async () => { const ids = [...T.selR]; T.selR.clear(); const r = await tDo(() => api("/api/t/requests/approve", { ids })); if (r) toast(`${r.given}개 승인했어요${r.skipped.length ? ` · ${r.skipped.length}개는 이미 받은 미션이에요` : ""}`); },
   treject: () => { const ids = [...T.selR]; T.selR.clear(); return tDo(() => api("/api/t/requests/reject", { ids }), "반려했어요"); },
   tpickq: v => { T.selQ = T.selQ === Number(v) ? null : Number(v); tRender(); }, tpicks: v => { const i = Number(v); T.selS.has(i) ? T.selS.delete(i) : T.selS.add(i); tRender(); }, tselAll: () => { tList().forEach(s => T.selS.add(s.id)); tRender(); },
   tgrant: async () => { const ids = [...T.selS]; T.selS.clear(); const r = await tDo(() => api("/api/t/grant", { questId: T.selQ, studentIds: ids })); if (r) toast(`${r.given}명에게 지급했어요${r.skipped.length ? ` · ${r.skipped.length}명은 이미 받았어요` : ""}`); },
-  tcloseCreated: () => { T.created = null; tRender(); }, tdetail: v => { T.detail = T.detail === Number(v) ? null : Number(v); tRender(); },
+  tcloseCreated: () => { T.created = null; tRender(); }, tdetail: v => { T.detail = T.detail === Number(v) ? null : Number(v); T.fresh = true; tRender(); },
   tdayFlip: v => { const [id, n] = v.split("|"), c = T.d.classes.find(x => x.id === Number(id)), days = c.days.includes(n) ? c.days.replace(n, "") : c.days + n; if (!days) return toast("수업 요일을 하루 이상 골라 주세요"); return tDo(() => api(`/api/t/classes/${id}/days`, { days }), `${c.name}: 수업 요일은 ${dayText([...days].sort().join(""))}이에요`); },
   tlevel: v => { const [id, n] = v.split("|"), c = T.d.classes.find(x => x.id === Number(id)), level = Number(n); if ((c.level || 0) === level) return; return tDo(() => api(`/api/t/classes/${id}/level`, { level }), `${c.name}: 미니게임과 대결 문제가 ${level ? "중등" : "초등"} 난이도로 나와요`); },
   tbonus: v => { const [id, step] = v.split("|"), c = T.d.classes.find(x => x.id === Number(id)), bonus = c.daily_bonus + Number(step); return tDo(() => api(`/api/t/classes/${id}/bonus`, { bonus }), `${c.name}: 매일 미션 행동력 +${bonus} 추가`); },
   tdaySet: v => { const [id, days] = v.split("|"), c = T.d.classes.find(x => x.id === Number(id)); return tDo(() => api(`/api/t/classes/${id}/days`, { days }), `${c.name}: 수업 요일은 ${dayText(days)}이에요`); },
   tbattleOn: v => { const c = T.d.classes.find(x => x.id === Number(v)); return tDo(() => api(`/api/t/classes/${v}/battle`, { on: !c.battle }), `${c.name}: 전투 ${c.battle ? "껐어요" : "켰어요"}`); },
-  tdelClass: v => { const c = T.d.classes.find(x => x.id === Number(v)); if (T.delArm !== v) { T.delArm = v; return toast(`${c.name}의 삭제 버튼을 한 번 더 누르면 반과 학생이 모두 삭제돼요`); } T.delArm = null; return tDo(() => api(`/api/t/classes/${v}/delete`, {}), "반을 삭제했어요"); },
+  tdelClass: v => { const c = T.d.classes.find(x => x.id === Number(v)); if (!armed(`class${v}`, `${c.name}의 삭제 버튼을 한 번 더 누르면 반과 학생이 모두 삭제돼요`)) return; return tDo(() => api(`/api/t/classes/${v}/delete`, {}), "반을 삭제했어요"); },
   tdemo: async () => { const r = await tDo(() => api("/api/t/demo", {})); if (r) toast(`시연반 코드 ${r.code} · 비밀번호 모두 ${r.pin}`); },
   tresetPin: async v => { const r = await tDo(() => api(`/api/t/students/${v}/reset-pin`, {})); if (r) { T.created = [{ nickname: sname(Number(v)), pin: r.pin }]; tRender(); scrollTo(0, 0); } },
-  tdelStudent: v => { if (T.delS !== v) { T.delS = v; return toast("한 번 더 누르면 선원이 삭제돼요"); } T.delS = null; T.detail = null; return tDo(() => api(`/api/t/students/${v}/delete`, {}), "선원을 삭제했어요"); },
-  teditQ: v => { T.editQ = v ? Number(v) : null; tRender(); scrollTo(0, 0); }, ttoggleQ: v => tDo(() => api(`/api/t/quests/${v}/toggle`, {})), tdelQ: v => tDo(() => api(`/api/t/quests/${v}/delete`, {}), "미션을 삭제했어요"),
+  tdelStudent: v => { if (!armed(`student${v}`, "한 번 더 누르면 선원이 삭제돼요")) return; T.detail = null; return tDo(() => api(`/api/t/students/${v}/delete`, {}), "선원을 삭제했어요"); },
+  teditQ: v => { T.editQ = v ? Number(v) : null; T.fresh = true; tRender(); scrollTo(0, 0); }, ttoggleQ: v => tDo(() => api(`/api/t/quests/${v}/toggle`, {})), tdelQ: v => tDo(() => api(`/api/t/quests/${v}/delete`, {}), "미션을 삭제했어요"),
   tdeliver: v => tDo(() => api(`/api/t/orders/${v}/deliver`, {}), "줬어요로 표시했어요"), tcancelOrder: v => tDo(() => api(`/api/t/orders/${v}/cancel`, {}), "취소하고 포인트를 돌려줬어요"), tundo: v => tDo(() => api(`/api/t/logs/${v}/undo`, {}), "기록을 취소했어요")
 };
+const saved = fn => async () => { const r = await fn(); T.fresh = true; return r; };
 const T_FORMS = {
   addClass: async () => { const r = await tDo(() => api("/api/t/classes", { name: val("nc-name"), level: Number(val("nc-level")) })); if (r) { toast(`반 코드 ${r.code}`); const el = $("#nc-name"); if (el) el.value = ""; } },
   addStudents: async () => { const r = await tDo(() => api("/api/t/students", { classId: Number(val("ns-class")), names: $("#ns-names").value })); if (r) { T.created = r.created; $("#ns-names").value = ""; tRender(); scrollTo(0, 0); } },
-  adjust: () => tDo(() => api("/api/t/adjust", { studentId: T.detail, type: val("adj-type"), amount: Number(val("adj-amt")), title: val("adj-why") || "선생님 조정" }), "반영했어요"),
-  saveQuest: () => { const id = T.editQ; T.editQ = null; return tDo(() => api("/api/t/quests", { id, title: val("q-title"), subject: val("q-subj"), kind: val("q-kind"), energy: Number(val("q-en")) }), "미션을 저장했어요"); },
-  saveGame: () => tDo(() => api("/api/t/game", { energyMax: val("g-max"), playCost: val("g-cost"), passCost: val("g-pass"), battlesPerDay: val("g-bat"), win: val("g-win"), lose: val("g-lose"), defend: val("g-def"), hourFrom: val("g-from"), hourTo: val("g-to"), bossHp: val("g-bosshp"), bossGold: val("g-bossgold") }), "저장했어요"),
-  tpw: () => tDo(() => api("/api/t/password", { password: $("#tpw").value }), "비밀번호를 바꿨어요")
+  adjust: () => tDo(saved(() => api("/api/t/adjust", { studentId: T.detail, type: val("adj-type"), amount: Number(val("adj-amt")), title: val("adj-why") || "선생님 조정" })), "반영했어요"),
+  saveQuest: () => tDo(saved(async () => { const r = await api("/api/t/quests", { id: T.editQ, title: val("q-title"), subject: val("q-subj"), kind: val("q-kind"), energy: Number(val("q-en")) }); T.editQ = null; return r; }), "미션을 저장했어요"),
+  saveGame: () => tDo(saved(() => api("/api/t/game", { energyMax: val("g-max"), playCost: val("g-cost"), passCost: val("g-pass"), battlesPerDay: val("g-bat"), win: val("g-win"), lose: val("g-lose"), defend: val("g-def"), hourFrom: val("g-from"), hourTo: val("g-to"), bossHp: val("g-bosshp"), bossGold: val("g-bossgold") })), "저장했어요"),
+  tpw: () => tDo(saved(() => api("/api/t/password", { password: $("#tpw").value })), "비밀번호를 바꿨어요")
 };
 
 /* ---------- wiring ---------- */

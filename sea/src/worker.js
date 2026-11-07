@@ -393,13 +393,13 @@ on("POST", "/api/kid/play/finish/:id", "student", async ({ db, me, params, body 
   const sid = me.student.id, p = await db.prepare("SELECT * FROM plays WHERE id=? AND student_id=?").bind(params.id, sid).first();
   if (!p) throw bad("없는 게임이에요"); if (p.finished_at) throw bad("이미 끝난 게임이에요");
   const g = GAMES[p.game], fast = Date.now() - p.started_at < g.minMs, score = fast ? 0 : int(body.score || 0, 0, g.max);
-  const stars = g.stars.filter(n => score >= n).length, map = MAPS[p.map] || MAPS[0], points = Math.round(STAR_POINTS[stars] * map.mult);
+  const stars = g.stars.filter(n => score >= n).length, map = MAPS[p.map] || MAPS[0], gaveUp = !!body.quit || fast, points = gaveUp ? 0 : Math.round(STAR_POINTS[stars] * map.mult);
   const r = await db.prepare("UPDATE plays SET finished_at=?, score=?, stars=? WHERE id=? AND finished_at IS NULL").bind(Date.now(), score, stars, p.id).run();
   if (!r.meta.changes) throw bad("이미 끝난 게임이에요");
-  await logStmt(db, { student_id: sid, kind: "game", title: `${map.isles[p.game]} 별 ${stars}개`, points }).run();
+  await logStmt(db, { student_id: sid, kind: "game", title: gaveUp ? `${map.isles[p.game]} 그만둠` : `${map.isles[p.game]} 별 ${stars}개`, points }).run();
   const item = randInt(100) < STAR_DROP[stars] ? await rollItem(db, sid, map.id, me.student.ship) : null;
   // a game played to the end always scratches the boss; a game left at once does nothing
-  const dmg = body.quit || fast ? 0 : Math.max(1, stars * BOSS_STAR_DMG), cls = me.student.class_id, hit = (await hitBosses(db, await getGame(db), [{ sid, cls, dmg, src: "game" }]))[cls];
+  const dmg = gaveUp ? 0 : Math.max(1, stars * BOSS_STAR_DMG), cls = me.student.class_id, hit = (await hitBosses(db, await getGame(db), [{ sid, cls, dmg, src: "game" }]))[cls];
   return { ok: true, stars, score, points, item, boss: hit ? { ...hit, dmg } : null };
 });
 // what was answered in a game or a practice, for the teacher's report. Only the kind of question, the counts and the wrong questions' own text are kept.
@@ -697,7 +697,13 @@ async function newStudent(db, classId, nickname, pin, mustChange) {
 on("POST", "/api/t/students", "teacher", async ({ db, body }) => {
   const classId = int(body.classId, 1); if (!(await db.prepare("SELECT 1 FROM classes WHERE id=? AND active=1").bind(classId).first())) throw bad("반을 먼저 골라 주세요");
   const names = String(body.names || "").split(/\n|,/).map(s => s.trim()).filter(Boolean); if (!names.length) throw bad("이름을 넣어 주세요");
-  const created = []; for (const n of names.slice(0, 60)) { const nick = str(n, 12), pin = randomPin(); await newStudent(db, classId, nick, pin, 1); created.push({ nickname: nick, pin }); }
+  if (names.length > 60) throw bad("한 번에 60명까지 등록할 수 있어요");
+  const nicks = names.map(n => str(n, 12)), taken = new Set((await db.prepare("SELECT nickname FROM students WHERE class_id=? AND active=1").bind(classId).all()).results.map(r => r.nickname));
+  const inClass = [...new Set(nicks.filter(n => taken.has(n)))], twice = [...new Set(nicks.filter((n, i) => nicks.indexOf(n) !== i))].filter(n => !taken.has(n));
+  if (inClass.length || twice.length) throw bad(`아무도 등록하지 않았어요. ${inClass.length ? `이 반에 이미 있는 이름: ${inClass.join(", ")}. ` : ""}${twice.length ? `두 번 적은 이름: ${twice.join(", ")}. ` : ""}고친 뒤 다시 눌러 주세요`);
+  const created = [], rows = [], now = Date.now();
+  for (const nick of nicks) { const pin = randomPin(), h = await hashSecret(pin); rows.push(db.prepare("INSERT INTO students (class_id, nickname, sail, pin_hash, salt, must_change, created_at) VALUES (?,?,?,?,?,1,?)").bind(classId, nick, randInt(SAILS), h.hash, h.salt, now)); created.push({ nickname: nick, pin }); }
+  await db.batch(rows);
   return { ok: true, created };
 });
 on("POST", "/api/t/students/:id/reset-pin", "teacher", async ({ db, params }) => {

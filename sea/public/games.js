@@ -12,7 +12,9 @@ function shell(title, help) {
   const el = document.createElement("div"); el.className = "game";
   el.innerHTML = `<div class="game-top"><b>${title}</b><span class="game-hud num"></span><button type="button" class="btn sm" data-quit>그만하기</button></div><p class="game-help">${help}</p><div class="game-stage"></div>`;
   document.body.appendChild(el);
-  return { el, hud: el.querySelector(".game-hud"), stage: el.querySelector(".game-stage"), quit: el.querySelector("[data-quit]") };
+  const quit = el.querySelector("[data-quit]"); let asked = false;
+  quit.addEventListener("click", e => { if (asked) return; e.stopImmediatePropagation(); asked = true; quit.textContent = "정말 그만하기"; quit.classList.add("danger"); setTimeout(() => { asked = false; quit.textContent = "그만하기"; quit.classList.remove("danger"); }, 3000); }, true);
+  return { el, hud: el.querySelector(".game-hud"), stage: el.querySelector(".game-stage"), quit };
 }
 function canvasIn(stage) {
   const c = document.createElement("canvas"); stage.appendChild(c); const g = c.getContext("2d");
