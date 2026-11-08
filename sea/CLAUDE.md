@@ -25,7 +25,7 @@
 - `public/ship3d.js`: three.js r147(CDN) 3D. `makeShip`이 배와 부착물을 만들고, `fight`가 전투 연출을 합니다.
 - `public/voyage.js`, `games.js`, `sound.js`, `style.css`, `sw.js`: 지도·2D 배, 미니게임, 효과음, 스타일, 오프라인 캐시.
 - `public/math.js`: 미니게임 수학 문제 생성기. 문제는 매번 새로 만들고, 틀린 문제의 글자만 오답 리포트용으로 저장합니다. 고치면 `sea/` 폴더에서 `node tests/math-check.cjs`로 정답을 다시 검사합니다.
-- `schema.sql`: 전체 스키마(새 DB용). `migrations/`: 운영 DB에 순서대로 적용한 변경분(001~009 적용 완료).
+- `schema.sql`: 전체 스키마(새 DB용). `migrations/`: 운영 DB에 순서대로 적용한 변경분(001~010 적용 완료).
 
 ## 로컬 실행 (`sea/` 폴더에서)
 `.dev.vars` 파일을 만들고 `SETUP_CODE=아무-로컬-값`을 적습니다. 이 파일은 커밋되지 않습니다.
@@ -42,7 +42,7 @@ npx wrangler dev --port 8791
 로컬 DB에서는 `wrangler.toml`의 `REPLACE_WITH_DATABASE_ID`를 그대로 둡니다. 바꾸면 다른 DB 파일을 보게 됩니다.
 
 ## 배포 순서
-처음 한 번 `npx wrangler login`을 합니다. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v48`입니다. 그다음 `sea/` 폴더에서 실행합니다.
+처음 한 번 `npx wrangler login`을 합니다. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v49`입니다. 그다음 `sea/` 폴더에서 실행합니다.
 
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\deploy.ps1 -Message "커밋 메시지"
@@ -126,6 +126,8 @@ ode tests/duel-check.mjs로 검사합니다.
 - 저울은 지도 그림을 다시 그리지 않으려고 포구 패널에 넣었습니다. 게임 키가 `port`라서 `MAPS[].isles.port` 이름을 그대로 제목으로 씁니다. `ISLES.port`에 `game`을 넣으면 상점이 가려지므로 넣지 않습니다. 내부 계산은 모두 g 단위 정수입니다.
 - 점수 범위는 서버의 `GAMES`에 맞춥니다. 제한 시간은 학생 반응을 보고 조정합니다.
 - 게임을 그만두면 행동력은 쓰이고 포인트·아이템·보스 피해는 없습니다(`그만둠` 기록). 앱을 중간에 닫아도 같습니다. 끝난 게임의 결과는 먼저 휴대폰에 적어 두고 보내며, 실패하면 다음에 연결될 때 `flushResults`가 다시 보냅니다.
+- 선생님 화면의 '확인할 것' 탭에 미션 확인 요청, 사진 승인, 건네줄 것, 학생 의견(`feedback`, 학생당 하루 5개)이 모입니다. 학생 의견 칸은 거기서 켜고 끕니다(`game.feedbackOn`).
+- 미션은 반마다 따로 둘 수 있습니다(`quests.class_id`, 0이면 모든 반). 다른 반 미션은 신청도 지급도 되지 않습니다.
 - 단원 지정: 선생님이 학생마다 단원(문제 유형 이름)을 3개까지 정합니다(`students.focus`). 그 단원이 있는 게임에서 문제의 약 70%가 그 단원으로 나옵니다. 단원 목록은 `public/math.js`의 `UNITS`이고, 문제를 바꾸면 `tests/math-check.cjs`가 목록과 맞는지 검사합니다.
 - 오답 리포트는 연습과 실제 게임을 합쳐 세고, 초등과 중등은 답할 때의 난이도(`answers.level`)로 나눕니다.
 - 미니게임 한 판은 가장 느리게 해도 2분 안에 끝나야 합니다. 포격 섬 3종 5발, 암초 통로 10개, 등대 4라운드(2분), 통신 기지 1분 40초, 저울 6문제(2분), 보물 동굴 2분입니다. 게임 길이를 바꾸면 문제 단계 인자(`shot * 2` 등)와 서버 별 기준, 설명 문구, `hs_intro` 번호를 함께 고칩니다.

@@ -6,7 +6,7 @@ const SESSION_DAYS = { teacher: 14, student: 60 };
 const PBKDF2_ITER = 60000, MAX_FAILED = 5, LOCK_MS = 10 * 60 * 1000;
 const SAILS = 16; // free sail/flag colours, see SAILS in public/voyage.js
 const SUBJECTS = ["영어", "수학", "공통"], KINDS = ["daily", "weekly", "challenge"];
-const DEFAULT_GAME = { energyMax: 20, playCost: 1, passCost: 200, battlesPerDay: 3, win: 30, lose: 10, defend: 10, startGold: 100, hourFrom: 0, hourTo: 0, bossHp: 60, bossGold: 100 }; // bossHp is per student; 0 switches the boss off
+const DEFAULT_GAME = { energyMax: 20, playCost: 1, passCost: 200, battlesPerDay: 3, win: 30, lose: 10, defend: 10, startGold: 100, hourFrom: 0, hourTo: 0, bossHp: 60, bossGold: 100, feedbackOn: 1 }; // bossHp is per student; 0 switches the boss off
 // the class boss, in the order they arrive. look uses the same names as a kid's ship; sail is a plain colour, darker than any a kid can pick.
 const BOSSES = [
   { name: "검은 돛 해적선", ship: "galleon", look: { hull: "ebony", se: "skull", fe: "skull" }, sail: "#23262B" },
@@ -236,11 +236,11 @@ async function titlesFor(db, sid, owned) {
 }
 // energy from homework, stopping at the cap
 async function giveEnergy(db, game, pairs) {
-  const who = [...new Set(pairs.map(p => p.sid))], bal = await balances(db, who), ops = [], skipped = [], bonus = {}; let short = 0;
+  const who = [...new Set(pairs.map(p => p.sid))], bal = await balances(db, who), ops = [], skipped = [], bonus = {}, clsOf = {}; let short = 0;
   // a class with fewer lessons a week can earn more from each daily mission
-  for (let i = 0; i < who.length; i += 80) { const part = who.slice(i, i + 80); for (const r of (await db.prepare(`SELECT s.id, c.daily_bonus FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id IN (${part.map(() => "?").join(",")})`).bind(...part).all()).results) bonus[r.id] = r.daily_bonus; }
+  for (let i = 0; i < who.length; i += 80) { const part = who.slice(i, i + 80); for (const r of (await db.prepare(`SELECT s.id, s.class_id, c.daily_bonus FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id IN (${part.map(() => "?").join(",")})`).bind(...part).all()).results) { bonus[r.id] = r.daily_bonus; clsOf[r.id] = r.class_id; } }
   for (const p of pairs) {
-    const why = await questBlocked(db, p.sid, p.quest);
+    const why = p.quest.class_id && clsOf[p.sid] !== p.quest.class_id ? "다른 반 미션이에요" : await questBlocked(db, p.sid, p.quest);
     if (why) { p.blocked = true; skipped.push({ studentId: p.sid, why }); if (p.requestId) ops.push(db.prepare("UPDATE requests SET status='rejected', decided_at=? WHERE id=?").bind(Date.now(), p.requestId)); continue; }
     const want = p.quest.energy + (p.quest.kind === "daily" ? bonus[p.sid] || 0 : 0), give = Math.max(0, Math.min(want, game.energyMax - bal[p.sid].energy)); bal[p.sid].energy += give; if (give < want) short++;
     ops.push(logStmt(db, { student_id: p.sid, kind: "quest", title: p.quest.title, quest_id: p.quest.id, energy: give }));
@@ -334,7 +334,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const photosThisWeek = (await db.prepare("SELECT COUNT(*) AS n FROM photos WHERE student_id=? AND date>=?").bind(st.id, ws).first()).n;
   const photo = { price: PHOTO_PRICE, left: Math.max(0, PHOTO_PER_WEEK - photosThisWeek), pending: lastPhoto?.status === "pending" ? lastPhoto.id : null, rejected: lastPhoto?.status === "rejected" && Date.now() - lastPhoto.decided_at < 3 * 864e5 };
   const pw = await powers(db, mates);
-  const quests = (await db.prepare("SELECT id, title, subject, kind, energy FROM quests WHERE active=1 AND deleted=0 ORDER BY subject, kind, id").all()).results;
+  const quests = (await db.prepare("SELECT id, title, subject, kind, energy FROM quests WHERE active=1 AND deleted=0 AND class_id IN (0, ?) ORDER BY subject, kind, id").bind(st.class_id).all()).results;
   const done = (await db.prepare("SELECT quest_id, date FROM logs WHERE student_id=? AND kind='quest' AND date>=?").bind(st.id, ws).all()).results;
   const pend = (await db.prepare("SELECT id, quest_id FROM requests WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
   for (const q of quests) { const d = done.some(r => r.quest_id === q.id && (q.kind === "weekly" || (q.kind === "daily" && r.date === today))), p = pend.find(r => r.quest_id === q.id);
@@ -369,7 +369,7 @@ on("POST", "/api/kid/like/:id", "student", async ({ db, me, params }) => {
   const r = await db.prepare("INSERT OR IGNORE INTO likes (liker, target, week, at) VALUES (?,?,?,?)").bind(me.student.id, target, kstWeekStart(), Date.now()).run(); if (!r.meta.changes) throw bad("이번 주에는 이미 눌렀어요"); return { ok: true };
 });
 on("POST", "/api/kid/request", "student", async ({ db, me, body }) => {
-  const q = await db.prepare("SELECT * FROM quests WHERE id=? AND active=1 AND deleted=0").bind(int(body.questId, 1)).first(); if (!q) throw bad("없는 미션이에요");
+  const q = await db.prepare("SELECT * FROM quests WHERE id=? AND active=1 AND deleted=0").bind(int(body.questId, 1)).first(); if (!q || (q.class_id && q.class_id !== me.student.class_id)) throw bad("없는 미션이에요");
   if (!isClassDay(me.student.class_days)) throw bad("오늘은 수업이 없는 날이라 미션이 쉬어요");
   const why = await questBlocked(db, me.student.id, q); if (why) throw bad(why);
   if (await db.prepare("SELECT 1 FROM requests WHERE student_id=? AND quest_id=? AND status='pending'").bind(me.student.id, q.id).first()) throw bad("이미 선생님께 확인을 요청했어요");
@@ -622,16 +622,17 @@ on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, photo, must_change, locked_until, focus FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const bal = await balances(db, students.map(s => s.id)), pw = await powers(db, students);
   for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = lookOf(s); s.locked = s.locked_until > Date.now(); delete s.locked_until; s.focus = focusOf(s); }
-  const quests = (await db.prepare("SELECT id, title, subject, kind, energy, active FROM quests WHERE deleted=0 ORDER BY active DESC, subject, kind, id").all()).results;
+  const quests = (await db.prepare("SELECT id, title, subject, kind, energy, active, class_id FROM quests WHERE deleted=0 ORDER BY active DESC, subject, kind, id").all()).results;
   const requests = (await db.prepare(`SELECT r.id, r.student_id, r.quest_id, r.created_at, q.title, q.energy + CASE WHEN q.kind='daily' THEN c.daily_bonus ELSE 0 END AS energy, q.subject FROM requests r JOIN quests q ON q.id=r.quest_id JOIN students s ON s.id=r.student_id JOIN classes c ON c.id=s.class_id WHERE r.status='pending' AND s.active=1 ORDER BY r.id`).all()).results;
   const orders = (await db.prepare("SELECT o.id, o.student_id, o.name, o.cost, o.created_at FROM orders o JOIN students s ON s.id=o.student_id WHERE o.status='pending' AND s.active=1 ORDER BY o.id").all()).results;
   const battles = (await db.prepare("SELECT b.id, b.winner, b.attacker, b.delta, b.at, a.nickname AS a_name, d.nickname AS d_name FROM battles b JOIN students a ON a.id=b.attacker JOIN students d ON d.id=b.defender WHERE b.date=? ORDER BY b.id DESC LIMIT 60").bind(today).all()).results;
   const photos = (await db.prepare("SELECT p.id, p.student_id, p.created_at FROM photos p JOIN students s ON s.id=p.student_id WHERE p.status='pending' AND s.active=1 ORDER BY p.id").all()).results;
+  const feedback = (await db.prepare("SELECT f.id, f.student_id, f.text, f.at, f.seen FROM feedback f JOIN students s ON s.id=f.student_id WHERE s.active=1 ORDER BY f.id DESC LIMIT 60").all()).results;
   const bosses = [];
   for (const c of classes) { const b = await currentBoss(db, c.id, game); if (!b) continue;
     const tot = (await db.prepare("SELECT student_id AS id, SUM(dmg) AS dmg FROM boss_hits WHERE boss_id=? GROUP BY student_id").bind(b.id).all()).results;
     bosses.push({ classId: c.id, name: BOSSES[b.kind].name, hp: b.hp, left: Math.max(0, b.hp - tot.reduce((n, x) => n + x.dmg, 0)), down: !!b.defeated_at, gold: b.gold, hits: tot.filter(x => x.id).sort((x, y) => y.dmg - x.dmg) }); }
-  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, battles, bosses, teacherDmg: BOSS_TEACHER_DMG, seas: MAPS.map(m => ({ name: m.name, power: m.power })), ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
+  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, feedback, battles, bosses, teacherDmg: BOSS_TEACHER_DMG, seas: MAPS.map(m => ({ name: m.name, power: m.power })), ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
 });
 // the wrong-answer report: every child's counts per kind of question over the last few days; the page adds them up by class
 on("GET", "/api/t/report/:days", "teacher", async ({ db, params }) => {
@@ -664,6 +665,15 @@ on("POST", "/api/t/focus", "teacher", async ({ db, body }) => {
   if (!ids.length) throw bad("학생을 골라 주세요");
   await db.batch(ids.map(id => db.prepare("UPDATE students SET focus=? WHERE id=? AND active=1").bind(tags.length ? JSON.stringify(tags) : "", id))); return { ok: true, count: ids.length };
 });
+const FEEDBACK_PER_DAY = 5;
+on("POST", "/api/kid/feedback", "student", async ({ db, me, body }) => {
+  if (!(await getGame(db)).feedbackOn) throw bad("지금은 의견을 받지 않아요");
+  const sid = me.student.id, date = kstDate(), text = clip(String(body.text ?? "").trim(), 300); if (text.length < 2) throw bad("두 글자 이상 적어 주세요");
+  if ((await db.prepare("SELECT COUNT(*) AS n FROM feedback WHERE student_id=? AND date=?").bind(sid, date).first()).n >= FEEDBACK_PER_DAY) throw bad(`의견은 하루에 ${FEEDBACK_PER_DAY}번까지 보낼 수 있어요`);
+  await db.prepare("INSERT INTO feedback (student_id, text, date, at) VALUES (?,?,?,?)").bind(sid, text, date, Date.now()).run(); return { ok: true };
+});
+on("POST", "/api/t/feedback/seen", "teacher", async ({ db, body }) => { const ids = [].concat(body.ids || []).map(Number).filter(n => Number.isInteger(n) && n > 0).slice(0, 100); if (ids.length) await db.batch(ids.map(id => db.prepare("UPDATE feedback SET seen=1 WHERE id=?").bind(id))); return { ok: true }; });
+on("POST", "/api/t/feedback/switch", "teacher", async ({ db }) => { const cur = await getGame(db), on = cur.feedbackOn ? 0 : 1; await db.prepare("INSERT INTO settings (key, value) VALUES ('game', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify({ ...cur, feedbackOn: on })).run(); return { ok: true, on: !!on }; });
 const LOG_DAY_MAX = 1000;
 on("GET", "/api/t/logs/:date", "teacher", async ({ db, params }) => {
   const today = kstDate(), date = params.date === "0" ? today : String(params.date).replace(/^(\d{4})(\d{2})(\d{2})$/, "$1-$2-$3"); if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw bad("날짜를 확인해 주세요");
@@ -672,8 +682,8 @@ on("GET", "/api/t/logs/:date", "teacher", async ({ db, params }) => {
 });
 on("POST", "/api/t/logs/:id/undo", "teacher", async ({ db, params }) => {
   const l = await db.prepare("SELECT * FROM logs WHERE id=?").bind(params.id).first(); if (!l) throw bad("이미 취소된 기록이에요");
-  if (l.kind === "exempt") throw bad("면제권은 '건네줄 것'에서 취소해 주세요");
-  if (l.kind === "photo") throw bad("사진 돛은 '사진 승인'에서 처리해 주세요");
+  if (l.kind === "exempt") throw bad("면제권은 '확인할 것'에서 취소해 주세요");
+  if (l.kind === "photo") throw bad("사진 돛은 '확인할 것'에서 처리해 주세요");
   const ops = [db.prepare("DELETE FROM logs WHERE id=?").bind(l.id)];
   // a mission or game taken back also takes back its shot, unless the boss has already gone down
   if (l.kind === "quest" || (l.kind === "game" && /별 \d개$/.test(l.title))) ops.push(db.prepare("DELETE FROM boss_hits WHERE id=(SELECT h.id FROM boss_hits h JOIN bosses b ON b.id=h.boss_id WHERE h.student_id=? AND h.src=? AND b.defeated_at=0 ORDER BY h.id DESC LIMIT 1)").bind(l.student_id, l.kind));
@@ -724,9 +734,10 @@ on("POST", "/api/t/students/:id/reset-pin", "teacher", async ({ db, params }) =>
 });
 on("POST", "/api/t/students/:id/delete", "teacher", async ({ db, params }) => { await db.batch([db.prepare("DELETE FROM answers WHERE student_id=?").bind(params.id), db.prepare("DELETE FROM misses WHERE student_id=?").bind(params.id), db.prepare("UPDATE photos SET status='removed', data='' WHERE student_id=?").bind(params.id), db.prepare("UPDATE students SET active=0, photo=0 WHERE id=?").bind(params.id), db.prepare("DELETE FROM sessions WHERE role='student' AND user_id=?").bind(params.id)]); return { ok: true }; });
 on("POST", "/api/t/quests", "teacher", async ({ db, body }) => {
-  const d = [str(body.title, 40), SUBJECTS.includes(body.subject) ? body.subject : "공통", KINDS.includes(body.kind) ? body.kind : "daily", int(body.energy, 0, 50)];
-  if (body.id) await db.prepare("UPDATE quests SET title=?, subject=?, kind=?, energy=? WHERE id=?").bind(...d, int(body.id, 1)).run();
-  else await db.prepare("INSERT INTO quests (title, subject, kind, energy) VALUES (?,?,?,?)").bind(...d).run(); return { ok: true };
+  const cls = int(body.classId || 0, 0, 1e9), d = [str(body.title, 40), SUBJECTS.includes(body.subject) ? body.subject : "공통", KINDS.includes(body.kind) ? body.kind : "daily", int(body.energy, 0, 50), cls];
+  if (cls && !(await db.prepare("SELECT 1 FROM classes WHERE id=? AND active=1").bind(cls).first())) throw bad("없는 반이에요");
+  if (body.id) await db.prepare("UPDATE quests SET title=?, subject=?, kind=?, energy=?, class_id=? WHERE id=?").bind(...d, int(body.id, 1)).run();
+  else await db.prepare("INSERT INTO quests (title, subject, kind, energy, class_id) VALUES (?,?,?,?,?)").bind(...d).run(); return { ok: true };
 });
 on("POST", "/api/t/quests/:id/toggle", "teacher", async ({ db, params }) => { await db.prepare("UPDATE quests SET active=1-active WHERE id=?").bind(params.id).run(); return { ok: true }; });
 on("POST", "/api/t/quests/:id/delete", "teacher", async ({ db, params }) => { await db.batch([db.prepare("UPDATE quests SET deleted=1, active=0 WHERE id=?").bind(params.id), db.prepare("UPDATE requests SET status='canceled' WHERE quest_id=? AND status='pending'").bind(params.id)]); return { ok: true }; });

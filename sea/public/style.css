@@ -612,3 +612,8 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
   .pcard dd { margin: 0; word-break: break-all; font-weight: 700 }
   .pcard p { margin: 0; color: #333 }
 }
+
+/* children's notes in the inbox */
+.prow.fb > span:first-child { display: grid; gap: 2px; min-width: 0 }
+.fb-text { white-space: pre-wrap; word-break: break-word }
+.prow.fb.seen { opacity: .6 }

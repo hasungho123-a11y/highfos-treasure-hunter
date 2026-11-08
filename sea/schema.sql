@@ -55,8 +55,18 @@ CREATE TABLE IF NOT EXISTS quests (
   kind TEXT NOT NULL,                 -- daily | weekly | challenge
   energy INTEGER NOT NULL DEFAULT 1,
   active INTEGER NOT NULL DEFAULT 1,
-  deleted INTEGER NOT NULL DEFAULT 0
+  deleted INTEGER NOT NULL DEFAULT 0,
+  class_id INTEGER NOT NULL DEFAULT 0  -- 0 = every class
 );
+CREATE TABLE IF NOT EXISTS feedback (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  date TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  seen INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_student ON feedback(student_id, date);
 CREATE TABLE IF NOT EXISTS requests (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   student_id INTEGER NOT NULL,

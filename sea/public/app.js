@@ -537,6 +537,7 @@ function kLog() {
   const d = K.d;
   return `<div class="row" style="justify-content:flex-end"><button class="btn ghost sm" data-act="logout">로그아웃</button></div>${d.weak?.length ? `<section class="panel"><h3>다시 풀어 볼 유형</h3><p class="small muted">최근 2주 동안 틀린 적이 있는 유형이에요. 연습은 행동력이 들지 않아요. 대신 포인트, 아이템, 보스 피해가 없어요.</p><div class="plist">${d.weak.map(w => `<div class="prow"><span><b>${esc(w.tag)}</b></span><span class="small muted num">${w.tries}문제 중 ${w.wrong}개 틀림</span><button class="btn sm primary" data-act="kpractice" data-v="${esc(`${w.game}|${w.map}|${w.tag}`)}">연습</button></div>`).join("")}</div></section>` : ""}
     ${d.orders.length ? `<section class="panel"><h3>선생님이 챙겨 줄 것</h3><div class="plist">${d.orders.map(o => `<div class="prow"><span>${esc(o.name)}</span><span class="small muted">${fmtTime(o.created_at)}</span><span class="pill wait">준비 중</span></div>`).join("")}</div></section>` : ""}
+    ${d.game.feedbackOn ? `<section class="panel"><h3>선생님께 한마디</h3><p class="small muted">불편한 점, 고장 난 곳, 바라는 점을 적어요. 선생님만 봐요.</p><form class="stack" style="gap:8px" data-form="kfb"><textarea id="kfb" rows="3" maxlength="300" placeholder="예: 저울 게임에서 추가 잘 안 눌려요"></textarea><div><button class="btn primary">보내기</button></div></form></section>` : ""}
     <section class="panel feed"><h3>항해 일지</h3>${d.log.length ? `<ul>${d.log.map(l => `<li><time class="num">${fmtTime(l.at)}</time><span>${esc(l.title)}</span><span class="small">${l.energy ? `<span class="nrg num">${l.energy > 0 ? "+" : ""}${l.energy}</span> ` : ""}${l.points ? `<span class="pt num">${l.points > 0 ? "+" : ""}${l.points}</span> ` : ""}${l.gold ? `<span class="gold num">${l.gold > 0 ? "+" : ""}${l.gold}</span>` : ""}</span></li>`).join("")}</ul>` : `<p class="muted small">아직 기록이 없어요.</p>`}</section>`;
 }
 function kDo(fn, msg) { return oneAtATime(async () => { try { const r = await fn(); if (msg) toast(msg); await kidLoad(); kidRender(); return r; } catch (e) { toast(e.message); } }); }
@@ -816,6 +817,7 @@ const KID_ACTS = {
   ksail: v => kDo(() => api("/api/kid/sail", { sail: Number(v) })), kflag: v => kDo(() => api("/api/kid/sail", { flag: Number(v) }))
 };
 const KID_FORMS = {
+  kfb: () => { const t = val("kfb").trim(); if (t.length < 2) return toast("두 글자 이상 적어 주세요"); return kDo(async () => { const r = await api("/api/kid/feedback", { text: t }); $("#kfb").value = ""; return r; }, "선생님께 보냈어요. 고마워요!"); },
   kpin: () => { const a = val("kp1"); if (!/^\d{4}$/.test(a)) return toast("숫자 4개로 정해 주세요"); if (a !== val("kp2")) return toast("두 번 넣은 숫자가 달라요"); return kDo(() => api("/api/kid/pin", { pin: a }), "비밀번호를 정했어요. 꼭 기억해요!"); },
   kex: () => kDo(() => api("/api/kid/exchange", { amount: Number(val("ex-n")) }), "금화로 바꿨어요")
 };
@@ -823,8 +825,10 @@ const KID_FORMS = {
 /* =====================================================================
    TEACHER
    ===================================================================== */
-const T = { d: null, tab: "grant", cls: "all", selQ: null, selS: new Set(), selR: new Set(), created: null, editQ: null, detail: null, rep: null, repDays: 7, repKid: null, repMiss: null, repLevel: null, fSel: new Set(), fUnits: new Set(), drafts: {}, log: null, logDay: null };
-const TTABS = [["grant", "미션 지급"], ["photo", "사진 승인"], ["crew", "반·선원"], ["quests", "미션 관리"], ["give", "건네줄 것"], ["report", "오답 리포트"], ["battle", "전투·설정"], ["log", "기록"]];
+const T = { d: null, tab: "inbox", cls: "all", selQ: null, selS: new Set(), selR: new Set(), created: null, editQ: null, detail: null, rep: null, repDays: 7, repKid: null, repMiss: null, repLevel: null, fSel: new Set(), fUnits: new Set(), drafts: {}, log: null, logDay: null };
+const TTABS = [["inbox", "확인할 것"], ["grant", "미션 지급"], ["crew", "반·선원"], ["quests", "미션 관리"], ["report", "오답 리포트"], ["battle", "전투·설정"], ["log", "기록"]];
+// everything waiting for the teacher, all classes counted
+const inboxCount = d => d.requests.length + d.photos.length + d.orders.length + (d.feedback || []).filter(f => !f.seen).length;
 async function tLoad() { T.d = await api("/api/t/state"); }
 async function tLogFetch() { T.log = await api(`/api/t/logs/${T.logDay ? T.logDay.replace(/-/g, "") : 0}`); }
 async function tLogLoad() { try { await tLogFetch(); } catch (e) { toast(e.message); } if (T.tab === "log") tRender(); }
@@ -840,26 +844,35 @@ function tRender() {
   const d = T.d, keep = keepInputs(app), edited = T.fresh ? [] : editedInputs(app), moved = T.tab !== T.shownTab, wide = moved ? [] : [...app.querySelectorAll(".tablewrap")].map(w => w.scrollLeft), strip = $(".tabs")?.scrollLeft || 0;
   if (moved && T.shownTab) T.drafts[T.shownTab] = [...keep, ...edited]; if (T.fresh) T.drafts[T.tab] = null; const back = moved ? T.drafts[T.tab] || [] : []; T.fresh = false; T.shownTab = T.tab;
   app.innerHTML = `<header class="top"><div class="hwrap"><div class="brand"><img src="${LOGO}" alt=""><div style="min-width:0"><h1>하이포스 매쓰아일랜드</h1><small>선생님 · ${esc(d.teacher)}</small></div></div><div class="hright"><button class="btn ghost sm" data-act="logout">로그아웃</button></div></div>
-    <nav class="tabs" aria-label="화면">${TTABS.map(([k, l]) => `<button data-act="ttab" data-v="${k}" aria-current="${T.tab === k}">${l}${k === "grant" && d.requests.length ? `<span class="cnt">${d.requests.length}</span>` : ""}${k === "give" && d.orders.length ? `<span class="cnt">${d.orders.length}</span>` : ""}${k === "photo" && d.photos.length ? `<span class="cnt">${d.photos.length}</span>` : ""}</button>`).join("")}</nav></header>
-    <main>${({ grant: tGrant, photo: tPhoto, crew: tCrew, quests: tQuests, give: tGive, report: tReport, battle: tBattle, log: tLog })[T.tab]()}</main>`;
+    <nav class="tabs" aria-label="화면">${TTABS.map(([k, l]) => `<button data-act="ttab" data-v="${k}" aria-current="${T.tab === k}">${l}${k === "inbox" && inboxCount(d) ? `<span class="cnt">${inboxCount(d)}</span>` : ""}</button>`).join("")}</nav></header>
+    <main>${({ inbox: tInbox, grant: tGrant, crew: tCrew, quests: tQuests, report: tReport, battle: tBattle, log: tLog })[T.tab]()}</main>`;
   restoreInputs(keep); restoreInputs(edited); restoreInputs(back); app.querySelectorAll(".tablewrap").forEach((w, i) => { w.scrollLeft = wide[i] || 0; }); const bar = $(".tabs"); if (bar) bar.scrollLeft = strip;
 }
 function tabIntoView() { const bar = $(".tabs"), on = bar?.querySelector("[aria-current=true]"); if (!on) return; const b = bar.getBoundingClientRect(), r = on.getBoundingClientRect(); bar.scrollLeft += r.left - b.left - (b.width - r.width) / 2; }
-function tGrant() {
-  const d = T.d, rs = d.requests, q = d.quests.find(x => x.id === T.selQ);
-  return `<section class="panel"><h2>아이들이 "다 했어요" 누른 미션</h2>
+// the inbox: missions handed in, photos, passes to hand over and what children wrote, for the class picked at the top
+function tInbox() {
+  const d = T.d, ids = new Set(tList().map(s => s.id)), rs = d.requests.filter(r => ids.has(r.student_id)), orders = d.orders.filter(o => ids.has(o.student_id)), fb = (d.feedback || []).filter(f => ids.has(f.student_id)), fresh = fb.filter(f => !f.seen), n = x => `<span class="small muted num">${x}</span>`;
+  return `${tChips() ? `<section class="panel">${tChips()}</section>` : ""}<section class="panel"><h2>"다 했어요" 누른 미션 ${n(rs.length)}</h2>
     ${rs.length ? `<div class="plist">${rs.map(r => `<label class="prow"><span><input type="checkbox" data-act="tselr" data-v="${r.id}" ${T.selR.has(r.id) ? "checked" : ""}> <b>${esc(sname(r.student_id))}</b> · ${esc(r.title)} <span class="small muted">행동력 +${r.energy}</span>${(d.students.find(s => s.id === r.student_id)?.bal.energy ?? 0) >= d.game.energyMax ? ` <span class="pill wait">행동력 가득</span>` : ""}</span><span class="small muted">${fmtTime(r.created_at)}</span><span></span></label>`).join("")}</div>
       <div class="row"><button class="btn sm" data-act="tselrAll">모두 선택</button><button class="btn primary" data-act="tapprove" ${T.selR.size ? "" : "disabled"}>${T.selR.size}개 승인</button>${armBtn(rejectKey(), "treject", "", "반려", "btn danger", T.selR.size ? "" : "disabled")}</div>` : `<p class="muted small">새 요청이 없어요.</p>`}</section>
-    <section class="panel"><div class="row between"><h2>직접 지급</h2>${tChips()}</div>
-      <div class="chips">${d.quests.filter(x => x.active).map(x => `<button class="chip" data-act="tpickq" data-v="${x.id}" aria-pressed="${x.id === T.selQ}">${esc(x.title)} +${x.energy}</button>`).join("") || `<span class="muted small">미션 관리에서 미션을 만들어 주세요.</span>`}</div>
-      <div class="chips">${tList().map(s => `<button class="chip" data-act="tpicks" data-v="${s.id}" aria-pressed="${T.selS.has(s.id)}">${esc(sname(s.id))} · 행동력 ${s.bal.energy}</button>`).join("")}</div>
+    ${tPhoto("wait")}
+    <section class="panel"><h2>건네줄 것 ${n(orders.length)}</h2><p class="small muted">아이들이 포인트로 산 숙제 면제권이에요. 실제로 적용한 뒤 '줬어요'를 눌러요.</p>${orders.length ? `<div class="plist">${orders.map(o => `<div class="prow"><span><b>${esc(sname(o.student_id))}</b> · ${esc(o.name)} <span class="small muted">${fmtTime(o.created_at)}</span></span>${armBtn(`order${o.id}`, "tcancelOrder", o.id, "취소(환불)")}<button class="btn sm primary" data-act="tdeliver" data-v="${o.id}">줬어요</button></div>`).join("")}</div>` : `<p class="muted small">지금 건네줄 것이 없어요.</p>`}</section>
+    <section class="panel"><div class="row between"><h2>학생 의견 ${n(fresh.length)}</h2><button class="btn sm ${d.game.feedbackOn ? "primary" : ""}" data-act="tfbSwitch">${d.game.feedbackOn ? "받는 중" : "꺼짐"}</button></div><p class="small muted">학생 기록 탭의 '선생님께 한마디'로 들어온 글이에요. 끄면 학생 화면에서 칸이 사라져요.</p>
+      ${fb.length ? `<div class="plist">${fb.map(f => `<div class="prow fb ${f.seen ? "seen" : ""}"><span><b>${esc(sname(f.student_id))}</b> <span class="small muted">${fmtTime(f.at)}</span><span class="fb-text">${esc(f.text)}</span></span>${f.seen ? `<span class="small muted">확인함</span>` : `<button class="btn sm" data-act="tfbSeen" data-v="${f.id}">확인</button>`}</div>`).join("")}</div>${fresh.length > 1 ? `<div class="row"><button class="btn sm" data-act="tfbSeen" data-v="${fresh.map(f => f.id).join(",")}">모두 확인</button></div>` : ""}` : `<p class="muted small">아직 들어온 의견이 없어요.</p>`}</section>`;
+}
+function tGrant() {
+  const d = T.d, q = d.quests.find(x => x.id === T.selQ), forClass = x => T.cls === "all" || !x.class_id || x.class_id === T.cls;
+  return `<section class="panel"><div class="row between"><h2>직접 지급</h2>${tChips()}</div><p class="small muted">미션을 고르고 학생을 골라 바로 행동력을 줘요. 반 미션을 고르면 그 반 학생만 보여요.</p>
+      <div class="chips">${d.quests.filter(x => x.active && forClass(x)).map(x => `<button class="chip" data-act="tpickq" data-v="${x.id}" aria-pressed="${x.id === T.selQ}">${esc(x.title)} +${x.energy}${x.class_id ? `<small>${esc(cname(x.class_id))}</small>` : ""}</button>`).join("") || `<span class="muted small">미션 관리에서 미션을 만들어 주세요.</span>`}</div>
+      <div class="chips">${tList().filter(s => !q?.class_id || s.class_id === q.class_id).map(s => `<button class="chip" data-act="tpicks" data-v="${s.id}" aria-pressed="${T.selS.has(s.id)}">${esc(sname(s.id))} · 행동력 ${s.bal.energy}</button>`).join("")}</div>
       <div class="row"><button class="btn sm" data-act="tselAll">모두 선택</button><button class="btn primary" data-act="tgrant" ${q && T.selS.size ? "" : "disabled"}>${T.selS.size}명에게 지급</button></div></section>`;
 }
-function tPhoto() {
+function tPhoto(part) {
   const d = T.d, onShips = d.students.filter(s => s.photo), who = id => { const s = d.students.find(x => x.id === id); return `<b>${esc(sname(id))}</b> <span class="small muted">${esc(cname(s?.class_id))}</span>`; };
-  return `<section class="panel"><h2>확인을 기다리는 사진</h2><p class="small muted">승인하면 같은 반 친구들에게 보여요. 반려하면 사진은 지워지고 금화 150개는 아이에게 돌아가요.</p>
-    ${d.photos.length ? `<div class="photo-grid">${d.photos.map(p => `<div class="photo-card"><img src="/api/photo/${p.id}" alt="신청한 사진"><div>${who(p.student_id)}</div><span class="small muted">${fmtTime(p.created_at)}</span><div class="row"><button class="btn sm primary" data-act="tphotoOk" data-v="${p.id}">승인</button>${armBtn(`photoNo${p.id}`, "tphotoNo", p.id, "반려", "btn sm danger")}</div></div>`).join("")}</div>` : `<p class="muted small">새 신청이 없어요.</p>`}</section>
-    <section class="panel"><h2>지금 배에 달린 사진</h2><p class="small muted">내리면 사진이 지워져요. 금화는 돌아가지 않아요.</p>
+  const ids = new Set(tList().map(s => s.id)), photos = d.photos.filter(p => ids.has(p.student_id));
+  if (part === "wait") return `<section class="panel"><h2>확인을 기다리는 사진 <span class="small muted num">${photos.length}</span></h2><p class="small muted">승인하면 같은 반 친구들에게 보여요. 반려하면 사진은 지워지고 금화 150개는 아이에게 돌아가요.</p>
+    ${photos.length ? `<div class="photo-grid">${photos.map(p => `<div class="photo-card"><img src="/api/photo/${p.id}" alt="신청한 사진"><div>${who(p.student_id)}</div><span class="small muted">${fmtTime(p.created_at)}</span><div class="row"><button class="btn sm primary" data-act="tphotoOk" data-v="${p.id}">승인</button>${armBtn(`photoNo${p.id}`, "tphotoNo", p.id, "반려", "btn sm danger")}</div></div>`).join("")}</div>` : `<p class="muted small">새 신청이 없어요.</p>`}</section>`;
+  return `<section class="panel"><h2>지금 배에 달린 사진</h2><p class="small muted">내리면 사진이 지워져요. 금화는 돌아가지 않아요.</p>
     ${onShips.length ? `<div class="photo-grid">${onShips.map(s => `<div class="photo-card"><img src="/api/photo/${s.photo}" alt="달려 있는 사진"><div>${who(s.id)}</div><div class="row">${armBtn(`photo${s.photo}`, "tphotoOff", s.photo, "내리기")}</div></div>`).join("")}</div>` : `<p class="muted small">달려 있는 사진이 없어요.</p>`}</section>`;
 }
 function tCrew() {
@@ -877,18 +890,16 @@ function tCrew() {
     ${s ? `<section class="panel" id="kidDetail"><div class="row between"><h2>${esc(s.nickname)}</h2><button class="btn sm ghost" data-act="tdetail" data-v="${s.id}">닫기</button></div>
       <form class="row" data-form="adjust"><label class="f">종류<select id="adj-type" data-keep="no"><option value="energy">행동력</option><option value="points">포인트</option><option value="gold">금화</option></select></label><label class="f">양<input type="number" id="adj-amt" placeholder="+5 / -5" required data-keep="no"></label><label class="f" style="flex:1 1 150px">사유<input type="text" id="adj-why" maxlength="40" data-keep="no"></label><button class="btn" style="align-self:end">반영</button></form>
       <div class="row"><span class="small">단원: <b>${kidFocus(s).length ? esc(kidFocus(s).join(", ")) : "없음"}</b></span><button class="btn sm ghost" data-act="tfGo" data-v="${s.id}">단원 바꾸기</button></div>
-      ${s.locked ? `<p class="small">비밀번호를 여러 번 틀려서 잠겼어요. 10분 뒤에 풀려요. 바로 풀려면 비밀번호를 새로 발급해요.</p>` : ""}<div class="row"><button class="btn" data-act="tresetPin" data-v="${s.id}">비밀번호 새로 발급</button>${armBtn(`student${s.id}`, "tdelStudent", s.id, "선원 삭제")}</div></section>` : ""}`;
+      ${s.locked ? `<p class="small">비밀번호를 여러 번 틀려서 잠겼어요. 10분 뒤에 풀려요. 바로 풀려면 비밀번호를 새로 발급해요.</p>` : ""}<div class="row"><button class="btn" data-act="tresetPin" data-v="${s.id}">비밀번호 새로 발급</button>${armBtn(`student${s.id}`, "tdelStudent", s.id, "선원 삭제")}</div></section>` : ""}
+    ${tPhoto("ships")}`;
 }
 function tQuests() {
   const d = T.d, e = d.quests.find(q => q.id === T.editQ);
   return `<section class="panel"><h2>${e ? "미션 수정" : "새 미션"}</h2><form class="row" data-form="saveQuest"><label class="f" style="flex:1 1 220px">내용<input type="text" id="q-title" maxlength="40" required value="${esc(e?.title || "")}" data-keep="no"></label>
       <label class="f">과목<select id="q-subj" data-keep="no">${SUBJECTS.map(s => `<option ${e?.subject === s ? "selected" : ""}>${s}</option>`).join("")}</select></label><label class="f">주기<select id="q-kind" data-keep="no">${Object.entries(KINDS).map(([k, v]) => `<option value="${k}" ${e?.kind === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label class="f">반<select id="q-cls" data-keep="no"><option value="0">모든 반</option>${d.classes.map(c => `<option value="${c.id}" ${(e ? e.class_id === c.id : T.cls === c.id) ? "selected" : ""}>${esc(c.name)}</option>`).join("")}</select></label>
       <label class="f">행동력<input type="number" id="q-en" min="0" max="50" value="${e?.energy ?? 1}" data-keep="no" required></label><button class="btn primary" style="align-self:end">${e ? "저장" : "추가"}</button>${e ? `<button type="button" class="btn ghost" style="align-self:end" data-act="teditQ">취소</button>` : ""}</form></section>
-    <section class="panel"><h2>미션 목록</h2>${d.quests.length ? `<div class="tablewrap"><table><thead><tr><th>미션</th><th>과목</th><th>주기</th><th>행동력</th><th></th></tr></thead><tbody>${d.quests.map(q => `<tr><td>${esc(q.title)}</td><td>${esc(q.subject)}</td><td>${KINDS[q.kind]}</td><td class="num">+${q.energy}</td><td class="row"><button class="btn sm ${q.active ? "primary" : ""}" data-act="ttoggleQ" data-v="${q.id}">${q.active ? "보임" : "숨김"}</button><button class="btn sm ghost" data-act="teditQ" data-v="${q.id}">수정</button>${armBtn(`quest${q.id}`, "tdelQ", q.id, "삭제")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">첫 미션을 만들어 주세요.</p>`}</section>`;
-}
-function tGive() {
-  const d = T.d;
-  return `<section class="panel"><h2>건네줄 것</h2><p class="small muted">아이들이 포인트로 산 숙제 면제권이에요. 실제로 적용한 뒤 '줬어요'를 눌러요.</p>${d.orders.length ? `<div class="plist">${d.orders.map(o => `<div class="prow"><span><b>${esc(sname(o.student_id))}</b> · ${esc(o.name)} <span class="small muted">${fmtTime(o.created_at)}</span></span>${armBtn(`order${o.id}`, "tcancelOrder", o.id, "취소(환불)")}<button class="btn sm primary" data-act="tdeliver" data-v="${o.id}">줬어요</button></div>`).join("")}</div>` : `<p class="muted small">지금 건네줄 것이 없어요.</p>`}</section>`;
+    <section class="panel"><div class="row between"><h2>미션 목록</h2>${tChips()}</div>${d.quests.length ? `<div class="tablewrap"><table><thead><tr><th>미션</th><th>반</th><th>과목</th><th>주기</th><th>행동력</th><th></th></tr></thead><tbody>${d.quests.filter(q => T.cls === "all" || !q.class_id || q.class_id === T.cls).map(q => `<tr><td>${esc(q.title)}</td><td class="small">${q.class_id ? esc(cname(q.class_id)) : `<span class="muted">모든 반</span>`}</td><td>${esc(q.subject)}</td><td>${KINDS[q.kind]}</td><td class="num">+${q.energy}</td><td class="row"><button class="btn sm ${q.active ? "primary" : ""}" data-act="ttoggleQ" data-v="${q.id}">${q.active ? "보임" : "숨김"}</button><button class="btn sm ghost" data-act="teditQ" data-v="${q.id}">수정</button>${armBtn(`quest${q.id}`, "tdelQ", q.id, "삭제")}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">첫 미션을 만들어 주세요.</p>`}</section>`;
 }
 // the wrong-answer report: which kinds of question a class misses most, then each child. The bars and the counts beside them say the same thing, so a kind asked only once or twice doesn't look alarming.
 const rateOf = x => x.tries ? Math.round(x.wrong / x.tries * 100) : 0;
@@ -916,12 +927,13 @@ function tReport() {
     const t = tags[r.tag] || (tags[r.tag] = { tag: r.tag, tries: 0, wrong: 0, who: 0 }), k = kids[r.id] || (kids[r.id] = { id: r.id, tries: 0, wrong: 0, tags: [] });
     t.tries += r.tries; t.wrong += r.wrong; if (r.wrong) t.who++; k.tries += r.tries; k.wrong += r.wrong; k.tags.push(r); }
   const worst = (a, b) => b.wrong - a.wrong || rateOf(b) - rateOf(a), tagRows = Object.values(tags).sort(worst), kidRows = Object.values(kids).sort(worst), idle = list.filter(s => !kids[s.id]), open = kids[T.repKid];
+  const focusText = k => { const s = T.d.students.find(x => x.id === k.id), fs = s ? kidFocus(s) : []; return fs.map(t => { const r = k.tags.find(x => x.tag === t); return r ? `${esc(t)} <span class="num">${r.tries}문제 · 정답 ${100 - rateOf(r)}%</span>` : `${esc(t)} <span class="muted">아직 안 풀었어요</span>`; }).join("<br>") || `<span class="muted">없음</span>`; };
   const weakText = k => k.tags.filter(t => t.wrong).sort(worst).slice(0, 3).map(t => `${esc(t.tag)} <span class="num">${t.wrong}/${t.tries}</span>`).join(" · ") || "틀린 문제 없음";
   const head = `<div class="row between"><h2>오답 리포트</h2><div class="chips">${[[7, "최근 7일"], [30, "최근 30일"]].map(([n, l]) => `<button class="chip" data-act="trepDays" data-v="${n}" aria-pressed="${T.repDays === n}">${l}</button>`).join("")}</div></div>${tChips()}${levels.length > 1 ? `<div class="chips">${[[0, "초등"], [1, "중등"]].map(([n, l]) => `<button class="chip" data-act="trepLevel" data-v="${n}" aria-pressed="${lv === n}">${l}</button>`).join("")}</div>` : ""}<p class="small muted">미니게임과 연습에서 푼 문제를 함께 세요. 초등과 중등은 따로 봐요. 범선의 바다 보물 동굴(짝 맞추기)과 친구 대결은 빠져 있어요.</p>`;
   if (!T.rep) return `<section class="panel">${head}<p class="muted small">불러오는 중…</p></section>${fp}`;
   if (!tagRows.length) return `<section class="panel">${head}<p class="muted small">이 기간에 쌓인 기록이 없어요. 아이들이 미니게임을 하면 여기에 쌓여요.</p></section>${fp}`;
   return `<section class="panel">${head}<h3>많이 틀린 유형</h3><div class="tablewrap"><table class="rep-table"><thead><tr><th>유형</th><th>틀린 비율</th><th>틀림 / 푼 문제</th><th>틀린 학생</th></tr></thead><tbody>${tagRows.map(t => `<tr><td><b>${esc(t.tag)}</b></td><td>${rateBar(t)}</td><td class="num">${t.wrong} / ${t.tries}</td><td class="num">${t.who}명</td></tr>`).join("")}</tbody></table></div></section>${fp}
-    <section class="panel"><h2>학생별</h2><p class="small muted">이름을 누르면 최근에 틀린 문제를 볼 수 있어요. 틀린 수가 많은 학생부터 보여요.</p><div class="tablewrap"><table class="rep-table"><thead><tr><th>이름</th><th>틀린 비율</th><th>틀림 / 푼 문제</th><th>많이 틀린 유형</th></tr></thead><tbody>${kidRows.map(k => `<tr class="click" data-act="trepKid" data-v="${k.id}" aria-selected="${k.id === T.repKid}"><td><b>${esc(sname(k.id))}</b></td><td>${rateBar(k)}</td><td class="num">${k.wrong} / ${k.tries}</td><td class="small">${weakText(k)}</td></tr>`).join("")}</tbody></table></div>
+    <section class="panel"><h2>학생별</h2><p class="small muted">이름을 누르면 최근에 틀린 문제를 볼 수 있어요. 틀린 수가 많은 학생부터 보여요.</p><div class="tablewrap"><table class="rep-table"><thead><tr><th>이름</th><th>틀린 비율</th><th>틀림 / 푼 문제</th><th>많이 틀린 유형</th><th>지정 단원</th></tr></thead><tbody>${kidRows.map(k => `<tr class="click" data-act="trepKid" data-v="${k.id}" aria-selected="${k.id === T.repKid}"><td><b>${esc(sname(k.id))}</b></td><td>${rateBar(k)}</td><td class="num">${k.wrong} / ${k.tries}</td><td class="small">${weakText(k)}</td><td class="small">${focusText(k)}</td></tr>`).join("")}</tbody></table></div>
       ${idle.length ? `<p class="small muted">이 기간에 문제를 풀지 않은 학생: ${idle.map(s => esc(sname(s.id))).join(", ")}</p>` : ""}</section>
     ${open ? `<section class="panel"><div class="row between"><h2>${esc(sname(open.id))}의 최근 틀린 문제</h2><button class="btn sm ghost" data-act="trepKid" data-v="${open.id}">닫기</button></div>${T.repMiss === null ? `<p class="muted small">불러오는 중…</p>` : T.repMiss.some(m => m.level === lv) ? `<ol class="rep-miss">${T.repMiss.filter(m => m.level === lv).map(m => `<li><small>${esc(m.tag)} · ${fmtTime(m.at)}</small><div class="miss-q num">${m.lines.map(l => `<div>${MathQ.html(esc(l))}</div>`).join("")}</div><p class="miss-a">정답 <b class="num">${MathQ.html(esc(m.answer))}</b></p>${m.how ? `<p class="miss-how num">${MathQ.html(esc(m.how))}</p>` : ""}</li>`).join("")}</ol>` : `<p class="muted small">저장된 틀린 문제가 없어요.</p>`}</section>` : ""}`;
 }
@@ -944,6 +956,7 @@ const ARM_MS = 5000, ARM_GAP = 500, armed = (key, msg) => { if (T.arm === key) {
 const armBtn = (key, act, v, plain, cls = "btn sm ghost", attrs = "") => `<button class="${cls}${T.arm === key ? " armed" : ""}" data-act="${act}" data-v="${v}" ${attrs}>${T.arm === key ? plain + " 확인" : plain}</button>`;
 const rejectKey = () => `reject${[...T.selR].join()}`; // choosing other requests asks again
 function tDo(fn, msg) { return oneAtATime(async () => { try { const r = await fn(); if (msg) toast(msg); await tLoad(); tRender(); return r; } catch (e) { toast(e.message); } }); }
+const skipText = (r, unit) => r.skipped.length ? ` · ${r.skipped.length}${unit}${unit === "명" ? "은" : "는"} 넘어갔어요(${[...new Set(r.skipped.map(s => s.why))].join(", ")})` : "";
 const shortText = r => r.short ? ` · ${r.short}명은 행동력이 가득 차서 다 받지 못했어요` : "";
 const T_ACTS = {
   tbossfire: v => armed(`fire${v}`, "한 번 더 누르면 보스를 포격해요") && tDo(() => api(`/api/t/classes/${v}/bossfire`, {}), "포격했어요! 아이들 화면에서 체력이 줄어요"),
@@ -958,6 +971,8 @@ const T_ACTS = {
   tprintCards: () => { if (!T.created?.length) return; const code = id => T.d.classes.find(c => c.id === id)?.code || "", sheet = document.createElement("div"); sheet.className = "print-sheet";
     sheet.innerHTML = T.created.map(c => `<div class="pcard"><b class="pc-title">하이포스 매쓰아일랜드</b><div class="pc-name">${esc(c.nickname)}</div><dl><dt>접속 주소</dt><dd>${esc(location.origin)}/?c=${esc(code(c.classId))}</dd><dt>반 코드</dt><dd class="code">${esc(code(c.classId))}</dd><dt>임시 비밀번호</dt><dd class="code">${esc(c.pin)}</dd></dl><p>주소로 들어가 내 이름을 누르고 임시 비밀번호를 넣어요. 처음 들어가면 나만 아는 비밀번호 숫자 4개를 새로 정해요.</p></div>`).join("");
     document.body.appendChild(sheet); document.body.classList.add("printing"); const done = () => { sheet.remove(); document.body.classList.remove("printing"); removeEventListener("afterprint", done); }; addEventListener("afterprint", done); window.print(); setTimeout(done, 60000); },
+  tfbSeen: v => tDo(() => api("/api/t/feedback/seen", { ids: String(v).split(",").map(Number) })),
+  tfbSwitch: async () => { const r = await tDo(() => api("/api/t/feedback/switch", {})); if (r) toast(r.on ? "학생 의견을 받아요" : "학생 의견 칸을 껐어요"); },
   tfGo: async v => { const s = T.d.students.find(x => x.id === Number(v)); if (!s) return; T.cls = s.class_id; T.repLevel = null; T.repKid = null; T.repMiss = null; T.tab = "report"; T.fSel = new Set([s.id]); T.fUnits = new Set(kidFocus(s)); tRender(); tabIntoView(); await tReportLoad(); const p = $("#focusPanel"); if (p) scrollTo(0, p.getBoundingClientRect().top + scrollY - ($(".tabs")?.getBoundingClientRect().bottom || 0) - 8); },
   tfKid: v => { const id = Number(v); if (T.fSel.has(id)) T.fSel.delete(id); else T.fSel.add(id); tRender(); },
   tfAll: v => { const ids = v.split(",").map(Number), all = ids.every(id => T.fSel.has(id)); ids.forEach(id => all ? T.fSel.delete(id) : T.fSel.add(id)); tRender(); },
@@ -966,12 +981,12 @@ const T_ACTS = {
   tfClear: () => { if (!armed("fclear", "한 번 더 누르면 고른 학생의 단원을 비워요")) return; return tDo(async () => { const r = await api("/api/t/focus", { studentIds: [...T.fSel], tags: [] }); T.fSel.clear(); return r; }, "단원을 비웠어요"); },
   trepDays: v => { T.repDays = Number(v); T.rep = null; tRender(); return tReportLoad(); },
   trepKid: async v => { const id = Number(v); if (T.repKid === id) { T.repKid = null; return tRender(); } T.repKid = id; T.repMiss = null; tRender(); try { const r = await api(`/api/t/report/student/${id}`); if (T.repKid === id) { T.repMiss = r.misses; tRender(); } } catch (e) { toast(e.message); } },
-  tcls: v => { T.cls = v === "all" ? "all" : Number(v); T.repLevel = null; T.fSel.clear(); const shown = new Set(tList().map(s => s.id)); T.selS = new Set([...T.selS].filter(i => shown.has(i))); tRender(); },
-  tselr: v => { const i = Number(v); T.selR.has(i) ? T.selR.delete(i) : T.selR.add(i); tRender(); }, tselrAll: () => { T.d.requests.forEach(r => T.selR.add(r.id)); tRender(); },
-  tapprove: async () => { const r = await tDo(async () => { const x = await api("/api/t/requests/approve", { ids: [...T.selR] }); T.selR.clear(); return x; }); if (r) toast(`${r.given}개 승인했어요${r.skipped.length ? ` · ${r.skipped.length}개는 이미 받은 미션이에요` : ""}${shortText(r)}`); },
+  tcls: v => { T.cls = v === "all" ? "all" : Number(v); T.repLevel = null; T.fSel.clear(); T.selR.clear(); const shown = new Set(tList().map(s => s.id)); T.selS = new Set([...T.selS].filter(i => shown.has(i))); tRender(); },
+  tselr: v => { const i = Number(v); T.selR.has(i) ? T.selR.delete(i) : T.selR.add(i); tRender(); }, tselrAll: () => { const ids = new Set(tList().map(s => s.id)); T.d.requests.filter(r => ids.has(r.student_id)).forEach(r => T.selR.add(r.id)); tRender(); },
+  tapprove: async () => { const r = await tDo(async () => { const x = await api("/api/t/requests/approve", { ids: [...T.selR] }); T.selR.clear(); return x; }); if (r) toast(`${r.given}개 승인했어요${skipText(r, "개")}${shortText(r)}`); },
   treject: () => { if (!armed(rejectKey(), `한 번 더 누르면 ${T.selR.size}개를 반려해요`)) return; return tDo(async () => { const x = await api("/api/t/requests/reject", { ids: [...T.selR] }); T.selR.clear(); return x; }, "반려했어요"); },
-  tpickq: v => { T.selQ = T.selQ === Number(v) ? null : Number(v); tRender(); }, tpicks: v => { const i = Number(v); T.selS.has(i) ? T.selS.delete(i) : T.selS.add(i); tRender(); }, tselAll: () => { tList().forEach(s => T.selS.add(s.id)); tRender(); },
-  tgrant: async () => { const r = await tDo(async () => { const x = await api("/api/t/grant", { questId: T.selQ, studentIds: [...T.selS] }); T.selS.clear(); return x; }); if (r) toast(`${r.given}명에게 지급했어요${r.skipped.length ? ` · ${r.skipped.length}명은 이미 받았어요` : ""}${shortText(r)}`); },
+  tpickq: v => { T.selQ = T.selQ === Number(v) ? null : Number(v); const q = T.d.quests.find(x => x.id === T.selQ); if (q?.class_id) for (const id of T.selS) if (T.d.students.find(s => s.id === id)?.class_id !== q.class_id) T.selS.delete(id); tRender(); }, tpicks: v => { const i = Number(v); T.selS.has(i) ? T.selS.delete(i) : T.selS.add(i); tRender(); }, tselAll: () => { const q = T.d.quests.find(x => x.id === T.selQ); tList().filter(s => !q?.class_id || s.class_id === q.class_id).forEach(s => T.selS.add(s.id)); tRender(); },
+  tgrant: async () => { const r = await tDo(async () => { const x = await api("/api/t/grant", { questId: T.selQ, studentIds: [...T.selS] }); T.selS.clear(); return x; }); if (r) toast(`${r.given}명에게 지급했어요${skipText(r, "명")}${shortText(r)}`); },
   // one child's first-login note, to send to that child alone
   tcopyCard: async v => { const c = T.created?.[Number(v)]; if (!c) return; const code = T.d.classes.find(x => x.id === c.classId)?.code || "";
     const text = `[하이포스 매쓰아일랜드] ${c.nickname}\n접속 주소: ${location.origin}/?c=${code}\n임시 비밀번호: ${c.pin}\n주소로 들어가 내 이름을 누르고 임시 비밀번호를 넣어요. 처음 들어가면 나만 아는 비밀번호 숫자 4개를 새로 정해요.`;
@@ -995,7 +1010,7 @@ const T_FORMS = {
   addClass: async () => { const r = await tDo(() => api("/api/t/classes", { name: val("nc-name"), level: Number(val("nc-level")) })); if (r) { toast(`반 코드 ${r.code}`); const el = $("#nc-name"); if (el) el.value = ""; } },
   addStudents: async () => { const r = await tDo(() => api("/api/t/students", { classId: Number(val("ns-class")), names: $("#ns-names").value })); if (r) { const classId = Number(val("ns-class")); T.created = r.created.map(c => ({ ...c, classId })); $("#ns-names").value = ""; tRender(); scrollTo(0, 0); } },
   adjust: () => tDo(saved(() => api("/api/t/adjust", { studentId: T.detail, type: val("adj-type"), amount: Number(val("adj-amt")), title: val("adj-why") || "선생님 조정" })), "반영했어요"),
-  saveQuest: () => tDo(saved(async () => { const r = await api("/api/t/quests", { id: T.editQ, title: val("q-title"), subject: val("q-subj"), kind: val("q-kind"), energy: Number(val("q-en")) }); T.editQ = null; return r; }), "미션을 저장했어요"),
+  saveQuest: () => tDo(saved(async () => { const r = await api("/api/t/quests", { id: T.editQ, title: val("q-title"), subject: val("q-subj"), kind: val("q-kind"), energy: Number(val("q-en")), classId: Number(val("q-cls")) }); T.editQ = null; return r; }), "미션을 저장했어요"),
   saveGame: () => tDo(saved(() => api("/api/t/game", { energyMax: val("g-max"), playCost: val("g-cost"), passCost: val("g-pass"), battlesPerDay: val("g-bat"), win: val("g-win"), lose: val("g-lose"), defend: val("g-def"), hourFrom: val("g-from"), hourTo: val("g-to"), bossHp: val("g-bosshp"), bossGold: val("g-bossgold") })), "저장했어요"),
   tpw: () => tDo(saved(() => api("/api/t/password", { password: $("#tpw").value })), "비밀번호를 바꿨어요")
 };
