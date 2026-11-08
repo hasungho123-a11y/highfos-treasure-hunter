@@ -164,6 +164,7 @@ for (const level of [0, 1]) { Q.setLevel(level); const orderTags = new Set(), we
 // units a teacher can set: every kind a game asks is on the list, a unit comes up in every sea's scales and every order game, and 70% means about 70%
 for (const level of [0, 1]) { Q.setLevel(level); const units = Q.units(level), known = new Set(units.map(u => u.tag));
   if (known.size !== units.length) fail("단원 이름 중복", level);
+  for (const u of units) if (!u.about) fail("단원 설명 없음", u.tag);
   for (let i = 0; i < 3000; i++) for (const t of [Q.order(1 + i % 10, 4).tag, Q.weigh(i % 3, i % 10).tag]) if (!known.has(t)) fail("단원 목록에 없는 유형", [level, t]);
   for (const u of units) { const src = u.at[0][0]; if (src !== "reef" && src !== "port") continue;
     Q.setFocus([u.tag]); for (let i = 0; i < 30; i++) { const q = src === "port" ? Q.weigh(i % 3, i % 10) : Q.order(1 + i % 10, 4); if (q.tag !== u.tag) fail("지정 단원이 안 나옴", [level, u.tag, q.tag]); } Q.setFocus(null); }

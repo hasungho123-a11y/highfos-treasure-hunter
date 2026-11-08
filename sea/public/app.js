@@ -344,6 +344,10 @@ function worldShip(me) { const pic = mapArt() && shipPic(me), k = pic ? Math.min
 const FOCUS_SHARE = .7;
 const kidUnits = () => { const have = new Set(MathQ.units(K.d.level).map(u => u.tag)); return (K.d.me.focus || []).filter(t => have.has(t)); };
 const unitIsles = map => { const mine = new Set(kidUnits()), out = new Set(); for (const u of MathQ.units(K.d.level)) if (mine.has(u.tag)) for (const [k, m] of u.at) if (m === null || m === map) out.add(k); return out; };
+function kUnitLine(units, mineAt) { const d = K.d, all = MathQ.units(d.level), away = [];
+  for (const t of units) { const u = all.find(x => x.tag === t), seas = u.at.map(a => a[1]); if (seas.some(m => m === null || m === K.map)) continue;
+    const sea = d.maps[seas[0]]; away.push(`${esc(t)}: ${seaOpen(sea) ? "" : `전투력 ${sea.power}부터 열리는 `}${esc(sea.name)}에서 나와요.`); }
+  return `<p class="unit-line">선생님이 정한 단원 <b>${units.map(esc).join(", ")}</b>${mineAt.size ? `<br><span class="small">'내 단원' 표시가 있는 섬에서 자주 나와요.</span>` : ""}${away.map(a => `<br><span class="small">${a}</span>`).join("")}</p>`; }
 function kMap() {
   const d = K.d, me = d.me, { w, h } = mapSize(), tall = tallMap(), fs = tall ? 36 : 27, sea = SEAS[K.map], names = d.maps[K.map].isles;
   const art = mapArt(), units = kidUnits(), mineAt = unitIsles(K.map), mark = (x, y) => `<text x="${x}" y="${y}" text-anchor="middle" class="lbl unit" font-size="${Math.round(fs * .72)}">내 단원</text>`;
@@ -356,7 +360,7 @@ function kMap() {
   const artImg = () => { const [cx, cy, cw] = artCrop(art), ch = cw * h / w; return `<img class="wart" src="${art.src}" alt="" style="width:${art.size / cw * 100}%;left:${-cx / cw * 100}%;top:${-cy / ch * 100}%"><div class="wfx" aria-hidden="true"><i class="wglint"></i><i class="wcloud"></i><i class="wcloud c2"></i><i class="wcloud c3"></i></div>`; };
   const route = (a, b, bend) => { const p = (art ? dockPos : islePos)(a), q = (art ? dockPos : islePos)(b); return `M${p.x} ${p.y} Q${(p.x + q.x) / 2 + bend} ${(p.y + q.y) / 2 - bend} ${q.x} ${q.y}`; };
   const tabs = d.maps.map(m => { const open = seaOpen(m); return `<button class="seatab ${open ? "" : "locked"}" data-act="ksea" data-v="${m.id}" aria-pressed="${K.map === m.id}"><b>${esc(m.name)}</b><small>${open ? esc(m.era) : `전투력 ${m.power}부터`}</small>${open ? "" : `<i class="seabar"><i style="width:${Math.min(100, me.power / m.power * 100)}%"></i></i>`}</button>`; }).join("");
-  return `${installCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p>${units.length ? `<p class="unit-line">선생님이 정한 단원 <b>${units.map(esc).join(", ")}</b><br><span class="small">${mineAt.size ? "'내 단원' 표시가 있는 섬에서 자주 나와요." : "이 바다에는 내 단원이 나오는 섬이 없어요. 다른 바다에서 나와요."}</span></p>` : ""}<div class="seatabs">${tabs}</div></section>
+  return `${installCard()}<section class="panel worldhead"><h2>어느 섬으로 갈까요?</h2><p class="small muted">게임 한 판에 행동력 ${d.game.playCost}을 써요. 미션을 끝내면 행동력이 생겨요. (최대 ${d.game.energyMax})</p>${units.length ? kUnitLine(units, mineAt) : ""}<div class="seatabs">${tabs}</div></section>
     <div class="world ${art ? "art" : ""}">${art ? artImg() : ""}<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(d.maps[K.map].name)} 지도">
       ${art ? "" : `<defs><linearGradient id="wsea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sea.top}"/><stop offset="1" stop-color="${sea.bot}"/></linearGradient><pattern id="wwv" width="60" height="34" patternUnits="userSpaceOnUse"><path d="M0 17 q15 -9 30 0 t30 0" fill="none" stroke="#fff" stroke-width="1.6" opacity=".14"/></pattern></defs>
       <rect width="${w}" height="${h}" fill="url(#wsea)"/><rect class="waves" width="${w + 100}" height="${h}" fill="url(#wwv)"/>`}
@@ -860,7 +864,7 @@ function tPhoto() {
 }
 function tCrew() {
   const d = T.d, base = location.origin, s = d.students.find(x => x.id === T.detail);
-  return `${T.created ? `<div class="notice"><b>임시 비밀번호 · 지금 한 번만 보여요</b><div class="plist">${T.created.map(c => `<div class="prow"><span>${esc(c.nickname)}</span><b class="code">${esc(c.pin)}</b><span></span></div>`).join("")}</div><div><button class="btn sm" data-act="tcloseCreated">다 적었어요</button></div></div>` : ""}
+  return `${T.created ? `<div class="notice"><b>임시 비밀번호 · 지금 한 번만 보여요</b><div class="plist">${T.created.map(c => `<div class="prow"><span>${esc(c.nickname)}</span><b class="code">${esc(c.pin)}</b><span></span></div>`).join("")}</div><div class="row"><button class="btn sm primary" data-act="tprintCards">인쇄용 카드</button><button class="btn sm" data-act="tcloseCreated">다 적었어요</button></div></div>` : ""}
     <section class="panel"><h2>반</h2>${d.classes.length ? `<div class="tablewrap"><table class="class-table"><thead><tr><th>반</th><th>문제 난이도</th><th>수업 요일</th><th>매일 미션 추가</th><th>학생</th><th>전투</th><th>반 코드</th><th>접속 주소</th><th></th></tr></thead><tbody>${d.classes.map(c => `<tr><td><b>${esc(c.name)}</b></td>
       <td><div class="day-pick level-pick" role="group" aria-label="${esc(c.name)} 문제 난이도">${[[0, "초등"], [1, "중등"]].map(([n, l]) => `<button data-act="tlevel" data-v="${c.id}|${n}" aria-pressed="${(c.level || 0) === n}">${l}</button>`).join("")}</div></td>
       <td><div class="day-pick" role="group" aria-label="${esc(c.name)} 수업 요일">${DAY_ORDER.map(([n, l]) => `<button data-act="tdayFlip" data-v="${c.id}|${n}" aria-pressed="${(c.days ?? "").includes(n)}">${l}</button>`).join("")}</div><div class="day-set">${[["135", "월수금"], ["24", "화목"], ["0123456", "매일"]].map(([v, l]) => `<button class="btn sm ghost" data-act="tdaySet" data-v="${c.id}|${v}">${l}</button>`).join("")}</div></td>
@@ -872,6 +876,7 @@ function tCrew() {
     <section class="panel"><div class="row between"><h2>선원 현황</h2>${tChips()}</div>${tList().length ? `<div class="tablewrap"><table class="crew-table"><thead><tr><th>이름</th><th>반</th><th>배</th><th>전투력</th><th>행동력</th><th>포인트</th><th>금화</th></tr></thead><tbody>${tList().map(x => `<tr class="click" data-act="tdetail" data-v="${x.id}" aria-selected="${x.id === T.detail}"><td style="--sail:${sail(x.sail)}"><b><i class="dot"></i> ${esc(x.nickname)}</b>${x.locked ? ` <span class="pill wait">잠김</span>` : ""}</td><td class="muted">${esc(cname(x.class_id))}</td><td class="small">${esc(d.ships.find(z => z.id === x.ship)?.name)}</td><td class="num">${x.power}</td><td class="num">${x.bal.energy}</td><td class="num">${x.bal.points}</td><td class="num">${x.bal.gold}</td></tr>`).join("")}</tbody></table></div>` : `<p class="muted small">아직 선원이 없어요.</p>`}</section>
     ${s ? `<section class="panel" id="kidDetail"><div class="row between"><h2>${esc(s.nickname)}</h2><button class="btn sm ghost" data-act="tdetail" data-v="${s.id}">닫기</button></div>
       <form class="row" data-form="adjust"><label class="f">종류<select id="adj-type" data-keep="no"><option value="energy">행동력</option><option value="points">포인트</option><option value="gold">금화</option></select></label><label class="f">양<input type="number" id="adj-amt" placeholder="+5 / -5" required data-keep="no"></label><label class="f" style="flex:1 1 150px">사유<input type="text" id="adj-why" maxlength="40" data-keep="no"></label><button class="btn" style="align-self:end">반영</button></form>
+      <div class="row"><span class="small">단원: <b>${kidFocus(s).length ? esc(kidFocus(s).join(", ")) : "없음"}</b></span><button class="btn sm ghost" data-act="tfGo" data-v="${s.id}">단원 바꾸기</button></div>
       ${s.locked ? `<p class="small">비밀번호를 여러 번 틀려서 잠겼어요. 10분 뒤에 풀려요. 바로 풀려면 비밀번호를 새로 발급해요.</p>` : ""}<div class="row"><button class="btn" data-act="tresetPin" data-v="${s.id}">비밀번호 새로 발급</button>${armBtn(`student${s.id}`, "tdelStudent", s.id, "선원 삭제")}</div></section>` : ""}`;
 }
 function tQuests() {
@@ -890,12 +895,17 @@ const rateOf = x => x.tries ? Math.round(x.wrong / x.tries * 100) : 0;
 const rateBar = x => `<span class="rate"><i class="rate-bar"><i style="width:${rateOf(x)}%"></i></i><b class="num">${rateOf(x)}%</b></span>`;
 async function tReportLoad() { try { T.rep = await api(`/api/t/report/${T.repDays}`); } catch (e) { toast(e.message); } if (T.tab === "report") tRender(); }
 // choosing units for children: pick children, pick up to three units, set
+// a child's units as far as the class level has them, and whether a unit sits in a sea the child can't reach yet
+const kidFocus = s => { const lv = T.d.classes.find(c => c.id === s.class_id)?.level || 0, known = new Set(MathQ.units(lv).map(u => u.tag)); return (s.focus || []).filter(t => known.has(t)); };
+const farSea = (s, u) => { const sea = u.one && (T.d.seas || [])[u.at[0][1]]; return sea && s.power < sea.power ? sea : null; };
 function tFocus(lv, kids) {
-  const units = MathQ.units(lv), known = new Set(units.map(u => u.tag)), mine = s => (s.focus || []).filter(t => known.has(t)), sel = T.fSel, pick = T.fUnits;
+  const units = MathQ.units(lv), sel = T.fSel, pick = T.fUnits, unitOf = t => units.find(u => u.tag === t);
+  const mine = s => kidFocus(s).map(t => farSea(s, unitOf(t)) ? `${t}(아직 못 가요)` : t);
+  const clash = [...sel].map(id => kids.find(s => s.id === id)).filter(Boolean).flatMap(s => units.filter(u => pick.has(u.tag)).map(u => { const sea = farSea(s, u); return sea ? `${sname(s.id)} · ${u.tag}(${sea.name}, 전투력 ${sea.power}부터)` : null; })).filter(Boolean);
   if (!kids.length) return "";
   return `<section class="panel" id="focusPanel"><h2>단원 지정</h2><p class="small muted">학생을 고르고 단원을 1~3개 골라 지정해요. 지정한 단원이 나오는 섬에서는 문제의 약 70%가 그 단원으로 나와요. 저울과 해협 단원은 모든 바다에서 나오고, 장소가 적힌 단원은 그 섬에서만 나와요.</p>
     <h3>학생</h3><div class="chips">${kids.map(s => `<button class="chip unit-kid" data-act="tfKid" data-v="${s.id}" aria-pressed="${sel.has(s.id)}">${esc(sname(s.id))}<small>${mine(s).length ? esc(mine(s).join(", ")) : "단원 없음"}</small></button>`).join("")}${kids.length > 1 ? `<button class="chip" data-act="tfAll" data-v="${kids.map(s => s.id).join(",")}">${kids.every(s => sel.has(s.id)) ? "모두 해제" : "모두 고르기"}</button>` : ""}</div>
-    <h3>단원</h3><div class="chips">${units.map(u => `<button class="chip" data-act="tfUnit" data-v="${esc(u.tag)}" aria-pressed="${pick.has(u.tag)}">${esc(u.tag)}${u.one ? `<small>${esc(u.where)}</small>` : ""}</button>`).join("")}</div>
+    <h3>단원</h3><div class="chips">${units.map(u => `<button class="chip" data-act="tfUnit" data-v="${esc(u.tag)}" aria-pressed="${pick.has(u.tag)}">${esc(u.tag)}<small>${esc(u.about)}${u.one ? ` · ${esc(u.where)}` : ""}</small></button>`).join("")}</div>${clash.length ? `<p class="notice small">아직 못 가는 바다에만 나오는 단원이에요. 전투력이 오를 때까지는 풀 수 없어요. ${clash.map(esc).join(", ")}</p>` : ""}
     <div class="row"><button class="btn primary" data-act="tfSave" ${sel.size && pick.size ? "" : "disabled"}>${sel.size ? `${sel.size}명에게 지정` : "학생을 골라요"}</button>${armBtn("fclear", "tfClear", "", "고른 학생 단원 비우기", "btn", sel.size ? "" : "disabled")}</div></section>`;
 }
 function tReport() {
@@ -944,6 +954,11 @@ const T_ACTS = {
   tlogDay: v => { const base = T.log?.date, today = T.log?.today; if (!base) return; const next = v === "0" ? today : new Date(Date.parse(`${base}T00:00:00Z`) + Number(v) * 864e5).toISOString().slice(0, 10); T.logDay = next >= today ? null : next; T.log = null; T.fresh = true; tRender(); return tLogLoad(); },
   tlogPick: v => { if (!/^\d{4}-\d{2}-\d{2}$/.test(v) || !T.log) return; T.logDay = v >= T.log.today ? null : v; T.log = null; T.fresh = true; tRender(); return tLogLoad(); },
   trepLevel: v => { T.repLevel = Number(v); T.repKid = null; T.repMiss = null; T.fSel.clear(); T.fUnits.clear(); tRender(); },
+  // one card per child with everything needed for the first login; only the cards go to the printer
+  tprintCards: () => { if (!T.created?.length) return; const code = id => T.d.classes.find(c => c.id === id)?.code || "", sheet = document.createElement("div"); sheet.className = "print-sheet";
+    sheet.innerHTML = T.created.map(c => `<div class="pcard"><b class="pc-title">하이포스 매쓰아일랜드</b><div class="pc-name">${esc(c.nickname)}</div><dl><dt>접속 주소</dt><dd>${esc(location.origin)}/?c=${esc(code(c.classId))}</dd><dt>반 코드</dt><dd class="code">${esc(code(c.classId))}</dd><dt>임시 비밀번호</dt><dd class="code">${esc(c.pin)}</dd></dl><p>주소로 들어가 내 이름을 누르고 임시 비밀번호를 넣어요. 처음 들어가면 나만 아는 비밀번호 숫자 4개를 새로 정해요.</p></div>`).join("");
+    document.body.appendChild(sheet); document.body.classList.add("printing"); const done = () => { sheet.remove(); document.body.classList.remove("printing"); removeEventListener("afterprint", done); }; addEventListener("afterprint", done); window.print(); setTimeout(done, 60000); },
+  tfGo: async v => { const s = T.d.students.find(x => x.id === Number(v)); if (!s) return; T.cls = s.class_id; T.repLevel = null; T.repKid = null; T.repMiss = null; T.tab = "report"; T.fSel = new Set([s.id]); T.fUnits = new Set(kidFocus(s)); tRender(); tabIntoView(); await tReportLoad(); const p = $("#focusPanel"); if (p) scrollTo(0, p.getBoundingClientRect().top + scrollY - ($(".tabs")?.getBoundingClientRect().bottom || 0) - 8); },
   tfKid: v => { const id = Number(v); if (T.fSel.has(id)) T.fSel.delete(id); else T.fSel.add(id); tRender(); },
   tfAll: v => { const ids = v.split(",").map(Number), all = ids.every(id => T.fSel.has(id)); ids.forEach(id => all ? T.fSel.delete(id) : T.fSel.add(id)); tRender(); },
   tfUnit: v => { if (T.fUnits.has(v)) T.fUnits.delete(v); else if (T.fUnits.size >= 3) return toast("단원은 3개까지 고를 수 있어요"); else T.fUnits.add(v); tRender(); },
@@ -965,7 +980,7 @@ const T_ACTS = {
   tbattleOn: v => { const c = T.d.classes.find(x => x.id === Number(v)); return tDo(() => api(`/api/t/classes/${v}/battle`, { on: !c.battle }), `${c.name}: 전투 ${c.battle ? "껐어요" : "켰어요"}`); },
   tdelClass: v => { const c = T.d.classes.find(x => x.id === Number(v)); if (!armed(`class${v}`, `${c.name}의 삭제 버튼을 한 번 더 누르면 반과 학생이 모두 삭제돼요`)) return; return tDo(() => api(`/api/t/classes/${v}/delete`, {}), "반을 삭제했어요"); },
   tdemo: async () => { const r = await tDo(() => api("/api/t/demo", {})); if (r) toast(`시연반 코드 ${r.code} · 비밀번호 모두 ${r.pin}`); },
-  tresetPin: async v => { const r = await tDo(() => api(`/api/t/students/${v}/reset-pin`, {})); if (r) { T.created = [{ nickname: sname(Number(v)), pin: r.pin }]; tRender(); scrollTo(0, 0); } },
+  tresetPin: async v => { const r = await tDo(() => api(`/api/t/students/${v}/reset-pin`, {})); if (r) { T.created = [{ nickname: T.d.students.find(s => s.id === Number(v))?.nickname || "", pin: r.pin, classId: T.d.students.find(s => s.id === Number(v))?.class_id }]; tRender(); scrollTo(0, 0); } },
   tdelStudent: v => { if (!armed(`student${v}`, "한 번 더 누르면 선원이 삭제돼요")) return; T.detail = null; return tDo(() => api(`/api/t/students/${v}/delete`, {}), "선원을 삭제했어요"); },
   teditQ: v => { T.editQ = v ? Number(v) : null; T.fresh = true; tRender(); scrollTo(0, 0); }, ttoggleQ: v => tDo(() => api(`/api/t/quests/${v}/toggle`, {})), tdelQ: v => armed(`quest${v}`, "한 번 더 누르면 미션이 삭제돼요") && tDo(() => api(`/api/t/quests/${v}/delete`, {}), "미션을 삭제했어요"),
   tdeliver: v => tDo(() => api(`/api/t/orders/${v}/deliver`, {}), "줬어요로 표시했어요"), tcancelOrder: v => armed(`order${v}`, "한 번 더 누르면 취소하고 포인트를 돌려줘요") && tDo(() => api(`/api/t/orders/${v}/cancel`, {}), "취소하고 포인트를 돌려줬어요"), tundo: v => armed(`undo${v}`, "한 번 더 누르면 이 기록을 취소해요") && tDo(async () => { const r = await api(`/api/t/logs/${v}/undo`, {}); await tLogFetch(); return r; }, "기록을 취소했어요")
@@ -973,7 +988,7 @@ const T_ACTS = {
 const saved = fn => async () => { const r = await fn(); T.fresh = true; return r; };
 const T_FORMS = {
   addClass: async () => { const r = await tDo(() => api("/api/t/classes", { name: val("nc-name"), level: Number(val("nc-level")) })); if (r) { toast(`반 코드 ${r.code}`); const el = $("#nc-name"); if (el) el.value = ""; } },
-  addStudents: async () => { const r = await tDo(() => api("/api/t/students", { classId: Number(val("ns-class")), names: $("#ns-names").value })); if (r) { T.created = r.created; $("#ns-names").value = ""; tRender(); scrollTo(0, 0); } },
+  addStudents: async () => { const r = await tDo(() => api("/api/t/students", { classId: Number(val("ns-class")), names: $("#ns-names").value })); if (r) { const classId = Number(val("ns-class")); T.created = r.created.map(c => ({ ...c, classId })); $("#ns-names").value = ""; tRender(); scrollTo(0, 0); } },
   adjust: () => tDo(saved(() => api("/api/t/adjust", { studentId: T.detail, type: val("adj-type"), amount: Number(val("adj-amt")), title: val("adj-why") || "선생님 조정" })), "반영했어요"),
   saveQuest: () => tDo(saved(async () => { const r = await api("/api/t/quests", { id: T.editQ, title: val("q-title"), subject: val("q-subj"), kind: val("q-kind"), energy: Number(val("q-en")) }); T.editQ = null; return r; }), "미션을 저장했어요"),
   saveGame: () => tDo(saved(() => api("/api/t/game", { energyMax: val("g-max"), playCost: val("g-cost"), passCost: val("g-pass"), battlesPerDay: val("g-bat"), win: val("g-win"), lose: val("g-lose"), defend: val("g-def"), hourFrom: val("g-from"), hourTo: val("g-to"), bossHp: val("g-bosshp"), bossGold: val("g-bossgold") })), "저장했어요"),

@@ -323,6 +323,16 @@ const UNITS = [
    ...["일차방정식", "분수가 있는 방정식", "방정식의 활용"].map(tag => ({ tag, ...PORT_AT })),
    one("좌표", "cannon", 0, "범선의 바다 포격 섬"), one("속력·거리·시간", "cannon", 1, "증기의 바다 포대 요새"), one("수열", "memory", 1, "증기의 바다 암호 등대"), one("기호 식", "memory", 2, "현대의 바다 통신 기지")]
 ];
+// a few words on each unit for the teacher's chips; tests/math-check.cjs checks every unit has one
+const ABOUT = {
+  "식 계산": "혼합 계산의 값", "배수": "배수 찾기", "약수": "약수 찾기", "공약수": "두 수의 공약수 찾기", "크기 비교": "분수·소수·%의 크기 비교", "같은 크기": "분수·소수·% 중 같은 값 찾기",
+  "무게 단위": "kg과 g 바꾸기", "곱셈": "1개 무게로 여러 개 무게 구하기", "소수의 나눗셈": "나누어 1개 무게 구하기", "평균": "평균, 평균으로 나머지 하나 구하기",
+  "분수의 덧셈": "분모가 다른 분수의 덧셈", "백분율": "몇 %인 양 구하기", "분수의 곱셈": "전체의 몇 분의 몇 구하기", "비례배분": "비로 나누기", "소수의 곱셈": "소수×소수", "전체 구하기": "부분으로 전체 구하기",
+  "칸 계산": "식의 값으로 칸 찾기", "속력·거리·시간": "거리 = 속력×시간", "수열": "규칙 찾아 다음 수", "기호 식": "식에서 기호의 값 찾기",
+  "정수의 계산": "음수가 있는 계산, 거듭제곱", "문자식의 값": "x에 수를 넣은 값", "소인수분해": "소인수분해한 수 찾기", "소수": "약수가 2개인 수 찾기", "최대공약수": "최대공약수 찾기", "최소공배수": "최소공배수 찾기",
+  "수의 크기": "음수와 분수의 크기 비교", "절댓값": "절댓값 비교", "일차방정식": "일차방정식 풀기", "분수가 있는 방정식": "계수가 분수인 방정식", "방정식의 활용": "문장을 읽고 식 세우기", "좌표": "계산한 값으로 좌표 찾기"
+};
+UNITS.forEach(list => list.forEach(u => { u.about = ABOUT[u.tag] || ""; }));
 window.MathQ = { pairs: either("pairs"), order: orderQ, cipher: either("cipher"), grid: either("grid"), series: either("series"), speed: either("speed"), weigh: weighQ, html, shuffle,
   setFocus: (tags, share = 1) => { const list = [].concat(tags || []).filter(Boolean); FOCUS = list.length ? { tags: new Set(list), share } : null; }, units: level => UNITS[level ? 1 : 0], setLevel: n => { LEVEL = n ? 1 : 0; }, level: () => LEVEL, gridSize: () => LEVEL ? 7 : 6, gridLabel: i => LEVEL ? neg(i - 4) : String(i) };
 })();

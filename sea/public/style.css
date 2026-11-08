@@ -597,3 +597,18 @@ tr[aria-selected="true"] td { background: var(--accent-soft) }
 .world .lbl.unit { fill: #FFE27A }
 .unit-line { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--gold-soft) }
 .chip small { display: block; font-size: 11px; font-weight: 400; opacity: .75 }
+
+/* account cards: only these are printed */
+.print-sheet { display: none }
+@media print {
+  body.printing { background: #fff }
+  body.printing > *:not(.print-sheet) { display: none !important }
+  body.printing .print-sheet { display: grid; grid-template-columns: 1fr 1fr; color: #000 }
+  .pcard { border: 1px dashed #888; padding: 14px 16px; break-inside: avoid; font-size: 12px; line-height: 1.5 }
+  .pc-title { font-size: 11px; color: #555 }
+  .pc-name { font-size: 20px; font-weight: 700; margin: 2px 0 8px }
+  .pcard dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0 0 8px }
+  .pcard dt { color: #555 }
+  .pcard dd { margin: 0; word-break: break-all; font-weight: 700 }
+  .pcard p { margin: 0; color: #333 }
+}

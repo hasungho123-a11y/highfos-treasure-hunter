@@ -631,7 +631,7 @@ on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   for (const c of classes) { const b = await currentBoss(db, c.id, game); if (!b) continue;
     const tot = (await db.prepare("SELECT student_id AS id, SUM(dmg) AS dmg FROM boss_hits WHERE boss_id=? GROUP BY student_id").bind(b.id).all()).results;
     bosses.push({ classId: c.id, name: BOSSES[b.kind].name, hp: b.hp, left: Math.max(0, b.hp - tot.reduce((n, x) => n + x.dmg, 0)), down: !!b.defeated_at, gold: b.gold, hits: tot.filter(x => x.id).sort((x, y) => y.dmg - x.dmg) }); }
-  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, battles, bosses, teacherDmg: BOSS_TEACHER_DMG, ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
+  return { teacher: me.teacher.username, game, classes, students, quests, requests, orders, photos, battles, bosses, teacherDmg: BOSS_TEACHER_DMG, seas: MAPS.map(m => ({ name: m.name, power: m.power })), ships: SHIPS, kinds: KINDS, subjects: SUBJECTS };
 });
 // the wrong-answer report: every child's counts per kind of question over the last few days; the page adds them up by class
 on("GET", "/api/t/report/:days", "teacher", async ({ db, params }) => {
