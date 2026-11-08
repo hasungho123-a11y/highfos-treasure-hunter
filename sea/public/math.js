@@ -61,9 +61,7 @@ const ORDER = {
   same(n) { const v = pick(NEAT.filter(x => x[1] <= 10)), k = ri(2, 4), real = pick([frac(v[0] * k, v[1] * k), decOf(v), pctText(v)]), others = NEAT.filter(x => pctOf(x) !== pctOf(v)), opts = distinct(real, () => anyForm(pick(others)), n); return opts && { ask: `${frac(...v)}${wa(v[0])} 크기가 같은 표적`, real, opts }; }
 };
 const ORDER_TAG = { value: "식 계산", multiple: "배수", divisor: "약수", common: "공약수", overHalf: "크기 비교", biggest: "크기 비교", same: "같은 크기" };
-// wave runs from 1 to 10, n is how many choices are on the water; noun is what the player is picking
-function order(wave, n, noun = "표적") { const pool = wave <= 3 ? ["value", "multiple", "divisor"] : wave <= 7 ? ["value", "common", "overHalf", "same"] : ["value", "biggest", "same", "common"], hard = wave > 3;
-  for (;;) { const kind = pick(pool), q = ORDER[kind](n, hard); if (q && q.opts.length === n) return { tag: ORDER_TAG[kind], ask: q.ask.replace(/표적$/, noun), real: q.real, opts: shuffle(q.opts) }; } }
+const ORDER_POOL = [["value", "multiple", "divisor"], ["value", "common", "overHalf", "same"], ["value", "biggest", "same", "common"]];
 
 /* ----- 포격 섬: a 6-by-6 sea. The hidden ship's two grid numbers are the answers to two sums; later a wind pushes the shot sideways. ----- */
 const divisors = v => { const out = []; for (let i = 1; i <= v; i++) if (v % i === 0) out.push(i); return out; };
@@ -233,8 +231,6 @@ const WAYS_MID = {
   solve: v => { const a = ri(2, 5), b = nz(-9, 9); return `${lin(a, b)} = ${neg(a * v + b)}의 해`; }
 };
 const MID = {
-  order(wave, n, noun = "표적") { const pool = wave <= 3 ? ["value", "factor", "prime"] : wave <= 7 ? ["value", "gcd", "lcm", "smallest", "subst"] : ["value", "subst", "biggestAbs", "smallest", "lcm"], hard = wave > 3;
-    for (;;) { const q = ORDER_MID[pick(pool)](n, hard); if (q && q.opts.length === n) return { tag: q.tag, ask: q.ask.replace(/표적$/, noun), real: q.real, opts: shuffle(q.opts) }; } },
   pairs() { const kinds = {
       power: () => { const p = pick([[2, 3], [2, 4], [2, 5], [3, 2], [3, 3], [5, 2], [4, 2], [7, 2]]), v = p[0] ** p[1]; return Math.random() < .3 && p[1] === 2 ? [`(−${p[0]})²`, String(v), `i${v}`] : [`${p[0]}${SUP[p[1]]}`, String(v), `i${v}`]; },
       signed: () => { const c = signedCalc(true); return [c.t, neg(c.v), `i${c.v}`]; },
@@ -276,7 +272,8 @@ const MID = {
       if (level === 2) { const u = v + pick([10, 20, 30, 40]), more = (u - v) * T; return { shipText: `적함: 1초에 ${v}m 가요`, torpText: `어뢰: 1초에 ${u}m, 적함보다 ${more}m 더 가요`, S, k, D, why: `${u}x−${v}x=${more}에서 x=${T}, ${v}×${T}=${D}` }; }
       if (level === 1) { const u = pick([10, 20, 25, 40, 50]); return { shipText: `적함: 시속 ${kmh}km로 가요`, torpText: `어뢰: 1초에 ${u}m, 만나는 곳까지 ${u * T}m`, S, k, D, why: `시속 ${kmh}km는 1초에 ${v}m, ${u * T}÷${u}=${T}, ${v}×${T}=${D}` }; }
       return { shipText: `적함: 시속 ${kmh}km로 가요`, torpText: `어뢰: ${T}초 뒤에 도착해요`, S, k, D, why: `시속 ${kmh}km는 1초에 ${v}m, ${v}×${T}=${D}` }; } },
-  weigh(map, round) { const n = g => g / 1000, plain = [
+};
+const MID_WEIGH = (() => { const n = g => g / 1000, plain = [
       it => { const T = ri(8, 45) * 100, b = ri(2, 20) * 100; return { tag: "일차방정식", T, load: `${it} xkg: x+${n(b)} = ${n(T + b)}`, why: `x = ${n(T + b)}−${n(b)} = ${n(T)}` }; },
       it => { const T = ri(8, 45) * 100, b = ri(2, 7) * 100; return T > b ? { tag: "일차방정식", T, load: `${it} xkg: x−${n(b)} = ${n(T - b)}`, why: `x = ${n(T - b)}+${n(b)} = ${n(T)}` } : null; },
       it => { const T = ri(4, 18) * 100, a = ri(2, 6); return { tag: "일차방정식", T, load: `${it} xkg: ${a}x = ${n(a * T)}`, why: `x = ${n(a * T)}÷${a} = ${n(T)}` }; }
@@ -291,17 +288,41 @@ const MID = {
       it => { const T = ri(5, 25) * 100, d = ri(1, 12) * 100; return { tag: "방정식의 활용", T, load: `${it} 2개의 합이 ${KG(2 * T + d)}이고 한쪽이 ${KG(d)} 더 무거워요. 가벼운 쪽`, why: `x+(x+${n(d)}) = ${n(2 * T + d)}, x = ${n(T)}` }; }
     ], wordsHard = [
       it => { const T = ri(5, 15) * 100, d = ri(1, 6) * 100; return { tag: "방정식의 활용", T, load: `${it} 3개가 차례로 ${KG(d)}씩 무겁고 합이 ${KG(3 * T + 3 * d)}이에요. 가장 가벼운 것`, why: `x+(x+${n(d)})+(x+${n(2 * d)}) = ${n(3 * T + 3 * d)}, x = ${n(T)}` }; }
-    ], stage = round < 3 ? plain : round < 7 ? (map ? [...twoStep, ...twoStepHard] : twoStep) : (map === 2 ? [...words, ...wordsHard] : words);
-    return rack(map, it => pick(stage)(it)); }
-};
-const HOLD = { pairs, order, cipher, grid, series, speed, weigh };
+    ];
+  return { plain, twoStep, twoStepHard, words, wordsHard }; })();
+const midWeighStage = (map, round) => { const w = MID_WEIGH; return round < 3 ? w.plain : round < 7 ? (map ? [...w.twoStep, ...w.twoStepHard] : w.twoStep) : (map === 2 ? [...w.words, ...w.wordsHard] : w.words); };
+const HOLD = { pairs, cipher, grid, series, speed };
 const either = name => (...a) => (LEVEL ? MID : HOLD)[name](...a);
 const html = label => String(label).replace(/(\d+)\/(\d+)/g, '<span class="frac"><i>$1</i><i>$2</i></span>');
-// practising one kind of question: keep drawing, from easy to hard stages, until that kind comes up. A kind this level doesn't have falls back to the normal questions.
+/* A unit is one kind of question (the tag the report counts by). Practising a unit asks only that kind; the units a teacher sets for a child
+   make up about 70% of the questions in the games that have them. FOCUS.share is how often a question is pulled towards the units; the rest are the game's own.
+   A unit this game doesn't have changes nothing. */
 let FOCUS = null;
-const focused = (name, stages, at) => (...a) => { const make = either(name); if (!FOCUS) return make(...a);
-  for (let i = 0; i < 600; i++) { const b = [...a]; b[at] = stages[i % 3]; const q = make(...b); if (q.tag === FOCUS) return q; }
-  return make(...a); };
-window.MathQ = { pairs: either("pairs"), order: focused("order", [1, 5, 9], 0), cipher: either("cipher"), grid: either("grid"), series: either("series"), speed: either("speed"), weigh: focused("weigh", [0, 4, 8], 1), html, shuffle,
-  setFocus: tag => { FOCUS = tag || null; }, setLevel: n => { LEVEL = n ? 1 : 0; }, level: () => LEVEL, gridSize: () => LEVEL ? 7 : 6, gridLabel: i => LEVEL ? neg(i - 4) : String(i) };
+const wantFocus = () => FOCUS && Math.random() < FOCUS.share ? FOCUS.tags : null;
+const MID_TAG = { value: "정수의 계산", subst: "문자식의 값", factor: "소인수분해", prime: "소수", gcd: "최대공약수", lcm: "최소공배수", smallest: "수의 크기", biggestAbs: "절댓값" };
+const ORDER_POOL_MID = [["value", "factor", "prime"], ["value", "gcd", "lcm", "smallest", "subst"], ["value", "subst", "biggestAbs", "smallest", "lcm"]];
+// wave runs from 1 to 10, n is how many choices are on the water; noun is what the player is picking. A unit is taken from this wave's kinds if it can be, otherwise from any wave's.
+function orderQ(wave, n, noun = "표적") { const gen = LEVEL ? ORDER_MID : ORDER, tagOf = LEVEL ? MID_TAG : ORDER_TAG, F = wantFocus(), hard = wave > 3;
+  let pool = (LEVEL ? ORDER_POOL_MID : ORDER_POOL)[wave <= 3 ? 0 : wave <= 7 ? 1 : 2];
+  if (F) { const hit = k => F.has(tagOf[k]), near = pool.filter(hit), far = Object.keys(gen).filter(hit); if (near.length || far.length) pool = near.length ? near : far; }
+  for (;;) { const kind = pick(pool), q = gen[kind](n, hard); if (q && q.opts.length === n) return { tag: tagOf[kind], ask: q.ask.replace(/표적$/, noun), real: q.real, opts: shuffle(q.opts) }; } }
+// the scales: a unit can come from any sea's questions, so a child still on the first sea gets it too
+const tagSeen = new Map(), tagsOf = make => { if (!tagSeen.has(make)) { const s = new Set(); for (let i = 0; i < 40; i++) { const q = make("짐"); if (q) s.add(q.tag); } tagSeen.set(make, s); } return tagSeen.get(make); };
+function weighQ(map, round) { const here = LEVEL ? midWeighStage(map, round) : [WEIGH[map][round < 3 ? 0 : round < 7 ? 1 : 2]], F = wantFocus();
+  if (F) { const hit = m => [...tagsOf(m)].some(t => F.has(t)), near = here.filter(hit), far = (LEVEL ? Object.values(MID_WEIGH).flat() : WEIGH.flat()).filter(hit), use = near.length ? near : far;
+    if (use.length) return rack(map, it => { const q = pick(use)(it); return q && F.has(q.tag) ? q : null; }); }
+  return rack(map, it => pick(here)(it)); }
+// the units a teacher can choose, by level, and where each comes up: [island, sea] with sea null for every sea. tests/math-check.cjs checks this list against the questions.
+const ORDER_AT = { at: [["reef", null], ["cannon", 2]], where: "모든 바다의 해협, 현대의 바다 사격 훈련장" }, PORT_AT = { at: [["port", null]], where: "모든 바다의 저울" };
+const one = (tag, kind, map, where) => ({ tag, at: [[kind, map]], where, one: true });
+const UNITS = [
+  [...["식 계산", "배수", "약수", "공약수", "크기 비교", "같은 크기"].map(tag => ({ tag, ...ORDER_AT })),
+   ...["무게 단위", "곱셈", "소수의 나눗셈", "평균", "분수의 덧셈", "백분율", "분수의 곱셈", "비례배분", "소수의 곱셈", "전체 구하기"].map(tag => ({ tag, ...PORT_AT })),
+   one("칸 계산", "cannon", 0, "범선의 바다 포격 섬"), one("속력·거리·시간", "cannon", 1, "증기의 바다 포대 요새"), one("수열", "memory", 1, "증기의 바다 암호 등대"), one("기호 식", "memory", 2, "현대의 바다 통신 기지")],
+  [...Object.values(MID_TAG).map(tag => ({ tag, ...ORDER_AT })),
+   ...["일차방정식", "분수가 있는 방정식", "방정식의 활용"].map(tag => ({ tag, ...PORT_AT })),
+   one("좌표", "cannon", 0, "범선의 바다 포격 섬"), one("속력·거리·시간", "cannon", 1, "증기의 바다 포대 요새"), one("수열", "memory", 1, "증기의 바다 암호 등대"), one("기호 식", "memory", 2, "현대의 바다 통신 기지")]
+];
+window.MathQ = { pairs: either("pairs"), order: orderQ, cipher: either("cipher"), grid: either("grid"), series: either("series"), speed: either("speed"), weigh: weighQ, html, shuffle,
+  setFocus: (tags, share = 1) => { const list = [].concat(tags || []).filter(Boolean); FOCUS = list.length ? { tags: new Set(list), share } : null; }, units: level => UNITS[level ? 1 : 0], setLevel: n => { LEVEL = n ? 1 : 0; }, level: () => LEVEL, gridSize: () => LEVEL ? 7 : 6, gridLabel: i => LEVEL ? neg(i - 4) : String(i) };
 })();

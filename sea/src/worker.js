@@ -348,7 +348,7 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
   const pass = await db.prepare("SELECT status FROM orders WHERE student_id=? AND month=? AND status<>'canceled' LIMIT 1").bind(st.id, month).first();
   const orders = (await db.prepare("SELECT id, name, status, created_at FROM orders WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
   const h = kstHour(), open = !!st.class_battle && (game.hourFrom === game.hourTo || (h >= game.hourFrom && h < game.hourTo));
-  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id] },
+  return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id], focus: focusOf(st) },
     boxUsed, boxes: MAPS.map(m => ({ map: m.id, price: boxPrice(m), all: WEAPONS.filter(w => w.era === m.id).every(w => owned.includes(w.key)) })),
     upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
     bal, game, quests, classDays: st.class_days, level: st.class_level || 0, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
@@ -415,6 +415,8 @@ on("POST", "/api/kid/answers", "student", async ({ db, me, body }) => {
   await db.batch(st); return { ok: true };
 });
 // the kinds of question a child has been missing lately, and which game asked them, so they can be practised
+// the units a teacher set for a child; anything unreadable counts as none
+function focusOf(s) { try { const a = JSON.parse(s.focus || "[]"); return Array.isArray(a) ? a.slice(0, 3).map(String) : []; } catch (e) { return []; } }
 async function weakOf(db, sid, level) { const by = {};
   for (const r of (await db.prepare("SELECT tag, game, map, tries, wrong FROM answers WHERE student_id=? AND level=? AND date>=? ORDER BY date").bind(sid, level, kstDate(Date.now() - WEAK_DAYS * 864e5)).all()).results) { const b = by[r.tag] || (by[r.tag] = { tag: r.tag, tries: 0, wrong: 0 }); b.tries += r.tries; b.wrong += r.wrong; b.game = r.game; b.map = r.map; }
   return Object.values(by).filter(b => b.wrong).sort((a, b) => b.wrong / b.tries - a.wrong / a.tries || b.wrong - a.wrong).slice(0, 6); }
@@ -617,9 +619,9 @@ on("POST", "/api/t/photos/:id/remove", "teacher", async ({ db, params }) => { aw
 on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   const today = kstDate(), game = await getGame(db);
   const classes = (await db.prepare("SELECT id, name, code, battle, days, daily_bonus, level FROM classes WHERE active=1 ORDER BY name").all()).results;
-  const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, photo, must_change, locked_until FROM students WHERE active=1 ORDER BY nickname").all()).results;
+  const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, photo, must_change, locked_until, focus FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const bal = await balances(db, students.map(s => s.id)), pw = await powers(db, students);
-  for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = lookOf(s); s.locked = s.locked_until > Date.now(); delete s.locked_until; }
+  for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = lookOf(s); s.locked = s.locked_until > Date.now(); delete s.locked_until; s.focus = focusOf(s); }
   const quests = (await db.prepare("SELECT id, title, subject, kind, energy, active FROM quests WHERE deleted=0 ORDER BY active DESC, subject, kind, id").all()).results;
   const requests = (await db.prepare(`SELECT r.id, r.student_id, r.quest_id, r.created_at, q.title, q.energy + CASE WHEN q.kind='daily' THEN c.daily_bonus ELSE 0 END AS energy, q.subject FROM requests r JOIN quests q ON q.id=r.quest_id JOIN students s ON s.id=r.student_id JOIN classes c ON c.id=s.class_id WHERE r.status='pending' AND s.active=1 ORDER BY r.id`).all()).results;
   const orders = (await db.prepare("SELECT o.id, o.student_id, o.name, o.cost, o.created_at FROM orders o JOIN students s ON s.id=o.student_id WHERE o.status='pending' AND s.active=1 ORDER BY o.id").all()).results;
@@ -656,6 +658,11 @@ on("POST", "/api/t/orders/:id/deliver", "teacher", async ({ db, params }) => { a
 on("POST", "/api/t/orders/:id/cancel", "teacher", async ({ db, params }) => {
   const o = await db.prepare("SELECT * FROM orders WHERE id=? AND status='pending'").bind(params.id).first(); if (!o) throw bad("이미 처리된 면제권이에요");
   await db.batch([db.prepare("UPDATE orders SET status='canceled', decided_at=? WHERE id=?").bind(Date.now(), o.id), db.prepare("DELETE FROM logs WHERE id=?").bind(o.log_id)]); return { ok: true };
+});
+on("POST", "/api/t/focus", "teacher", async ({ db, body }) => {
+  const ids = [...new Set([].concat(body.studentIds || []).map(Number).filter(n => Number.isInteger(n) && n > 0))].slice(0, 300), tags = [...new Set([].concat(body.tags || []).map(t => clip(t, 20)).filter(Boolean))].slice(0, 3);
+  if (!ids.length) throw bad("학생을 골라 주세요");
+  await db.batch(ids.map(id => db.prepare("UPDATE students SET focus=? WHERE id=? AND active=1").bind(tags.length ? JSON.stringify(tags) : "", id))); return { ok: true, count: ids.length };
 });
 const LOG_DAY_MAX = 1000;
 on("GET", "/api/t/logs/:date", "teacher", async ({ db, params }) => {

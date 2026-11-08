@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS students (
   failed INTEGER NOT NULL DEFAULT 0,
   locked_until INTEGER NOT NULL DEFAULT 0,
   active INTEGER NOT NULL DEFAULT 1,
+  focus TEXT NOT NULL DEFAULT '',     -- units the teacher set: JSON list of up to three question kinds
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);

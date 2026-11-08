@@ -161,5 +161,14 @@ for (const level of [0, 1]) { Q.setLevel(level); const orderTags = new Set(), we
   for (let i = 0; i < 4000; i++) { orderTags.add(Q.order(1 + i % 10, 4).tag); weighTags[i % 3].add(Q.weigh(i % 3, i % 10).tag); }
   for (const tag of orderTags) { Q.setFocus(tag); for (let i = 0; i < 40; i++) { const q = Q.order(1 + i % 10, 4); if (q.tag !== tag) fail("연습 유형 다름", [tag, q.tag]); } Q.setFocus(null); }
   weighTags.forEach((tags, map) => { for (const tag of tags) { Q.setFocus(tag); for (let i = 0; i < 40; i++) { const q = Q.weigh(map, i % 10); if (q.tag !== tag) fail("연습 유형 다름", [map, tag, q.tag]); } Q.setFocus(null); } }); }
+// units a teacher can set: every kind a game asks is on the list, a unit comes up in every sea's scales and every order game, and 70% means about 70%
+for (const level of [0, 1]) { Q.setLevel(level); const units = Q.units(level), known = new Set(units.map(u => u.tag));
+  if (known.size !== units.length) fail("단원 이름 중복", level);
+  for (let i = 0; i < 3000; i++) for (const t of [Q.order(1 + i % 10, 4).tag, Q.weigh(i % 3, i % 10).tag]) if (!known.has(t)) fail("단원 목록에 없는 유형", [level, t]);
+  for (const u of units) { const src = u.at[0][0]; if (src !== "reef" && src !== "port") continue;
+    Q.setFocus([u.tag]); for (let i = 0; i < 30; i++) { const q = src === "port" ? Q.weigh(i % 3, i % 10) : Q.order(1 + i % 10, 4); if (q.tag !== u.tag) fail("지정 단원이 안 나옴", [level, u.tag, q.tag]); } Q.setFocus(null); }
+  // a unit the first sea's first scales never ask on their own, so every one of them is the 70%
+  const port = level ? "방정식의 활용" : "분수의 덧셈"; Q.setFocus([port], .7); let hit = 0; for (let i = 0; i < 2000; i++) if (Q.weigh(0, 0).tag === port) hit++; Q.setFocus(null);
+  if (hit < 1300 || hit > 1500) fail("지정 단원 비율", [level, port, hit]); console.log(level ? "중등" : "초등", "단원", units.length, "개 · 70% 지정 시", port, hit / 20, "%"); }
 Q.setLevel(0);
 console.log("검사 끝, 실패", bad, "건 / 문제 유형", JSON.stringify(asks)); process.exitCode = bad ? 1 : 0;
