@@ -42,7 +42,7 @@ npx wrangler dev --port 8791
 로컬 DB에서는 `wrangler.toml`의 `REPLACE_WITH_DATABASE_ID`를 그대로 둡니다. 바꾸면 다른 DB 파일을 보게 됩니다.
 
 ## 배포 순서
-처음 한 번 `npx wrangler login`을 합니다. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v47`입니다. 그다음 `sea/` 폴더에서 실행합니다.
+처음 한 번 `npx wrangler login`을 합니다. 화면 파일을 고쳤으면 `public/sw.js`의 `CACHE` 번호를 올립니다. 지금은 `hs-v48`입니다. 그다음 `sea/` 폴더에서 실행합니다.
 
 ```bash
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\deploy.ps1 -Message "커밋 메시지"
