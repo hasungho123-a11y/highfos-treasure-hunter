@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS classes (
   days TEXT NOT NULL DEFAULT '0123456', -- lesson days as weekday digits, 0 = Sunday; kids can only hand in missions on these
   daily_bonus INTEGER NOT NULL DEFAULT 0, -- extra energy on each daily mission, for classes with fewer lessons a week
   level INTEGER NOT NULL DEFAULT 0,   -- question level: 0 = 초등 고학년, 1 = 중1
+  battle_times TEXT NOT NULL DEFAULT '', -- battle windows on lesson days, '16:50-17:00,18:20-18:30'; '' = the game-wide hours
   active INTEGER NOT NULL DEFAULT 1,
   created_at INTEGER NOT NULL
 );

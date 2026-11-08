@@ -116,6 +116,28 @@ const kstDate = (ms = Date.now()) => new Date(ms + 9 * 36e5).toISOString().slice
 const kstHour = (ms = Date.now()) => new Date(ms + 9 * 36e5).getUTCHours();
 // a class's lesson days are stored as weekday digits, 0 = Sunday; kids can only hand in missions on these
 const isClassDay = (days, ms = Date.now()) => String(days ?? "0123456").includes(String(new Date(ms + 9 * 36e5).getUTCDay()));
+const kstMin = (ms = Date.now()) => { const d = new Date(ms + 9 * 36e5); return d.getUTCHours() * 60 + d.getUTCMinutes(); };
+// a class's battle windows: '16:50-17:00,18:20-18:30' -> [[1010, 1020], [1100, 1110]] in minutes of the day
+const parseTimes = s => String(s || "").split(",").filter(Boolean).map(w => w.split("-").map(t => { const [h, m] = t.split(":").map(Number); return h * 60 + m; }));
+const hhmm = m => `${Math.floor(m / 60)}:${String(m % 60).padStart(2, "0")}`;
+const DAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+const daysKo = days => { const d = String(days ?? "0123456"); return d.length === 7 ? "매일" : [1, 2, 3, 4, 5, 6, 0].filter(n => d.includes(String(n))).map(n => DAY_KO[n]).join("·"); };
+// why a child can't battle right now, or null when it can; the class's own windows win over the game-wide hours
+function battleNo(st, game, ms = Date.now()) {
+  if (!st.class_battle) return "지금은 선생님이 전투를 쉬게 했어요";
+  const wins = parseTimes(st.class_btimes);
+  if (wins.length) { const m = kstMin(ms); return isClassDay(st.class_days, ms) && wins.some(([a, b]) => m >= a && m < b) ? null : `전투는 ${daysKo(st.class_days)} ${wins.map(([a, b]) => `${hhmm(a)}~${hhmm(b)}`).join(", ")}에 할 수 있어요`; }
+  const h = kstHour(ms); return game.hourFrom === game.hourTo || (h >= game.hourFrom && h < game.hourTo) ? null : `전투는 ${game.hourFrom}시부터 ${game.hourTo}시까지 할 수 있어요`;
+}
+// the teacher's text, '16:50-17:00, 18:20~18:30', checked and stored in one shape
+function normTimes(text) {
+  const s = String(text || "").trim(); if (!s) return "";
+  const parts = s.split(/[,\s]+/).filter(Boolean), out = [];
+  for (const p of parts) { const m = p.match(/^(\d{1,2}):(\d{2})[-~](\d{1,2}):(\d{2})$/); if (!m) throw bad("16:50-17:00 처럼 시작과 끝을 적어 주세요. 여러 개는 쉼표로 나눠요");
+    const a = +m[1] * 60 + +m[2], b = +m[3] * 60 + +m[4]; if (+m[2] > 59 || +m[4] > 59 || b > 24 * 60) throw bad(`${p}: 없는 시각이에요`); if (a >= b) throw bad(`${p}: 시작이 끝보다 빨라야 해요`); out.push([a, b]); }
+  if (out.length > 8) throw bad("전투 시간은 8개까지 정할 수 있어요");
+  return out.sort((x, y) => x[0] - y[0]).map(([a, b]) => `${hhmm(a)}-${hhmm(b)}`).join(",");
+}
 function kstWeekStart(ms = Date.now()) { const d = new Date(ms + 9 * 36e5); d.setUTCDate(d.getUTCDate() - (d.getUTCDay() + 6) % 7); return d.toISOString().slice(0, 10); }
 const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
 const randHex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(16).padStart(2, "0")).join("");
@@ -149,7 +171,7 @@ async function auth(req, db) {
   const s = await db.prepare("SELECT * FROM sessions WHERE token=? AND expires_at>?").bind(t, Date.now()).first();
   if (!s) return null;
   if (s.role === "student") {
-    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.battle AS class_battle, c.days AS class_days, c.daily_bonus AS class_bonus, c.level AS class_level FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
+    const st = await db.prepare("SELECT s.*, c.name AS class_name, c.battle AS class_battle, c.battle_times AS class_btimes, c.days AS class_days, c.daily_bonus AS class_bonus, c.level AS class_level FROM students s JOIN classes c ON c.id=s.class_id WHERE s.id=? AND s.active=1 AND c.active=1").bind(s.user_id).first();
     return st ? { role: "student", token: t, student: st } : null;
   }
   const te = await db.prepare("SELECT id, username FROM teachers WHERE id=?").bind(s.user_id).first();
@@ -347,13 +369,13 @@ on("GET", "/api/kid/state", "student", async ({ db, me }) => {
     .map(b => ({ id: b.id, attacked: b.attacker === st.id, opp: b.attacker === st.id ? b.d_name : b.a_name, won: b.winner === st.id, gold: b.attacker === st.id ? b.delta : (b.winner === st.id ? game.defend : 0), at: b.at }));
   const pass = await db.prepare("SELECT status FROM orders WHERE student_id=? AND month=? AND status<>'canceled' LIMIT 1").bind(st.id, month).first();
   const orders = (await db.prepare("SELECT id, name, status, created_at FROM orders WHERE student_id=? AND status='pending'").bind(st.id).all()).results;
-  const h = kstHour(), open = !!st.class_battle && (game.hourFrom === game.hourTo || (h >= game.hourFrom && h < game.hourTo));
+  const closed = battleNo(st, game), open = !closed;
   return { me: { id: st.id, nickname: st.nickname, sail: st.sail, look: lookOf(st), ship: st.ship, className: st.class_name, mustChange: !!st.must_change, power: pw[st.id], focus: focusOf(st) },
     boxUsed, boxes: MAPS.map(m => ({ map: m.id, price: boxPrice(m), all: WEAPONS.filter(w => w.era === m.id).every(w => owned.includes(w.key)) })),
     upgrades: UPGRADES.map(u => { const level = owned.filter(k => k.startsWith(`up.${u.id}.`)).length; return { ...u, level, max: UP_MAX, power: UP_POWER, price: level < UP_MAX ? upPrice(level + 1) : 0 }; }),
     bal, game, quests, classDays: st.class_days, level: st.class_level || 0, owned, log, photo, deco: ITEMS, ships: SHIPS, games: GAMES, maps: MAPS,
     mates: mates.map(m => ({ id: m.id, nickname: m.nickname, sail: m.sail, look: lookOf(m), ship: m.ship, power: pw[m.id] })),
-    battle: { open, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), duelLeft: await duelLeft(db, st.id, game, today), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates), titles: await titlesFor(db, st.id, owned),
+    battle: { open, closed, off: !st.class_battle, left: Math.max(0, game.battlesPerDay - used), duelLeft: await duelLeft(db, st.id, game, today), fights }, pass: { bought: !!pass, status: pass?.status || null }, orders, boss: await bossView(db, st, game, mates), titles: await titlesFor(db, st.id, owned),
     approved: (await db.prepare("SELECT id, title, energy FROM logs WHERE student_id=? AND kind='quest' ORDER BY id DESC LIMIT 20").bind(st.id).all()).results,
     weak: await weakOf(db, st.id, st.class_level || 0),
     likes: { counts: Object.fromEntries((await db.prepare("SELECT l.target AS id, COUNT(*) AS n FROM likes l JOIN students s ON s.id=l.target WHERE s.class_id=? GROUP BY l.target").bind(st.class_id).all()).results.map(r => [r.id, r.n])), mine: (await db.prepare("SELECT target FROM likes WHERE liker=? AND week=?").bind(st.id, ws).all()).results.map(r => r.target) } };
@@ -500,9 +522,8 @@ on("POST", "/api/kid/pass", "student", async ({ db, me }) => {
 });
 // a battle: the opponent is picked for the attacker, close in power and not yet fought today. Only the attacker can lose gold.
 on("POST", "/api/kid/battle", "student", async ({ db, me, body }) => {
-  const st = me.student, game = await getGame(db), today = kstDate(), h = kstHour();
-  if (!st.class_battle) throw bad("지금은 선생님이 전투를 쉬게 했어요");
-  if (game.hourFrom !== game.hourTo && !(h >= game.hourFrom && h < game.hourTo)) throw bad(`전투는 ${game.hourFrom}시부터 ${game.hourTo}시까지 할 수 있어요`);
+  const st = me.student, game = await getGame(db), today = kstDate(), no = battleNo(st, game);
+  if (no) throw bad(no);
   const fought = (await db.prepare("SELECT defender FROM battles WHERE attacker=? AND date=?").bind(st.id, today).all()).results.map(r => r.defender);
   if (fought.length >= game.battlesPerDay) throw bad("오늘 전투를 모두 했어요. 내일 다시 해요");
   const mates = (await db.prepare("SELECT id, nickname, sail, look, ship, photo FROM students WHERE class_id=? AND active=1").bind(st.class_id).all()).results, pw = await powers(db, mates);
@@ -546,7 +567,7 @@ async function duelStep(db, d) { const now = Date.now();
 const duelView = (d, sid) => { const mine = d.a === sid ? "a" : "b", now = Date.now(), live = d.status === "live", q = live ? duelQ(d, d.round) : null, past = live ? d.round - 1 : d.round, old = past >= 1 ? duelQ(d, past) : null;
   return { id: d.id, status: d.status, mine, oppId: mine === "a" ? d.b : d.a, round: d.round, hp: { a: d.hp_a, b: d.hp_b }, log: JSON.parse(d.log), winner: d.winner, forfeit: !!d.forfeit, iAimed: (mine === "a" ? d.aim_a : d.aim_b) != null, oppDone: (mine === "a" ? d.aim_b : d.aim_a) != null, ms: Math.max(0, DUEL_WAIT - (now - d.created_at)), left: live ? Math.max(0, d.deadline - now) : 0, limit: live ? duelLimit(d.round) : 0, q: q && { ask: q.ask, text: q.text, opts: q.opts }, prev: old && { text: old.text, real: old.real } }; };
 async function duelMine(db, sid, id) { const d = await duelRow(db, id); if (!d || (d.a !== sid && d.b !== sid)) throw new HttpError(404, "없는 대결이에요"); return d; }
-const duelGate = (st, game) => { const h = kstHour(); if (!st.class_battle) throw bad("지금은 선생님이 전투를 쉬게 했어요"); if (game.hourFrom !== game.hourTo && !(h >= game.hourFrom && h < game.hourTo)) throw bad(`전투는 ${game.hourFrom}시부터 ${game.hourTo}시까지 할 수 있어요`); };
+const duelGate = (st, game) => { const no = battleNo(st, game); if (no) throw bad(no); };
 // asked every few seconds by every open app; "free" means not in the middle of a game, so a kid who is busy doesn't show as ready to duel
 on("GET", "/api/kid/duel/poll", "student", async ({ db, me, req }) => { const st = me.student, now = Date.now();
   if (new URL(req.url).searchParams.get("free") === "1" && now - st.seen_at > 10000) await db.prepare("UPDATE students SET seen_at=? WHERE id=?").bind(now, st.id).run();
@@ -618,7 +639,7 @@ on("POST", "/api/t/photos/:id/remove", "teacher", async ({ db, params }) => { aw
 /* ----- teacher ----- */
 on("GET", "/api/t/state", "teacher", async ({ db, me }) => {
   const today = kstDate(), game = await getGame(db);
-  const classes = (await db.prepare("SELECT id, name, code, battle, days, daily_bonus, level FROM classes WHERE active=1 ORDER BY name").all()).results;
+  const classes = (await db.prepare("SELECT id, name, code, battle, battle_times, days, daily_bonus, level FROM classes WHERE active=1 ORDER BY name").all()).results;
   const students = (await db.prepare("SELECT id, class_id, nickname, sail, look, ship, photo, must_change, locked_until, focus FROM students WHERE active=1 ORDER BY nickname").all()).results;
   const bal = await balances(db, students.map(s => s.id)), pw = await powers(db, students);
   for (const s of students) { s.bal = bal[s.id]; s.power = pw[s.id]; s.look = lookOf(s); s.locked = s.locked_until > Date.now(); delete s.locked_until; s.focus = focusOf(s); }
@@ -703,6 +724,7 @@ on("POST", "/api/t/classes", "teacher", async ({ db, body }) => {
   await db.prepare("INSERT INTO classes (name, code, level, created_at) VALUES (?,?,?,?)").bind(str(body.name, 20), code, body.level ? 1 : 0, Date.now()).run(); return { ok: true, code };
 });
 on("POST", "/api/t/classes/:id/battle", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET battle=? WHERE id=?").bind(body.on ? 1 : 0, params.id).run(); return { ok: true }; });
+on("POST", "/api/t/classes/:id/btimes", "teacher", async ({ db, params, body }) => { const times = normTimes(body.times); await db.prepare("UPDATE classes SET battle_times=? WHERE id=?").bind(times, params.id).run(); return { ok: true, times }; });
 on("POST", "/api/t/classes/:id/days", "teacher", async ({ db, params, body }) => { const days = [...new Set(String(body.days || "").replace(/[^0-6]/g, ""))].sort().join(""); if (!days) throw bad("수업 요일을 하루 이상 골라 주세요"); await db.prepare("UPDATE classes SET days=? WHERE id=?").bind(days, params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/bonus", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET daily_bonus=? WHERE id=?").bind(int(body.bonus, 0, 10), params.id).run(); return { ok: true }; });
 on("POST", "/api/t/classes/:id/level", "teacher", async ({ db, params, body }) => { await db.prepare("UPDATE classes SET level=? WHERE id=?").bind(body.level ? 1 : 0, params.id).run(); return { ok: true }; });
